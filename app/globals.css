@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+@layer base {
+  :root {
+    /* ── Light Mode ── */
+    --background:   0 0% 98%;
+    --foreground:   0 0% 4%;
+
+    --card:         0 0% 100%;
+    --card-foreground: 0 0% 4%;
+
+    --popover:      0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    --primary:      0 0% 4%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary:    0 0% 94%;
+    --secondary-foreground: 0 0% 4%;
+
+    --muted:        0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent:       0 0% 94%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive:  4 86% 58%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border:       0 0% 88%;
+    --input:        0 0% 88%;
+    --ring:         0 0% 4%;
+    --radius:       0.5rem;
+
+    --sidebar:      0 0% 96%;
+    --sidebar-border: 0 0% 88%;
+  }
+
+  .dark {
+    /* ── Dark Mode — Pure Black ── */
+    --background:   0 0% 0%;        /* #000000 */
+    --foreground:   0 0% 93%;       /* #EDEDED */
+
+    --card:         0 0% 6%;        /* #0F0F0F */
+    --card-foreground: 0 0% 93%;
+
+    --popover:      0 0% 8%;        /* #141414 */
+    --popover-foreground: 0 0% 93%;
+
+    --primary:      0 0% 93%;       /* white is the primary CTA */
+    --primary-foreground: 0 0% 4%;  /* black text on white buttons */
+
+    --secondary:    0 0% 10%;       /* #1A1A1A */
+    --secondary-foreground: 0 0% 93%;
+
+    --muted:        0 0% 10%;
+    --muted-foreground: 0 0% 45%;   /* #737373 */
+
+    --accent:       0 0% 14%;       /* #242424 — hover state */
+    --accent-foreground: 0 0% 93%;
+
+    --destructive:  4 86% 58%;      /* red — only for errors */
+    --destructive-foreground: 0 0% 98%;
+
+    --border:       0 0% 12%;       /* #1F1F1F */
+    --input:        0 0% 10%;
+    --ring:         0 0% 60%;
+
+    --sidebar:      0 0% 3%;        /* #080808 — sidebar slightly off black */
+    --sidebar-border: 0 0% 10%;
+  }
+}
+
+@layer base {
+  * { @apply border-border box-border; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-feature-settings: 'ss01', 'cv01', 'cv11';
+  }
+
+  /* Scrollbar — ultra thin */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+
+  ::selection { @apply bg-foreground/10; }
+
+  :focus-visible {
+    @apply outline-none ring-1 ring-ring ring-offset-1 ring-offset-background;
+  }
+}
+
+/* ── Custom Design Tokens ── */
+@layer components {
+
+  /* Sidebar */
+  .sidebar {
+    background: hsl(var(--sidebar));
+    border-right: 1px solid hsl(var(--sidebar-border));
+  }
+
+  /* Nav item */
+  .nav-item {
+    @apply flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium
+           text-muted-foreground transition-colors duration-100
+           hover:bg-accent hover:text-foreground cursor-pointer select-none;
+  }
+  .nav-item.active {
+    @apply bg-accent text-foreground;
+  }
+
+  /* Metric card number */
+  .metric-number {
+    @apply text-3xl font-semibold tracking-tight tabular-nums;
+  }
+
+  /* Table row */
+  .table-row-hover {
+    @apply hover:bg-accent/60 transition-colors duration-100;
+  }
+
+  /* Status dot */
+  .dot-green  { @apply inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0; }
+  .dot-red    { @apply inline-block h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0; }
+  .dot-gray   { @apply inline-block h-1.5 w-1.5 rounded-full bg-zinc-500 flex-shrink-0; }
+  .dot-yellow { @apply inline-block h-1.5 w-1.5 rounded-full bg-yellow-500 flex-shrink-0; }
+
+  /* Skeleton */
+  .skeleton {
+    @apply rounded bg-accent animate-pulse;
+  }
+
+  /* Page fade */
+  .page-enter { @apply animate-fade-in; }
+
+  /* Tab bar — PWA */
+  .tab-bar {
+    @apply fixed bottom-0 inset-x-0 z-50 flex items-stretch border-t border-border;
+    background: hsl(var(--sidebar));
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+
+  /* Glass — used only in modals/overlays */
+  .glass {
+    background: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Input apple-like style */
+  .input-base {
+    @apply h-9 w-full rounded-md border border-input bg-transparent px-3 py-1
+           text-sm shadow-none placeholder:text-muted-foreground
+           focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
+
+@layer utilities {
+  .text-xxs { font-size: 0.65rem; line-height: 1rem; }
+
+  /* Animate */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in { animation: fade-in 0.2s ease-out; }
+
+  @keyframes shimmer {
+    from { background-position: -400px 0; }
+    to   { background-position: 400px 0; }
+  }
+}

@@ -1,0 +1,292 @@
+// Safe Door Brasil - Prisma Schema (SQLite for MVP)
+// Switch provider to "postgresql" and restore @db.Text for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTH (NextAuth.js compatible)
+// ============================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  emailVerified  DateTime?
+  name           String?
+  image          String?
+  passwordHash   String?
+  role           String    @default("PARENT") // "ADMIN" | "PARENT"
+  schoolId       String?
+  school         School?   @relation(fields: [schoolId], references: [id])
+  parent         Parent?
+  accounts       Account[]
+  sessions       Session[]
+  lgpdAccepted   Boolean   @default(false)
+  lgpdAcceptedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ============================================================
+// SCHOOL
+// ============================================================
+
+model School {
+  id                String               @id @default(cuid())
+  name              String
+  cnpj              String?              @unique
+  address           String?
+  city              String?
+  state             String?
+  contactEmail      String?
+  contactPhone      String?
+  logoUrl           String?
+  admins            User[]
+  classes           Class[]
+  students          Student[]
+  devices           Device[]
+  unrecognizedLogs  UnrecognizedFaceLog[]
+  pushSubscriptions PushSubscription[]
+  settings          SchoolSettings?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+model SchoolSettings {
+  id             String   @id @default(cuid())
+  schoolId       String   @unique
+  school         School   @relation(fields: [schoolId], references: [id])
+  entryStartTime String   @default("06:00")
+  entryEndTime   String   @default("09:00")
+  exitStartTime  String   @default("11:00")
+  exitEndTime    String   @default("18:00")
+  minConfidence  Float    @default(0.90)
+  notifyOnEntry  Boolean  @default(true)
+  notifyOnExit   Boolean  @default(true)
+  timezone       String   @default("America/Sao_Paulo")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ============================================================
+// CLASS
+// ============================================================
+
+model Class {
+  id        String    @id @default(cuid())
+  name      String
+  grade     String?
+  schoolId  String
+  school    School    @relation(fields: [schoolId], references: [id])
+  students  Student[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([name, schoolId])
+}
+
+// ============================================================
+// STUDENT
+// ============================================================
+
+model Student {
+  id                String            @id @default(cuid())
+  name              String
+  birthDate         DateTime?
+  photoUrl          String?           // profile photo URL (one of the StudentPhotos)
+  faceVector        Bytes?            // AES-256-GCM encrypted face embedding
+  faceVectorVersion Int               @default(1)
+  isActive          Boolean           @default(true)
+  classId           String
+  schoolId          String
+  school            School            @relation(fields: [schoolId], references: [id])
+  class             Class             @relation(fields: [classId], references: [id])
+  parents           StudentParent[]
+  photos            StudentPhoto[]
+  attendance        AttendanceEvent[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([schoolId, classId])
+}
+
+model StudentPhoto {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  url       String
+  isProfile Boolean  @default(false)
+  label     String?  // "Frente", "Perfil esquerdo", "Perfil direito", etc.
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// PARENT / RESPONSIBLE
+// ============================================================
+
+model Parent {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  phone             String?
+  cpf               String?           @unique
+  students          StudentParent[]
+  pushSubscriptions PushSubscription[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model StudentParent {
+  studentId    String
+  parentId     String
+  relationship String  @default("Responsável")
+  isPrimary    Boolean @default(false)
+  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent       Parent  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, parentId])
+}
+
+// ============================================================
+// ATTENDANCE EVENT
+// ============================================================
+
+model AttendanceEvent {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  deviceId  String?
+  device    Device?  @relation(fields: [deviceId], references: [id])
+  timestamp DateTime @default(now())
+  eventType String   // "ENTRY" | "EXIT"
+  photoUrl  String?
+  confidence Float?
+  isManual  Boolean  @default(false)
+  notes     String?
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, timestamp])
+  @@index([deviceId, timestamp])
+}
+
+// ============================================================
+// DEVICE
+// ============================================================
+
+model Device {
+  id               String               @id @default(cuid())
+  schoolId         String
+  school           School               @relation(fields: [schoolId], references: [id])
+  name             String
+  description      String?
+  type             String               @default("TABLET") // "TABLET" | "CAMERA_AGENT"
+  status           String               @default("OFFLINE") // "ONLINE" | "OFFLINE" | "ERROR"
+  apiKey           String               @unique @default(cuid())
+  lastSeen         DateTime?
+  lastIpAddress    String?
+  firmwareVersion  String?
+  attendanceEvents AttendanceEvent[]
+  unrecognizedLogs UnrecognizedFaceLog[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+// ============================================================
+// UNRECOGNIZED FACE LOG
+// ============================================================
+
+model UnrecognizedFaceLog {
+  id              String   @id @default(cuid())
+  schoolId        String
+  school          School   @relation(fields: [schoolId], references: [id])
+  deviceId        String
+  device          Device   @relation(fields: [deviceId], references: [id])
+  timestamp       DateTime @default(now())
+  photoUrl        String
+  confidenceScore Float?
+  reviewed        Boolean  @default(false)
+  reviewedAt      DateTime?
+  reviewedById    String?
+  notes           String?
+  createdAt       DateTime @default(now())
+}
+
+// ============================================================
+// PUSH NOTIFICATIONS
+// ============================================================
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  parentId  String?
+  parent    Parent?  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   String?  // JSON string (SQLite has no native JSON type)
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+}

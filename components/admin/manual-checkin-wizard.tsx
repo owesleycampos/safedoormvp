@@ -161,7 +161,7 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
       <SheetContent
         side="bottom"
         showClose={false}
-        className="h-[78vh] max-h-[78vh] rounded-t-2xl p-0 flex flex-col overflow-hidden sm:max-w-none"
+        className="h-[76vh] max-h-[76vh] !left-3 !right-3 !bottom-3 rounded-2xl border-0 shadow-xl p-0 flex flex-col overflow-hidden sm:!left-4 sm:!right-4 sm:!bottom-4"
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 flex flex-row items-center gap-3 px-5 py-4 border-b border-border">

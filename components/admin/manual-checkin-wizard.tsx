@@ -160,7 +160,8 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[90vh] max-h-[90vh] rounded-t-2xl p-0 flex flex-col overflow-hidden sm:max-w-none"
+        showClose={false}
+        className="h-[78vh] max-h-[78vh] rounded-t-2xl p-0 flex flex-col overflow-hidden sm:max-w-none"
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 flex flex-row items-center gap-3 px-5 py-4 border-b border-border">

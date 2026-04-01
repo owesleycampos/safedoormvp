@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye,
@@ -24,11 +25,13 @@ interface StudentsClientProps {
 }
 
 export function StudentsClient({ students: initialStudents, classes }: StudentsClientProps) {
+  const router = useRouter();
   const [students, setStudents] = useState(initialStudents);
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
+  const [dialogDefaultTab, setDialogDefaultTab] = useState<'info' | 'photos' | 'parents'>('info');
 
   const filtered = students.filter((s) => {
     const matchSearch =
@@ -39,8 +42,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     return matchSearch && matchClass;
   });
 
-  function handleEdit(student: any) {
+  function handleEdit(student: any, tab: 'info' | 'photos' | 'parents' = 'info') {
     setEditingStudent(student);
+    setDialogDefaultTab(tab);
     setDialogOpen(true);
   }
 
@@ -101,7 +105,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         </div>
 
         <Button
-          onClick={() => { setEditingStudent(null); setDialogOpen(true); }}
+          onClick={() => { setEditingStudent(null); setDialogDefaultTab('info'); setDialogOpen(true); }}
           size="sm"
           className="gap-1.5"
         >
@@ -195,15 +199,15 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(student)}>
+                          <DropdownMenuItem onClick={() => handleEdit(student, 'info')}>
                             <Edit className="h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(student, 'photos')}>
                             <Camera className="h-4 w-4" />
                             Foto / biometria
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/reports?studentId=${student.id}`)}>
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>
@@ -232,6 +236,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         student={editingStudent}
         classes={classes}
         onSaved={handleSaved}
+        defaultTab={dialogDefaultTab}
       />
     </div>
   );

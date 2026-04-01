@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Camera, X, Star, StarOff, Plus, Search, UserPlus, Trash2,
   Phone, Mail, MessageCircle, ChevronRight, Loader2,
+  Cpu, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -43,14 +44,18 @@ interface StudentDialogProps {
   student?: any;
   classes: any[];
   onSaved: (student: any) => void;
+  defaultTab?: 'info' | 'photos' | 'parents';
 }
 
-export function StudentDialog({ open, onOpenChange, student, classes, onSaved }: StudentDialogProps) {
+export function StudentDialog({ open, onOpenChange, student, classes, onSaved, defaultTab }: StudentDialogProps) {
   const isEdit = !!student;
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTab] = useState<string>(defaultTab || 'info');
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollStatus, setEnrollStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [enrollMessage, setEnrollMessage] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ name: '', classId: '', birthDate: '' });
 
@@ -76,7 +81,9 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved }:
           : '',
       });
       setErrors({});
-      setActiveTab('info');
+      setActiveTab(defaultTab || 'info');
+      setEnrollStatus('idle');
+      setEnrollMessage('');
       setParentSearch('');
       setParentResults([]);
 
@@ -164,6 +171,28 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved }:
     if (res.ok) {
       setPhotos((prev) => prev.filter((p) => p.id !== photoId));
       toast({ variant: 'success', title: 'Foto removida.' });
+    }
+  }
+
+  async function handleEnroll() {
+    if (!isEdit) return;
+    setEnrolling(true);
+    setEnrollStatus('idle');
+    setEnrollMessage('');
+    try {
+      const res = await fetch(`/api/students/${student.id}/enroll`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setEnrollStatus('success');
+        setEnrollMessage(data.message || 'Biometria treinada com sucesso!');
+        toast({ variant: 'success', title: '✅ Biometria treinada!', description: student.name });
+      } else {
+        setEnrollStatus('error');
+        setEnrollMessage(data.error || 'Falha ao treinar biometria.');
+        toast({ variant: 'destructive', title: 'Erro na biometria', description: data.error });
+      }
+    } finally {
+      setEnrolling(false);
     }
   }
 
@@ -460,6 +489,48 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved }:
                 {photos.length > 0 && photos.length < 5 && (
                   <div className="rounded-md bg-secondary/40 p-3 text-xs text-muted-foreground">
                     💡 Para reconhecimento mais preciso, adicione fotos de: frente, perfil esquerdo, perfil direito, levemente acima e expressão neutra.
+                  </div>
+                )}
+
+                {/* Biometric enrollment */}
+                {photos.length > 0 && (
+                  <div className="rounded-xl border border-border p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Cpu className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Treinar Reconhecimento Facial</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Extrai o vetor biométrico da foto de perfil e armazena criptografado (AES-256).
+                        </p>
+                      </div>
+                    </div>
+
+                    {enrollStatus === 'success' && (
+                      <div className="flex items-center gap-2 rounded-md bg-success/10 border border-success/20 p-2.5 text-xs text-success">
+                        <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                        {enrollMessage}
+                      </div>
+                    )}
+                    {enrollStatus === 'error' && (
+                      <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                        {enrollMessage}
+                      </div>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant={enrollStatus === 'success' ? 'outline' : 'default'}
+                      onClick={handleEnroll}
+                      loading={enrolling}
+                      disabled={enrolling}
+                      className="w-full gap-2"
+                    >
+                      <Cpu className="h-3.5 w-3.5" />
+                      {enrollStatus === 'success' ? 'Retreinar Biometria' : 'Treinar Biometria'}
+                    </Button>
                   </div>
                 )}
               </div>

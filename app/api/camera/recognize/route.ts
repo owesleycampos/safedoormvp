@@ -74,57 +74,44 @@ export async function POST(req: NextRequest) {
 
   try {
     // ── Search for matching faces ──────────────────────────────────────────
-    const faceMatches = await rekognition.searchFacesByImage(collectionId, imageBytes);
+    const { matches: faceMatches, box } = await rekognition.searchFacesByImage(collectionId, imageBytes);
 
     if (faceMatches.length === 0) {
       return NextResponse.json({ matches: [], faceCount: 0 });
     }
 
-    // ── Look up matched students in DB ─────────────────────────────────────
-    const matches = await Promise.all(
-      faceMatches.map(async (match) => {
-        const student = await prisma.student.findFirst({
-          where: {
-            id: match.studentId,
-            schoolId,
-            isActive: true,
-            recognitionEnabled: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            photoUrl: true,
-            class: { select: { name: true } },
-          },
-        });
+    // ── Look up best match in DB ───────────────────────────────────────────
+    const bestMatch = faceMatches[0];
+    const student = await prisma.student.findFirst({
+      where: {
+        id: bestMatch.studentId,
+        schoolId,
+        isActive: true,
+        recognitionEnabled: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        photoUrl: true,
+        class: { select: { name: true } },
+      },
+    });
 
-        if (student) {
-          return {
-            studentId: student.id,
-            name: student.name,
-            photoUrl: student.photoUrl,
-            className: student.class?.name ?? null,
-            confidence: match.similarity / 100, // normalize to 0..1
-            box: null,
-          };
-        }
+    if (student) {
+      return NextResponse.json({
+        matches: [{
+          studentId: student.id,
+          name: student.name,
+          photoUrl: student.photoUrl,
+          className: student.class?.name ?? null,
+          confidence: bestMatch.similarity / 100, // normalize to 0..1
+          box, // AWS fraction-based bounding box (0–1) or null
+        }],
+        faceCount: 1,
+      });
+    }
 
-        return {
-          studentId: null,
-          name: 'Rosto não identificado',
-          photoUrl: null,
-          className: null,
-          confidence: 0,
-          box: null,
-        };
-      })
-    );
-
-    // Filter to only the best match (highest similarity)
-    const validMatches = matches.filter((m) => m.studentId !== null);
-    const result = validMatches.length > 0 ? [validMatches[0]] : [];
-
-    return NextResponse.json({ matches: result, faceCount: result.length });
+    return NextResponse.json({ matches: [], faceCount: 0 });
   } catch (err: any) {
     console.error('[recognize] AWS Rekognition error:', err);
     return NextResponse.json(

@@ -98,20 +98,33 @@ export async function indexFace(
     .filter((id): id is string => !!id);
 }
 
+export interface BoundingBox {
+  top: number;    // fraction 0–1
+  left: number;
+  width: number;
+  height: number;
+}
+
 export interface FaceSearchMatch {
   studentId: string;
   similarity: number; // 0–100
   faceId: string;
 }
 
+export interface FaceSearchResult {
+  matches: FaceSearchMatch[];
+  /** Bounding box of the detected face (fractions 0–1), or null if no face found */
+  box: BoundingBox | null;
+}
+
 /**
  * Detect a face in the image and find the closest match in the collection.
- * Returns an array sorted by similarity descending.
+ * Returns matches sorted by similarity descending, plus the detected face's bounding box.
  */
 export async function searchFacesByImage(
   collectionId: string,
   imageBuffer: Buffer
-): Promise<FaceSearchMatch[]> {
+): Promise<FaceSearchResult> {
   try {
     const res = await getClient().send(
       new SearchFacesByImageCommand({
@@ -122,7 +135,16 @@ export async function searchFacesByImage(
       })
     );
 
-    return (res.FaceMatches ?? [])
+    const box: BoundingBox | null = res.SearchedFaceBoundingBox
+      ? {
+          top: res.SearchedFaceBoundingBox.Top ?? 0,
+          left: res.SearchedFaceBoundingBox.Left ?? 0,
+          width: res.SearchedFaceBoundingBox.Width ?? 0,
+          height: res.SearchedFaceBoundingBox.Height ?? 0,
+        }
+      : null;
+
+    const matches = (res.FaceMatches ?? [])
       .map((m) => ({
         studentId: m.Face?.ExternalImageId ?? '',
         similarity: m.Similarity ?? 0,
@@ -130,13 +152,15 @@ export async function searchFacesByImage(
       }))
       .filter((m) => m.studentId)
       .sort((a, b) => b.similarity - a.similarity);
+
+    return { matches, box };
   } catch (err: any) {
     // No face detected in image, or collection is empty
     if (
       err.name === 'InvalidParameterException' ||
       err.name === 'ResourceNotFoundException'
     ) {
-      return [];
+      return { matches: [], box: null };
     }
     throw err;
   }

@@ -354,26 +354,34 @@ export function CameraClient() {
             <div className="absolute inset-0 pointer-events-none">
               {detectedFaces.map((face, idx) => {
                 const video = videoRef.current!;
-                const scaleX = video.clientWidth / (video.videoWidth || video.clientWidth);
-                const scaleY = video.clientHeight / (video.videoHeight || video.clientHeight);
                 const isKnown = face.studentId !== null;
-                const box = face.box; // { top, left, width, height } from Azure
+                const box = face.box; // AWS: fractions 0–1; null if unavailable
+
+                // Convert fraction-based box to display pixels
+                const boxPx = box ? {
+                  left: box.left * video.clientWidth,
+                  top: box.top * video.clientHeight,
+                  width: box.width * video.clientWidth,
+                  height: box.height * video.clientHeight,
+                } : null;
 
                 return (
                   <div key={idx}>
-                    {/* Bounding box */}
+                    {/* Bounding box — only if position is available */}
+                    {boxPx && (
                     <div
                       className={cn(
                         'absolute border-2 rounded-md transition-all',
                         isKnown ? 'border-emerald-400' : 'border-red-400'
                       )}
                       style={{
-                        left: box.left * scaleX,
-                        top: box.top * scaleY,
-                        width: box.width * scaleX,
-                        height: box.height * scaleY,
+                        left: boxPx.left,
+                        top: boxPx.top,
+                        width: boxPx.width,
+                        height: boxPx.height,
                       }}
                     />
+                    )}
 
                     {/* Name card */}
                     <div
@@ -382,8 +390,8 @@ export function CameraClient() {
                         isKnown ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'
                       )}
                       style={{
-                        left: box.left * scaleX,
-                        top: Math.max(0, box.top * scaleY - 40),
+                        left: boxPx ? boxPx.left : 16,
+                        top: boxPx ? Math.max(0, boxPx.top - 40) : 16,
                         maxWidth: 240,
                       }}
                     >

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
 
-export default function LoginPage() {
+// Inner component that uses useSearchParams — must be wrapped in <Suspense>
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -156,5 +157,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="space-y-6 animate-pulse"><div className="h-8 bg-muted rounded w-1/3" /><div className="h-10 bg-muted rounded" /><div className="h-10 bg-muted rounded" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

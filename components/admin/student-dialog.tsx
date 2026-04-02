@@ -191,72 +191,14 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     if (!isEdit) return;
     setEnrolling(true);
     setEnrollStatus('idle');
-    setEnrollMessage('');
+    setEnrollMessage('Enviando fotos para AWS Rekognition...');
     try {
-      // 1. Load face-api models in parallel
-      setEnrollMessage('Carregando modelos de IA...');
-      const faceapi = await import('@vladmandic/face-api');
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-        faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models'),
-        faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-      ]);
-
-      // 2. Find the profile photo URL
-      const profilePhoto = photos.find((p) => p.isProfile) || photos[0];
-      if (!profilePhoto) {
-        setEnrollStatus('error');
-        setEnrollMessage('Nenhuma foto cadastrada. Adicione ao menos uma foto antes de treinar a biometria.');
-        return;
-      }
-
-      setEnrollMessage('Analisando foto...');
-
-      // 3. Load the image — fetch as blob to avoid CORS issues with external URLs
-      let img: HTMLImageElement;
-      try {
-        const photoRes = await fetch(profilePhoto.url);
-        const blob = await photoRes.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const el = new Image();
-          el.onload = () => resolve(el);
-          el.onerror = reject;
-          el.src = objectUrl;
-        });
-      } catch {
-        // Fallback to direct load
-        img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const el = new Image();
-          el.crossOrigin = 'anonymous';
-          el.onload = () => resolve(el);
-          el.onerror = reject;
-          el.src = profilePhoto.url;
-        });
-      }
-
-      // 4. Detect single face — use larger inputSize (416) for better accuracy during enrollment
-      const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
-
-      if (!detection) {
-        setEnrollStatus('error');
-        setEnrollMessage('Nenhum rosto encontrado na foto. Tente uma foto de frente com boa iluminação.');
-        toast({ variant: 'destructive', title: 'Nenhum rosto encontrado', description: 'Use uma foto de frente com boa iluminação.' });
-        return;
-      }
-
-      // 5. Convert Float32Array descriptor to number[]
-      const descriptor = Array.from(detection.descriptor);
-
-      // 6. POST to enrollment API
-      setEnrollMessage('Salvando biometria...');
+      // All processing happens server-side via AWS Rekognition.
+      // The server fetches the student's photos and sends them to AWS.
       const res = await fetch(`/api/students/${student.id}/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descriptor }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
 
@@ -272,11 +214,10 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     } catch (err: any) {
       console.error('[enroll] error:', err);
       setEnrollStatus('error');
-      setEnrollMessage('Erro inesperado ao processar biometria. Tente novamente.');
+      setEnrollMessage('Erro inesperado. Verifique sua conexão e tente novamente.');
       toast({ variant: 'destructive', title: 'Erro na biometria', description: err?.message });
     } finally {
       setEnrolling(false);
-      if (!enrollMessage) setEnrollMessage('');
     }
   }
 
@@ -587,7 +528,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                       <div className="flex-1">
                         <p className="text-sm font-medium">Treinar Reconhecimento Facial</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Extrai o vetor biométrico da foto de perfil e armazena criptografado (AES-256).
+                          Envia todas as fotos para o AWS Rekognition e treina o modelo de reconhecimento.
                         </p>
                       </div>
                     </div>

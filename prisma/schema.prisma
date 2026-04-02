@@ -135,8 +135,9 @@ model Student {
   name              String
   birthDate         DateTime?
   photoUrl          String?           // profile photo URL (one of the StudentPhotos)
-  faceVector        Bytes?            // AES-256-GCM encrypted face embedding
+  faceVector        Bytes?            // Legacy: browser face-api.js embedding (128 × float32)
   faceVectorVersion Int               @default(1)
+  azurePersonId     String?           // Azure Face API Person ID (recognition_04)
   isActive          Boolean           @default(true)
   recognitionEnabled Boolean          @default(true)
   classId           String

@@ -139,7 +139,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         <span>·</span>
         <span>{classes.length} turmas</span>
         <span>·</span>
-        <span>{students.filter((s) => s.faceVector).length} com biometria</span>
+        <span>{students.filter((s) => s.azurePersonId || s.faceVector).length} com biometria</span>
       </div>
 
       {/* List */}
@@ -181,7 +181,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                         </Avatar>
                         <span className={cn(
                           'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card',
-                          student.faceVector ? 'bg-success' : 'bg-muted-foreground/40'
+                          (student.azurePersonId || student.faceVector) ? 'bg-success' : 'bg-muted-foreground/40'
                         )} />
                       </div>
 
@@ -201,14 +201,14 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
 
                       {/* Biometry badge */}
                       <div className="hidden md:flex items-center gap-2">
-                        {student.faceVector && student.recognitionEnabled === false && (
+                        {(student.azurePersonId || student.faceVector) && student.recognitionEnabled === false && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
                             <ScanLine className="h-3 w-3" />
                             Reconhecimento off
                           </Badge>
                         )}
-                        <Badge variant={student.faceVector ? (student.recognitionEnabled !== false ? 'success' : 'outline') : 'warning'}>
-                          {student.faceVector ? 'Biometria OK' : 'Sem biometria'}
+                        <Badge variant={(student.azurePersonId || student.faceVector) ? (student.recognitionEnabled !== false ? 'success' : 'outline') : 'warning'}>
+                          {(student.azurePersonId || student.faceVector) ? 'Biometria OK' : 'Sem biometria'}
                         </Badge>
                       </div>
 
@@ -236,7 +236,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>
-                          {student.faceVector && (
+                          {(student.azurePersonId || student.faceVector) && (
                             <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
                               <ScanFace className="h-4 w-4" />
                               {student.recognitionEnabled !== false ? 'Desativar reconhecimento' : 'Ativar reconhecimento'}

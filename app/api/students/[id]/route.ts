@@ -76,6 +76,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await verifyAdminAndStudent(req, params.id);
+  if (!auth) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const body = await req.json();
+  const updated = await prisma.student.update({
+    where: { id: params.id },
+    data: {
+      ...(typeof body.recognitionEnabled === 'boolean' && { recognitionEnabled: body.recognitionEnabled }),
+    },
+  });
+
+  return NextResponse.json({ student: updated });
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await verifyAdminAndStudent(req, params.id);
   if (!auth) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });

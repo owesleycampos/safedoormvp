@@ -138,6 +138,7 @@ model Student {
   faceVector        Bytes?            // AES-256-GCM encrypted face embedding
   faceVectorVersion Int               @default(1)
   isActive          Boolean           @default(true)
+  recognitionEnabled Boolean          @default(true)
   classId           String
   schoolId          String
   school            School            @relation(fields: [schoolId], references: [id])

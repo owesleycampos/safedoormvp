@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
-  Camera, Users, GraduationCap, Eye,
+  Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +54,25 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     if (res.ok) {
       setStudents((prev) => prev.filter((s) => s.id !== student.id));
       toast({ variant: 'success', title: 'Aluno removido', description: student.name });
+    }
+  }
+
+  async function handleToggleRecognition(student: any) {
+    const newValue = !student.recognitionEnabled;
+    const res = await fetch(`/api/students/${student.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recognitionEnabled: newValue }),
+    });
+    if (res.ok) {
+      setStudents((prev) => prev.map((s) =>
+        s.id === student.id ? { ...s, recognitionEnabled: newValue } : s
+      ));
+      toast({
+        variant: newValue ? 'success' : 'warning',
+        title: newValue ? 'Reconhecimento ativado' : 'Reconhecimento desativado',
+        description: student.name,
+      });
     }
   }
 
@@ -181,8 +200,14 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                       </div>
 
                       {/* Biometry badge */}
-                      <div className="hidden md:block">
-                        <Badge variant={student.faceVector ? 'success' : 'warning'}>
+                      <div className="hidden md:flex items-center gap-2">
+                        {student.faceVector && student.recognitionEnabled === false && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
+                            <ScanLine className="h-3 w-3" />
+                            Reconhecimento off
+                          </Badge>
+                        )}
+                        <Badge variant={student.faceVector ? (student.recognitionEnabled !== false ? 'success' : 'outline') : 'warning'}>
                           {student.faceVector ? 'Biometria OK' : 'Sem biometria'}
                         </Badge>
                       </div>
@@ -211,6 +236,12 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>
+                          {student.faceVector && (
+                            <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
+                              <ScanFace className="h-4 w-4" />
+                              {student.recognitionEnabled !== false ? 'Desativar reconhecimento' : 'Ativar reconhecimento'}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             destructive

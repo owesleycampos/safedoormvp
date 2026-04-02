@@ -77,9 +77,30 @@ export function CameraClient() {
         confidence: match.confidence,
       }),
     })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.skipped) return;
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.skipped) {
+          // "Entrada já registrada hoje" — show in recent list as already-registered
+          if (data.reason && data.reason !== 'cooldown') {
+            setRecentRecognitions((prev) => {
+              // Avoid duplicate entries for same student
+              if (prev.some((e) => e.studentId === match.studentId)) return prev;
+              return [
+                {
+                  id: crypto.randomUUID(),
+                  studentId: match.studentId!,
+                  name: match.name,
+                  photoUrl: match.photoUrl,
+                  type: currentMode,
+                  timestamp: new Date(),
+                  confidence: match.confidence,
+                },
+                ...prev,
+              ].slice(0, MAX_RECENT);
+            });
+          }
+          return;
+        }
         if (data.success) {
           const label = currentMode === 'ENTRY' ? 'Entrada registrada!' : 'Saída registrada!';
           toast({ variant: 'success', title: label, description: match.name });
@@ -98,6 +119,9 @@ export function CameraClient() {
               ...prev,
             ].slice(0, MAX_RECENT)
           );
+        } else if (data.error) {
+          console.error('[attendance] server error:', data.error, 'status:', r.status);
+          toast({ variant: 'destructive', title: 'Erro ao registrar', description: data.error });
         }
       })
       .catch((err) => console.error('[attendance] error:', err));

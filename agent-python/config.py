@@ -40,9 +40,13 @@ class AgentConfig(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
 
+    # Enrollment server
+    enrollment_port: int = Field(default=8001, env="ENROLLMENT_PORT")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 config = AgentConfig()

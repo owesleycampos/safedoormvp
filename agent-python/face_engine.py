@@ -65,16 +65,31 @@ class FaceEngine:
         self._liveness_history: dict[str, list] = {}
 
         # Mediapipe face mesh for liveness detection
+        # MediaPipe 0.10+ changed the solutions API — wrap in try/except
+        self._face_mesh = None
         if MEDIAPIPE_AVAILABLE:
-            mp_face_mesh = mp.solutions.face_mesh
-            self._face_mesh = mp_face_mesh.FaceMesh(
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5,
-            )
+            try:
+                # Try legacy solutions API first (0.9.x)
+                mp_face_mesh = mp.solutions.face_mesh
+                self._face_mesh = mp_face_mesh.FaceMesh(
+                    max_num_faces=1,
+                    refine_landmarks=True,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5,
+                )
+            except AttributeError:
+                # MediaPipe 0.10+ — try new import path
+                try:
+                    import mediapipe.python.solutions.face_mesh as face_mesh_module
+                    self._face_mesh = face_mesh_module.FaceMesh(
+                        max_num_faces=1,
+                        refine_landmarks=True,
+                        min_detection_confidence=0.5,
+                        min_tracking_confidence=0.5,
+                    )
+                except Exception as e:
+                    logger.warning("MediaPipe FaceMesh unavailable — liveness disabled", error=str(e))
         else:
-            self._face_mesh = None
             logger.warning("MediaPipe not available — liveness detection disabled")
 
         logger.info(

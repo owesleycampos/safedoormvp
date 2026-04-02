@@ -20,6 +20,7 @@ import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException, Header
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import structlog
 
 from config import config
@@ -43,7 +44,7 @@ app.add_middleware(
 )
 
 # Lazy-initialized engine instance
-_engine: FaceEngine | None = None
+_engine: Optional[FaceEngine] = None
 
 
 def get_engine() -> FaceEngine:
@@ -69,7 +70,7 @@ async def health():
 @app.post("/enroll")
 async def enroll_face(
     file: UploadFile = File(...),
-    x_agent_secret: str | None = Header(None, alias="x-agent-secret"),
+    x_agent_secret: Optional[str] = Header(None, alias="x-agent-secret"),
 ):
     """
     Extract and encrypt a face embedding from an uploaded photo.
@@ -99,7 +100,7 @@ async def enroll_face(
 
     # ── Write to temp file ────────────────────────────────────────────
     suffix = Path(file.filename or "upload.jpg").suffix or ".jpg"
-    tmp_path: str | None = None
+    tmp_path: Optional[str] = None
 
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:

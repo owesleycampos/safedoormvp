@@ -128,29 +128,42 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   }, [parentSearch, parentLinks]);
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !isEdit) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ variant: 'warning', title: 'Arquivo muito grande', description: 'Máximo 10MB.' });
-      return;
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0 || !isEdit) return;
+
+    const maxSize = 10 * 1024 * 1024;
+    const validFiles = Array.from(files).filter((f) => {
+      if (f.size > maxSize) {
+        toast({ variant: 'warning', title: 'Arquivo muito grande', description: `${f.name} excede 10MB.` });
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
 
     setUploadingPhoto(true);
+    let uploaded = 0;
     try {
-      const formData = new FormData();
-      formData.append('photo', file);
-      formData.append('setProfile', photos.length === 0 ? 'true' : 'false');
+      for (const file of validFiles) {
+        const formData = new FormData();
+        formData.append('photo', file);
+        formData.append('setProfile', photos.length === 0 && uploaded === 0 ? 'true' : 'false');
 
-      const res = await fetch(`/api/students/${student.id}/photos`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setPhotos((prev) => [...prev, data.photo]);
-        toast({ variant: 'success', title: 'Foto adicionada!' });
-      } else {
-        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        const res = await fetch(`/api/students/${student.id}/photos`, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setPhotos((prev) => [...prev, data.photo]);
+          uploaded++;
+        } else {
+          toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        }
+      }
+      if (uploaded > 0) {
+        toast({ variant: 'success', title: `${uploaded} foto${uploaded > 1 ? 's' : ''} adicionada${uploaded > 1 ? 's' : ''}!` });
       }
     } finally {
       setUploadingPhoto(false);
@@ -180,12 +193,14 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     setEnrollStatus('idle');
     setEnrollMessage('');
     try {
-      // 1. Load face-api models (tiny ones only)
+      // 1. Load face-api models in parallel
       setEnrollMessage('Carregando modelos de IA...');
       const faceapi = await import('@vladmandic/face-api');
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models');
-      await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models'),
+        faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+      ]);
 
       // 2. Find the profile photo URL
       const profilePhoto = photos.find((p) => p.isProfile) || photos[0];
@@ -197,18 +212,32 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
 
       setEnrollMessage('Analisando foto...');
 
-      // 3. Load the image as HTMLImageElement
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image();
-        el.crossOrigin = 'anonymous';
-        el.onload = () => resolve(el);
-        el.onerror = reject;
-        el.src = profilePhoto.url;
-      });
+      // 3. Load the image — fetch as blob to avoid CORS issues with external URLs
+      let img: HTMLImageElement;
+      try {
+        const photoRes = await fetch(profilePhoto.url);
+        const blob = await photoRes.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = objectUrl;
+        });
+      } catch {
+        // Fallback to direct load
+        img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = 'anonymous';
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = profilePhoto.url;
+        });
+      }
 
-      // 4. Detect single face with descriptor
+      // 4. Detect single face — use larger inputSize (416) for better accuracy during enrollment
       const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
         .withFaceLandmarks(true)
         .withFaceDescriptor();
 
@@ -469,6 +498,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                   ref={fileRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
+                  multiple
                   className="hidden"
                   onChange={handlePhotoUpload}
                 />

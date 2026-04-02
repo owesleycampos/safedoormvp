@@ -42,7 +42,9 @@ export async function GET(_req: NextRequest) {
     let descriptor: number[] | null = null;
     if (s.faceVector && s.faceVector.length === 512) {
       // 128 float32 values × 4 bytes = 512 bytes
-      descriptor = Array.from(new Float32Array(s.faceVector.buffer));
+      // Must use byteOffset/byteLength because Node.js Buffer shares an ArrayBuffer pool
+      const buf = Buffer.from(s.faceVector);
+      descriptor = Array.from(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4));
     }
     return {
       id: s.id,

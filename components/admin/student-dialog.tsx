@@ -180,19 +180,74 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     setEnrollStatus('idle');
     setEnrollMessage('');
     try {
-      const res = await fetch(`/api/students/${student.id}/enroll`, { method: 'POST' });
+      // 1. Load face-api models (tiny ones only)
+      setEnrollMessage('Carregando modelos de IA...');
+      const faceapi = await import('@vladmandic/face-api');
+      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+
+      // 2. Find the profile photo URL
+      const profilePhoto = photos.find((p) => p.isProfile) || photos[0];
+      if (!profilePhoto) {
+        setEnrollStatus('error');
+        setEnrollMessage('Nenhuma foto cadastrada. Adicione ao menos uma foto antes de treinar a biometria.');
+        return;
+      }
+
+      setEnrollMessage('Analisando foto...');
+
+      // 3. Load the image as HTMLImageElement
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.crossOrigin = 'anonymous';
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = profilePhoto.url;
+      });
+
+      // 4. Detect single face with descriptor
+      const detection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+
+      if (!detection) {
+        setEnrollStatus('error');
+        setEnrollMessage('Nenhum rosto encontrado na foto. Tente uma foto de frente com boa iluminação.');
+        toast({ variant: 'destructive', title: 'Nenhum rosto encontrado', description: 'Use uma foto de frente com boa iluminação.' });
+        return;
+      }
+
+      // 5. Convert Float32Array descriptor to number[]
+      const descriptor = Array.from(detection.descriptor);
+
+      // 6. POST to enrollment API
+      setEnrollMessage('Salvando biometria...');
+      const res = await fetch(`/api/students/${student.id}/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor }),
+      });
       const data = await res.json();
+
       if (res.ok) {
         setEnrollStatus('success');
         setEnrollMessage(data.message || 'Biometria treinada com sucesso!');
-        toast({ variant: 'success', title: '✅ Biometria treinada!', description: student.name });
+        toast({ variant: 'success', title: 'Biometria treinada!', description: student.name });
       } else {
         setEnrollStatus('error');
         setEnrollMessage(data.error || 'Falha ao treinar biometria.');
         toast({ variant: 'destructive', title: 'Erro na biometria', description: data.error });
       }
+    } catch (err: any) {
+      console.error('[enroll] error:', err);
+      setEnrollStatus('error');
+      setEnrollMessage('Erro inesperado ao processar biometria. Tente novamente.');
+      toast({ variant: 'destructive', title: 'Erro na biometria', description: err?.message });
     } finally {
       setEnrolling(false);
+      if (!enrollMessage) setEnrollMessage('');
     }
   }
 

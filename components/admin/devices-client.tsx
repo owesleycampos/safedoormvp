@@ -169,7 +169,7 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
       const res = await fetch('/api/devices');
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setDevices(data);
+      setDevices(data.devices ?? data);
       toast({ variant: 'success', title: 'Dispositivos atualizados' });
     } catch {
       toast({ variant: 'destructive', title: 'Erro ao atualizar' });
@@ -197,7 +197,8 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
           }),
         });
         if (!res.ok) throw new Error(await res.text());
-        const updated: DeviceItem = await res.json();
+        const patchPayload = await res.json();
+        const updated: DeviceItem = patchPayload.device ?? patchPayload;
         setDevices((prev) =>
           prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d))
         );
@@ -213,7 +214,8 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
           }),
         });
         if (!res.ok) throw new Error(await res.text());
-        const created: DeviceItem & { _count?: { attendanceEvents: number } } = await res.json();
+        const payload = await res.json();
+        const created: DeviceItem = payload.device ?? payload;
         setDevices((prev) => [{ ...created, _count: { attendanceEvents: 0 } }, ...prev]);
         toast({ variant: 'success', title: 'Dispositivo registrado', description: created.name });
       }

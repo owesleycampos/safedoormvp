@@ -1,13 +1,4 @@
 {
   "buildCommand": "prisma generate && next build",
-  "framework": "nextjs",
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "NEXTAUTH_SECRET": "@nextauth_secret",
-    "ENCRYPTION_KEY": "@encryption_key",
-    "NEXT_PUBLIC_VAPID_PUBLIC_KEY": "@vapid_public_key",
-    "VAPID_PRIVATE_KEY": "@vapid_private_key",
-    "VAPID_EMAIL": "@vapid_email",
-    "AGENT_API_SECRET": "@agent_api_secret"
-  }
+  "framework": "nextjs"
 }

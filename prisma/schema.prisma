@@ -1,13 +1,13 @@
-// Safe Door Brasil - Prisma Schema (SQLite for MVP)
-// Switch provider to "postgresql" and restore @db.Text for production
+// Safe Door Brasil - Prisma Schema (PostgreSQL)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================
@@ -20,12 +20,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -265,10 +265,10 @@ model PushSubscription {
   parent    Parent?  @relation(fields: [parentId], references: [id], onDelete: Cascade)
   schoolId  String?
   school    School?  @relation(fields: [schoolId], references: [id])
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?
+  endpoint  String   @unique @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  userAgent String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -283,7 +283,7 @@ model AuditLog {
   action     String
   entityType String?
   entityId   String?
-  metadata   String?  // JSON string (SQLite has no native JSON type)
+  metadata   String?  @db.Text // JSON string
   ipAddress  String?
   createdAt  DateTime @default(now())
 

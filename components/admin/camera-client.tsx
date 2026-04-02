@@ -32,15 +32,15 @@ interface DetectedFace {
   studentId: string | null;
   name: string;
   photoUrl: string | null;
-  confidence: number; // 0–1 (1 = perfect match, lower = worse)
-  distance: number;   // face-api distance (lower = better)
+  confidence: number;
+  distance: number;
   box: { x: number; y: number; width: number; height: number };
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants (OPTIMIZED for speed) ──────────────────────────────────────────
 
-const MATCH_THRESHOLD = 0.5;   // face-api distance threshold
-const SCAN_INTERVAL_MS = 800;
+const MATCH_THRESHOLD = 0.5;
+const SCAN_INTERVAL_MS = 250;        // 4x faster: was 800ms → now 250ms
 const CLIENT_COOLDOWN_MS = 60_000;
 const MAX_RECENT = 5;
 const MODELS_PATH = '/models';
@@ -62,37 +62,43 @@ export function CameraClient() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastScanRef = useRef<number>(0);
   const faceapiRef = useRef<any>(null);
   const cooldownRef = useRef<Map<string, number>>(new Map());
+  const scanningRef = useRef(false);
+  const studentsRef = useRef<StudentDescriptor[]>([]);
+  const enrolledCacheRef = useRef<{ id: string; descriptor: Float32Array }[]>([]);
+  const modeRef = useRef<'ENTRY' | 'EXIT'>('ENTRY');
 
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [modelProgress, setModelProgress] = useState(0);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [mode, setMode] = useState<'ENTRY' | 'EXIT'>('ENTRY');
-  const [students, setStudents] = useState<StudentDescriptor[]>([]);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [detectedFaces, setDetectedFaces] = useState<DetectedFace[]>([]);
   const [recentRecognitions, setRecentRecognitions] = useState<RecentRecognition[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   // ── Load face-api.js models ──────────────────────────────────────────────────
   useEffect(() => {
     async function loadModels() {
       try {
         setModelProgress(10);
-        // Dynamic import to avoid SSR issues
         const faceapi = await import('@vladmandic/face-api');
         faceapiRef.current = faceapi;
 
+        // Load all models in parallel for speed
         setModelProgress(20);
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_PATH);
-        setModelProgress(50);
-        await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODELS_PATH);
-        setModelProgress(75);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH);
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_PATH),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODELS_PATH),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH),
+        ]);
         setModelProgress(100);
-
         setModelStatus('ready');
       } catch (err) {
         console.error('[face-api] Model load error:', err);
@@ -103,7 +109,7 @@ export function CameraClient() {
     loadModels();
   }, []);
 
-  // ── Load student descriptors ─────────────────────────────────────────────────
+  // ── Load student descriptors + pre-compute Float32Arrays ──────────────────
   useEffect(() => {
     async function fetchDescriptors() {
       try {
@@ -111,8 +117,17 @@ export function CameraClient() {
         if (!res.ok) return;
         const data = await res.json();
         const list: StudentDescriptor[] = data.students || [];
-        setStudents(list);
-        setEnrolledCount(list.filter((s) => s.descriptor !== null).length);
+        studentsRef.current = list;
+
+        // Pre-compute Float32Array descriptors for fast comparison
+        enrolledCacheRef.current = list
+          .filter((s) => s.descriptor !== null)
+          .map((s) => ({
+            id: s.id,
+            descriptor: new Float32Array(s.descriptor!),
+          }));
+
+        setEnrolledCount(enrolledCacheRef.current.length);
       } catch (err) {
         console.error('[descriptors] fetch error:', err);
       }
@@ -120,12 +135,12 @@ export function CameraClient() {
     fetchDescriptors();
   }, []);
 
-  // ── Start camera ─────────────────────────────────────────────────────────────
+  // ── Start camera (lower resolution = faster processing) ───────────────────
   const startCamera = useCallback(async () => {
     setCameraStatus('starting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
       streamRef.current = stream;
@@ -143,9 +158,9 @@ export function CameraClient() {
 
   // ── Stop camera ──────────────────────────────────────────────────────────────
   const stopCamera = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -155,149 +170,160 @@ export function CameraClient() {
     setDetectedFaces([]);
   }, []);
 
-  // ── Face detection loop ──────────────────────────────────────────────────────
-  const runDetection = useCallback(async () => {
-    const faceapi = faceapiRef.current;
-    if (!faceapi || !videoRef.current || videoRef.current.readyState < 2) return;
-    if (isScanning) return;
+  // ── Register attendance (non-blocking) ────────────────────────────────────
+  const registerAttendance = useCallback((student: StudentDescriptor, confidence: number) => {
+    const currentMode = modeRef.current;
+    // Fire-and-forget: don't await
+    fetch('/api/attendance/recognize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentId: student.id, type: currentMode, confidence }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.skipped) return;
+        if (data.success) {
+          const label = currentMode === 'ENTRY' ? 'Entrada registrada!' : 'Saída registrada!';
+          toast({ variant: 'success', title: label, description: student.name });
 
-    setIsScanning(true);
-    try {
-      const detections = await faceapi
-        .detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
-        .withFaceLandmarks(true)
-        .withFaceDescriptors();
-
-      if (!detections || detections.length === 0) {
-        setDetectedFaces([]);
-        setIsScanning(false);
-        return;
-      }
-
-      const enrolled = students.filter((s) => s.descriptor !== null);
-      const newFaces: DetectedFace[] = [];
-
-      for (const det of detections) {
-        const detDescriptor = det.descriptor as Float32Array;
-        const box = det.detection.box;
-
-        if (enrolled.length === 0) {
-          newFaces.push({
-            studentId: null,
-            name: 'Nenhum aluno cadastrado',
-            photoUrl: null,
-            confidence: 0,
-            distance: 1,
-            box: { x: box.x, y: box.y, width: box.width, height: box.height },
-          });
-          continue;
-        }
-
-        // Find closest match
-        let bestDistance = Infinity;
-        let bestStudent: StudentDescriptor | null = null;
-
-        for (const student of enrolled) {
-          const refDescriptor = new Float32Array(student.descriptor!);
-          const dist = euclideanDistance(detDescriptor, refDescriptor);
-          if (dist < bestDistance) {
-            bestDistance = dist;
-            bestStudent = student;
-          }
-        }
-
-        if (bestStudent && bestDistance < MATCH_THRESHOLD) {
-          const confidence = Math.max(0, 1 - bestDistance / MATCH_THRESHOLD);
-          newFaces.push({
-            studentId: bestStudent.id,
-            name: bestStudent.name,
-            photoUrl: bestStudent.photoUrl,
+          const newRecognition: RecentRecognition = {
+            id: data.event?.id ?? crypto.randomUUID(),
+            studentId: student.id,
+            name: student.name,
+            photoUrl: student.photoUrl,
+            type: currentMode,
+            timestamp: new Date(),
             confidence,
-            distance: bestDistance,
-            box: { x: box.x, y: box.y, width: box.width, height: box.height },
-          });
-
-          // Register attendance with cooldown check
-          const cooldownKey = `${bestStudent.id}:${mode}`;
-          const lastTime = cooldownRef.current.get(cooldownKey) ?? 0;
-          const now = Date.now();
-          if (now - lastTime > CLIENT_COOLDOWN_MS) {
-            cooldownRef.current.set(cooldownKey, now);
-            registerAttendance(bestStudent, confidence);
-          }
-        } else {
-          newFaces.push({
-            studentId: null,
-            name: 'Rosto não identificado',
-            photoUrl: null,
-            confidence: 0,
-            distance: bestDistance,
-            box: { x: box.x, y: box.y, width: box.width, height: box.height },
-          });
+          };
+          setRecentRecognitions((prev) => [newRecognition, ...prev].slice(0, MAX_RECENT));
         }
+      })
+      .catch((err) => console.error('[attendance] register error:', err));
+  }, []);
+
+  // ── Face detection (RAF loop with throttle) ───────────────────────────────
+  const runDetectionLoop = useCallback(() => {
+    const tick = async (timestamp: number) => {
+      rafRef.current = requestAnimationFrame(tick);
+
+      // Throttle to SCAN_INTERVAL_MS
+      if (timestamp - lastScanRef.current < SCAN_INTERVAL_MS) return;
+      lastScanRef.current = timestamp;
+
+      const faceapi = faceapiRef.current;
+      if (!faceapi || !videoRef.current || videoRef.current.readyState < 2) return;
+      if (scanningRef.current) return; // Skip if previous scan still running
+
+      scanningRef.current = true;
+      setIsScanning(true);
+
+      try {
+        // FAST: inputSize 224 instead of 416 (4x less pixels to process)
+        const detections = await faceapi
+          .detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptors();
+
+        if (!detections || detections.length === 0) {
+          setDetectedFaces([]);
+          return;
+        }
+
+        const enrolled = enrolledCacheRef.current;
+        const students = studentsRef.current;
+        const newFaces: DetectedFace[] = [];
+
+        for (const det of detections) {
+          const detDescriptor = det.descriptor as Float32Array;
+          const box = det.detection.box;
+
+          if (enrolled.length === 0) {
+            newFaces.push({
+              studentId: null,
+              name: 'Nenhum aluno cadastrado',
+              photoUrl: null,
+              confidence: 0,
+              distance: 1,
+              box: { x: box.x, y: box.y, width: box.width, height: box.height },
+            });
+            continue;
+          }
+
+          // Find closest match using pre-computed Float32Arrays
+          let bestDistance = Infinity;
+          let bestId: string | null = null;
+
+          for (const entry of enrolled) {
+            const dist = euclideanDistance(detDescriptor, entry.descriptor);
+            if (dist < bestDistance) {
+              bestDistance = dist;
+              bestId = entry.id;
+            }
+          }
+
+          const bestStudent = bestId ? students.find((s) => s.id === bestId) : null;
+
+          if (bestStudent && bestDistance < MATCH_THRESHOLD) {
+            const confidence = Math.max(0, 1 - bestDistance / MATCH_THRESHOLD);
+            newFaces.push({
+              studentId: bestStudent.id,
+              name: bestStudent.name,
+              photoUrl: bestStudent.photoUrl,
+              confidence,
+              distance: bestDistance,
+              box: { x: box.x, y: box.y, width: box.width, height: box.height },
+            });
+
+            // Cooldown check
+            const cooldownKey = `${bestStudent.id}:${modeRef.current}`;
+            const lastTime = cooldownRef.current.get(cooldownKey) ?? 0;
+            const now = Date.now();
+            if (now - lastTime > CLIENT_COOLDOWN_MS) {
+              cooldownRef.current.set(cooldownKey, now);
+              registerAttendance(bestStudent, confidence);
+            }
+          } else {
+            newFaces.push({
+              studentId: null,
+              name: 'Rosto não identificado',
+              photoUrl: null,
+              confidence: 0,
+              distance: bestDistance,
+              box: { x: box.x, y: box.y, width: box.width, height: box.height },
+            });
+          }
+        }
+
+        setDetectedFaces(newFaces);
+      } catch (err) {
+        console.error('[detection] error:', err);
+      } finally {
+        scanningRef.current = false;
+        setIsScanning(false);
       }
+    };
 
-      setDetectedFaces(newFaces);
-    } catch (err) {
-      console.error('[detection] error:', err);
-    } finally {
-      setIsScanning(false);
-    }
-  }, [students, mode, isScanning]);
+    rafRef.current = requestAnimationFrame(tick);
+  }, [registerAttendance]);
 
-  // ── Register attendance ──────────────────────────────────────────────────────
-  const registerAttendance = useCallback(async (student: StudentDescriptor, confidence: number) => {
-    try {
-      const res = await fetch('/api/attendance/recognize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student.id, type: mode, confidence }),
-      });
-      const data = await res.json();
-
-      if (data.skipped) return;
-
-      if (data.success) {
-        const label = mode === 'ENTRY' ? 'Entrada registrada!' : 'Saída registrada!';
-        toast({ variant: 'success', title: label, description: student.name });
-
-        const newRecognition: RecentRecognition = {
-          id: data.event?.id ?? crypto.randomUUID(),
-          studentId: student.id,
-          name: student.name,
-          photoUrl: student.photoUrl,
-          type: mode,
-          timestamp: new Date(),
-          confidence,
-        };
-
-        setRecentRecognitions((prev) => [newRecognition, ...prev].slice(0, MAX_RECENT));
-      }
-    } catch (err) {
-      console.error('[attendance] register error:', err);
-    }
-  }, [mode]);
-
-  // ── Start/stop detection loop when camera is active ──────────────────────────
+  // ── Start/stop detection loop when camera is active ──────────────────────
   useEffect(() => {
     if (cameraStatus === 'active' && modelStatus === 'ready') {
-      intervalRef.current = setInterval(runDetection, SCAN_INTERVAL_MS);
+      runDetectionLoop();
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
     }
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [cameraStatus, modelStatus, runDetection]);
+  }, [cameraStatus, modelStatus, runDetectionLoop]);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────────
   useEffect(() => {
-    return () => {
-      stopCamera();
-    };
+    return () => { stopCamera(); };
   }, [stopCamera]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -388,7 +414,7 @@ export function CameraClient() {
               <Video className="h-16 w-16 text-white/30" strokeWidth={1} />
               <div className="text-center">
                 <p className="text-white text-sm font-medium">Câmera inativa</p>
-                <p className="text-white/60 text-xs mt-1">Clique em "Iniciar Câmera" para começar</p>
+                <p className="text-white/60 text-xs mt-1">Clique em &quot;Iniciar Câmera&quot; para começar</p>
               </div>
             </div>
           )}

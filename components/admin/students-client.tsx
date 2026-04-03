@@ -100,9 +100,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   return (
     <div className="space-y-5">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1">
-          <div className="relative max-w-xs flex-1">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder="Buscar aluno..."
@@ -111,26 +111,26 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
               className="pl-8"
             />
           </div>
-          <select
-            value={filterClass}
-            onChange={(e) => setFilterClass(e.target.value)}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          <Button
+            onClick={() => { setEditingStudent(null); setDialogDefaultTab('info'); setDialogOpen(true); }}
+            size="sm"
+            className="gap-1.5 flex-shrink-0"
           >
-            <option value="all">Todas as turmas</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            <UserPlus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Novo Aluno</span>
+            <span className="sm:hidden">Novo</span>
+          </Button>
         </div>
-
-        <Button
-          onClick={() => { setEditingStudent(null); setDialogDefaultTab('info'); setDialogOpen(true); }}
-          size="sm"
-          className="gap-1.5"
+        <select
+          value={filterClass}
+          onChange={(e) => setFilterClass(e.target.value)}
+          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
         >
-          <UserPlus className="h-3.5 w-3.5" />
-          Novo Aluno
-        </Button>
+          <option value="all">Todas as turmas</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Stats */}
@@ -212,13 +212,13 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                         </Badge>
                       </div>
 
-                      {/* Actions */}
+                      {/* Actions — always visible on touch, hover-only on desktop */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>

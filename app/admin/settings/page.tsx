@@ -254,10 +254,34 @@ export default function SettingsPage() {
     <div className="flex flex-col flex-1 page-enter">
       <AdminHeader title="Configurações" subtitle="Gerencie os dados e preferências da escola" />
 
-      <div className="flex-1 p-8">
+      {/* Mobile: horizontal scrollable tab strip */}
+      <div className="lg:hidden border-b border-border overflow-x-auto flex-shrink-0">
+        <div className="flex min-w-max px-4">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap',
+                  activeSection === item.id
+                    ? 'border-foreground text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex-1 p-4 lg:p-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto flex gap-8">
-          {/* Sidebar nav */}
-          <nav className="w-52 shrink-0 space-y-1">
+          {/* Sidebar nav — desktop only */}
+          <nav className="hidden lg:block w-52 shrink-0 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (

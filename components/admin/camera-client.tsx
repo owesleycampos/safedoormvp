@@ -255,16 +255,17 @@ export function CameraClient() {
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden">
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
-        <div>
+      {/* Header — compact on mobile */}
+      <div className="flex items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b border-border flex-shrink-0">
+        {/* Title hidden on mobile to save space */}
+        <div className="hidden md:block">
           <h1 className="text-base font-semibold">Câmera ao Vivo</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Reconhecimento facial via AWS Rekognition
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           {/* Mode toggle */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-secondary/40">
             <button
@@ -307,11 +308,11 @@ export function CameraClient() {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main content — mobile: stacked column, desktop: side by side */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
-        {/* Camera + overlays */}
-        <div className="flex-1 relative bg-black overflow-hidden">
+        {/* Camera + overlays — aspect-video on mobile, fills remaining space on desktop */}
+        <div className="relative bg-black overflow-hidden w-full aspect-video md:aspect-auto md:flex-1">
 
           {/* AWS Rekognition not configured */}
           {rekognitionConfigured === false && (
@@ -472,8 +473,8 @@ export function CameraClient() {
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="w-72 flex flex-col border-l border-border bg-card overflow-hidden flex-shrink-0">
+        {/* Sidebar — full width below camera on mobile, fixed sidebar on desktop */}
+        <div className="w-full md:w-72 flex flex-col border-t md:border-t-0 md:border-l border-border bg-card overflow-hidden flex-shrink-0 md:overflow-y-auto">
 
           {/* Status */}
           <div className="px-4 py-3 border-b border-border">

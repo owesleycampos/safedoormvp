@@ -22,7 +22,7 @@ const nav = [
   { href: '/admin/students',     icon: GraduationCap,   label: 'Alunos'            },
   { href: '/admin/classes',      icon: Users,           label: 'Turmas'            },
   { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis'      },
-  { href: '/admin/devices',      icon: Monitor,         label: 'Dispositivos'      },
+  { href: '/admin/camera',       icon: Monitor,         label: 'Câmera ao Vivo'   },
   { href: '/admin/reports',      icon: BarChart2,       label: 'Relatórios'        },
   { href: '/admin/unrecognized', icon: ScanFace,        label: 'Não Identificados' },
   { href: '/admin/settings',     icon: Settings,        label: 'Configurações'     },

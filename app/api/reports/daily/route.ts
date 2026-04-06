@@ -50,11 +50,13 @@ export async function GET(req: NextRequest) {
       timestamp: { gte: date, lt: dayEnd },
     },
     select: {
+      id: true,
       studentId: true,
       eventType: true,
       timestamp: true,
       isManual: true,
       confidence: true,
+      notes: true,
     },
     orderBy: { timestamp: 'asc' },
   });
@@ -63,16 +65,20 @@ export async function GET(req: NextRequest) {
   const eventMap = new Map<string, {
     entry: Date | null;
     entryManual: boolean;
+    entryEventId: string | null;
+    entryNotes: string | null;
     exit: Date | null;
     exitManual: boolean;
+    exitEventId: string | null;
+    exitNotes: string | null;
     confidence: number | null;
   }>();
 
   for (const ev of events) {
     if (!eventMap.has(ev.studentId)) {
       eventMap.set(ev.studentId, {
-        entry: null, entryManual: false,
-        exit: null, exitManual: false,
+        entry: null, entryManual: false, entryEventId: null, entryNotes: null,
+        exit: null, exitManual: false, exitEventId: null, exitNotes: null,
         confidence: null,
       });
     }
@@ -80,12 +86,16 @@ export async function GET(req: NextRequest) {
     if (ev.eventType === 'ENTRY' && !record.entry) {
       record.entry = ev.timestamp;
       record.entryManual = ev.isManual;
+      record.entryEventId = ev.id;
+      record.entryNotes = ev.notes;
       record.confidence = ev.confidence;
     }
     if (ev.eventType === 'EXIT') {
       // Take the latest exit
       record.exit = ev.timestamp;
       record.exitManual = ev.isManual;
+      record.exitEventId = ev.id;
+      record.exitNotes = ev.notes;
     }
   }
 
@@ -109,8 +119,12 @@ export async function GET(req: NextRequest) {
       status,
       entryTime: ev?.entry?.toISOString() ?? null,
       entryManual: ev?.entryManual ?? false,
+      entryEventId: ev?.entryEventId ?? null,
+      entryNotes: ev?.entryNotes ?? null,
       exitTime: ev?.exit?.toISOString() ?? null,
       exitManual: ev?.exitManual ?? false,
+      exitEventId: ev?.exitEventId ?? null,
+      exitNotes: ev?.exitNotes ?? null,
       confidence: ev?.confidence ?? null,
     };
   });

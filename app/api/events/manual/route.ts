@@ -4,16 +4,36 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
 
+/**
+ * POST /api/events/manual
+ *
+ * Body: {
+ *   studentId: string
+ *   eventType: 'ENTRY' | 'EXIT'
+ *   notes?: string          // 'ATRASO' | 'SAIDA_ANTECIPADA' | free text
+ *   override?: boolean      // force replace existing entry for today
+ *   timestamp?: string      // ISO — defaults to now
+ * }
+ *
+ * DELETE /api/events/manual
+ * Body: { eventId: string }  — remove a specific event
+ */
+
+const validEventTypes = ['ENTRY', 'EXIT'];
+const validNotes = ['ATRASO', 'SAIDA_ANTECIPADA'];
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user as any)?.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  const schoolId = (session.user as any)?.schoolId;
-  const { studentId, eventType, notes } = await req.json();
+  const schoolId = (session.user as any)?.schoolId as string;
+  const adminName = (session.user as any)?.name || 'admin';
+  const body = await req.json();
+  const { studentId, eventType, notes, override, timestamp } = body;
 
-  if (!studentId || !eventType || !['ENTRY', 'EXIT'].includes(eventType)) {
+  if (!studentId || !eventType || !validEventTypes.includes(eventType)) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
   }
 
@@ -23,31 +43,66 @@ export async function POST(req: NextRequest) {
   });
   if (!student) return NextResponse.json({ error: 'Aluno não encontrado.' }, { status: 404 });
 
-  // ── Prevent duplicate ENTRY per day (same as camera recognition) ──
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const eventTime = timestamp ? new Date(timestamp) : new Date();
+  const dayStart = new Date(eventTime); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd   = new Date(dayStart);  dayEnd.setDate(dayEnd.getDate() + 1);
 
+  // Build notes string
+  let notesStr: string;
+  if (notes && validNotes.includes(notes)) {
+    const labelMap: Record<string, string> = {
+      ATRASO: 'Atraso registrado manualmente',
+      SAIDA_ANTECIPADA: 'Saída antecipada registrada manualmente',
+    };
+    notesStr = labelMap[notes];
+  } else {
+    notesStr = notes || `Registro manual por ${adminName}`;
+  }
+
+  // ── Handle ENTRY ──────────────────────────────────────────────
   if (eventType === 'ENTRY') {
-    const existingEntry = await prisma.attendanceEvent.findFirst({
-      where: { studentId, eventType: 'ENTRY', timestamp: { gte: today, lt: tomorrow } },
+    const existing = await prisma.attendanceEvent.findFirst({
+      where: { studentId, eventType: 'ENTRY', timestamp: { gte: dayStart, lt: dayEnd } },
     });
-    if (existingEntry) {
-      return NextResponse.json({
-        skipped: true,
-        reason: 'Entrada já registrada hoje para este aluno.',
+
+    if (existing && !override) {
+      return NextResponse.json({ skipped: true, reason: 'Entrada já registrada hoje.', existingEventId: existing.id });
+    }
+
+    if (existing && override) {
+      // Update the existing entry (e.g., change to ATRASO)
+      const updated = await prisma.attendanceEvent.update({
+        where: { id: existing.id },
+        data: { notes: notesStr, timestamp: eventTime, isManual: true },
       });
+      return NextResponse.json({ success: true, event: updated }, { status: 200 });
     }
   }
 
+  // ── Handle EXIT ───────────────────────────────────────────────
+  if (eventType === 'EXIT') {
+    const existing = await prisma.attendanceEvent.findFirst({
+      where: { studentId, eventType: 'EXIT', timestamp: { gte: dayStart, lt: dayEnd } },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    if (existing && override) {
+      const updated = await prisma.attendanceEvent.update({
+        where: { id: existing.id },
+        data: { notes: notesStr, timestamp: eventTime, isManual: true },
+      });
+      return NextResponse.json({ success: true, event: updated }, { status: 200 });
+    }
+  }
+
+  // ── Create new event ──────────────────────────────────────────
   const event = await prisma.attendanceEvent.create({
     data: {
       studentId,
       eventType,
       isManual: true,
-      notes: notes || `Registro manual por ${(session.user as any)?.name || 'admin'}`,
-      timestamp: new Date(),
+      notes: notesStr,
+      timestamp: eventTime,
     },
   });
 
@@ -57,18 +112,45 @@ export async function POST(req: NextRequest) {
       action: 'MANUAL_CHECKIN',
       entityType: 'AttendanceEvent',
       entityId: event.id,
-      metadata: JSON.stringify({ studentId, eventType, studentName: student.name }),
+      metadata: JSON.stringify({ studentId, eventType, notes, studentName: student.name }),
     },
   });
 
-  // Notify parents
-  const notification = formatAttendanceNotification(
-    student.name,
-    eventType,
-    new Date(),
-    student.school.name
-  );
+  const notification = formatAttendanceNotification(student.name, eventType, eventTime, student.school.name);
   notifyParentsOfStudent(studentId, notification).catch(console.error);
 
   return NextResponse.json({ success: true, event }, { status: 201 });
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+
+  const schoolId = (session.user as any)?.schoolId as string;
+  const { eventId } = await req.json();
+
+  if (!eventId) return NextResponse.json({ error: 'eventId obrigatório.' }, { status: 400 });
+
+  // Verify the event belongs to this school
+  const event = await prisma.attendanceEvent.findFirst({
+    where: { id: eventId, student: { schoolId } },
+  });
+
+  if (!event) return NextResponse.json({ error: 'Evento não encontrado.' }, { status: 404 });
+
+  await prisma.attendanceEvent.delete({ where: { id: eventId } });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: (session.user as any)?.id,
+      action: 'EVENT_DELETED',
+      entityType: 'AttendanceEvent',
+      entityId: eventId,
+      metadata: JSON.stringify({ eventId, reason: 'Deleted via manual correction' }),
+    },
+  });
+
+  return NextResponse.json({ success: true });
 }

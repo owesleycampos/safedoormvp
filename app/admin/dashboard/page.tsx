@@ -11,13 +11,7 @@ async function getDashboardData(schoolId: string) {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const [
-    totalStudents,
-    presentToday,
-    recentEvents,
-    deviceStatuses,
-    unrecognizedCount,
-  ] = await Promise.all([
+  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes] = await Promise.all([
     prisma.student.count({ where: { schoolId, isActive: true } }),
     prisma.attendanceEvent.findMany({
       where: { student: { schoolId }, timestamp: { gte: today, lt: tomorrow }, eventType: 'ENTRY' },
@@ -28,17 +22,15 @@ async function getDashboardData(schoolId: string) {
       where: { student: { schoolId } },
       include: {
         student: { select: { name: true, class: { select: { name: true } }, photoUrl: true } },
-        device: { select: { name: true } },
       },
       orderBy: { timestamp: 'desc' },
-      take: 15,
+      take: 20,
     }),
-    prisma.device.findMany({
+    prisma.unrecognizedFaceLog.count({ where: { schoolId, reviewed: false } }),
+    prisma.class.findMany({
       where: { schoolId },
-      select: { id: true, name: true, status: true, lastSeen: true, type: true },
-    }),
-    prisma.unrecognizedFaceLog.count({
-      where: { schoolId, reviewed: false },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     }),
   ]);
 
@@ -47,8 +39,8 @@ async function getDashboardData(schoolId: string) {
     presentCount: presentToday.length,
     absentCount: totalStudents - presentToday.length,
     recentEvents,
-    deviceStatuses,
     unrecognizedCount,
+    classes,
   };
 }
 

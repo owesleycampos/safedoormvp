@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
-  Upload, KeyRound, Loader2,
+  Upload, KeyRound, Loader2, Share2, Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +58,29 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
       setStudents((prev) => prev.filter((s) => s.id !== student.id));
       toast({ variant: 'success', title: 'Aluno removido', description: student.name });
     }
+  }
+
+  function handleShareCode(student: any) {
+    if (!student.accessCode) {
+      toast({ variant: 'destructive', title: 'Sem código', description: 'Gere o código primeiro.' });
+      return;
+    }
+    const msg = encodeURIComponent(
+      `Olá! Para vincular *${student.name}* ao app Safe Door, ` +
+      `baixe o aplicativo e use o código: *${student.accessCode}*\n\n` +
+      `O código é único e pode ser usado uma vez por responsável.`
+    );
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+
+  function handleCopyCode(student: any) {
+    if (!student.accessCode) {
+      toast({ variant: 'destructive', title: 'Sem código', description: 'Gere o código primeiro.' });
+      return;
+    }
+    navigator.clipboard.writeText(student.accessCode).then(() => {
+      toast({ variant: 'success', title: 'Código copiado!', description: student.accessCode });
+    });
   }
 
   async function handleToggleRecognition(student: any) {
@@ -327,6 +350,18 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>
+                          {student.accessCode && (
+                            <>
+                              <DropdownMenuItem onClick={() => handleCopyCode(student)}>
+                                <Copy className="h-4 w-4" />
+                                Copiar código
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleShareCode(student)}>
+                                <Share2 className="h-4 w-4" />
+                                Enviar via WhatsApp
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           {(student.azurePersonId || student.faceVector) && (
                             <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
                               <ScanFace className="h-4 w-4" />

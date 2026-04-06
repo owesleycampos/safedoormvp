@@ -74,42 +74,70 @@ export async function POST(req: NextRequest) {
   dayEnd.setDate(dayEnd.getDate() + 1);
 
   // ── Prevent duplicate ENTRY per day ──────────────────────────────
-  const existingEntry = await prisma.attendanceEvent.findFirst({
-    where: {
-      studentId,
-      eventType,
-      timestamp: { gte: dayStart, lt: dayEnd },
-    },
-    orderBy: { timestamp: 'desc' },
-  });
-
-  if (existingEntry && eventType === 'ENTRY') {
-    return NextResponse.json({
-      skipped: true,
-      reason: 'Entrada já registrada hoje',
-      existingEventId: existingEntry.id,
-      student: { name: student.name, photoUrl: student.photoUrl },
-    });
-  }
-
-  // ── Create or update attendance event ────────────────────────────
-  let event;
-  if (eventType === 'EXIT' && existingEntry) {
-    event = await prisma.attendanceEvent.update({
-      where: { id: existingEntry.id },
-      data: { timestamp, confidence, notified: false },
-    });
-  } else {
-    event = await prisma.attendanceEvent.create({
-      data: {
+  if (eventType === 'ENTRY') {
+    const existingEntry = await prisma.attendanceEvent.findFirst({
+      where: {
         studentId,
-        eventType,
-        timestamp,
-        confidence,
-        isManual: false,
+        eventType: 'ENTRY',
+        timestamp: { gte: dayStart, lt: dayEnd },
       },
     });
+
+    if (existingEntry) {
+      return NextResponse.json({
+        skipped: true,
+        reason: 'Entrada já registrada hoje',
+        existingEventId: existingEntry.id,
+        student: { name: student.name, photoUrl: student.photoUrl },
+      });
+    }
   }
+
+  // ── Prevent duplicate EXIT per day (update latest exit time) ────
+  if (eventType === 'EXIT') {
+    const existingExit = await prisma.attendanceEvent.findFirst({
+      where: {
+        studentId,
+        eventType: 'EXIT',
+        timestamp: { gte: dayStart, lt: dayEnd },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    if (existingExit) {
+      const event = await prisma.attendanceEvent.update({
+        where: { id: existingExit.id },
+        data: { timestamp, confidence, notified: false },
+      });
+
+      const notification = formatAttendanceNotification(
+        student.name, 'EXIT', timestamp, student.school.name
+      );
+      notifyParentsOfStudent(studentId, notification).catch(console.error);
+
+      await prisma.attendanceEvent.update({
+        where: { id: event.id },
+        data: { notified: true },
+      }).catch(() => {});
+
+      return NextResponse.json({
+        success: true,
+        student: { name: student.name, photoUrl: student.photoUrl },
+        event: { id: event.id, eventType: event.eventType, timestamp: event.timestamp },
+      }, { status: 200 });
+    }
+  }
+
+  // ── Create new event ────────────────────────────────────────────
+  const event = await prisma.attendanceEvent.create({
+    data: {
+      studentId,
+      eventType,
+      timestamp,
+      confidence,
+      isManual: false,
+    },
+  });
 
   // ── Push notification (fire-and-forget) ──────────────────────────
   const notification = formatAttendanceNotification(

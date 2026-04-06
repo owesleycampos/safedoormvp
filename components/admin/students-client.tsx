@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
+  Upload, KeyRound, Loader2, FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,8 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
   const [dialogDefaultTab, setDialogDefaultTab] = useState<'info' | 'photos' | 'parents'>('info');
+  const [importing, setImporting] = useState(false);
+  const [generatingCodes, setGeneratingCodes] = useState(false);
 
   const filtered = students.filter((s) => {
     const matchSearch =
@@ -90,6 +93,62 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     setEditingStudent(null);
   }
 
+  async function handleImportCsv() {
+    if (filterClass === 'all') {
+      toast({ variant: 'destructive', title: 'Selecione uma turma', description: 'Filtre por turma antes de importar.' });
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setImporting(true);
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('classId', filterClass);
+        const res = await fetch('/api/students/import', { method: 'POST', body: form });
+        const data = await res.json();
+        if (res.ok) {
+          toast({ variant: 'success', title: data.message });
+          router.refresh();
+        } else {
+          toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        }
+      } catch {
+        toast({ variant: 'destructive', title: 'Erro de conexão' });
+      } finally {
+        setImporting(false);
+      }
+    };
+    input.click();
+  }
+
+  async function handleGenerateCodes() {
+    setGeneratingCodes(true);
+    try {
+      const body = filterClass !== 'all' ? { classId: filterClass } : {};
+      const res = await fetch('/api/students/generate-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ variant: 'success', title: data.message });
+        router.refresh();
+      } else {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setGeneratingCodes(false);
+    }
+  }
+
   const byClass: Record<string, any[]> = {};
   filtered.forEach((s) => {
     const cls = s.class?.name || 'Sem turma';
@@ -133,13 +192,40 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         </select>
       </div>
 
-      {/* Stats */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{filtered.length} alunos</span>
-        <span>·</span>
-        <span>{classes.length} turmas</span>
-        <span>·</span>
-        <span>{students.filter((s) => s.azurePersonId || s.faceVector).length} com biometria</span>
+      {/* Actions row: import, generate codes, stats */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs"
+          onClick={handleImportCsv}
+          disabled={importing}
+        >
+          {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">Importar CSV</span>
+          <span className="sm:hidden">CSV</span>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs"
+          onClick={handleGenerateCodes}
+          disabled={generatingCodes}
+        >
+          {generatingCodes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">Gerar Códigos</span>
+          <span className="sm:hidden">Códigos</span>
+        </Button>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{filtered.length} alunos</span>
+          <span className="hidden sm:inline">·</span>
+          <span className="hidden sm:inline">{classes.length} turmas</span>
+          <span className="hidden sm:inline">·</span>
+          <span className="hidden sm:inline">{students.filter((s) => s.azurePersonId || s.faceVector).length} com biometria</span>
+        </div>
       </div>
 
       {/* List */}
@@ -199,8 +285,13 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                         </p>
                       </div>
 
-                      {/* Biometry badge */}
+                      {/* Badges */}
                       <div className="hidden md:flex items-center gap-2">
+                        {student.accessCode && (
+                          <Badge variant="outline" className="text-[10px] font-mono tracking-wider">
+                            {student.accessCode}
+                          </Badge>
+                        )}
                         {(student.azurePersonId || student.faceVector) && student.recognitionEnabled === false && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
                             <ScanLine className="h-3 w-3" />

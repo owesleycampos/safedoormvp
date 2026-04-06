@@ -4,10 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
 
-// In-memory cooldown map: studentId → last registration timestamp (ms)
-// Resets on server restart; the client also tracks this independently.
-const cooldownMap = new Map<string, number>();
-const COOLDOWN_MS = 60_000; // 60 seconds
+// Database-backed cooldown: prevents duplicate registrations across
+// multiple cameras, server instances, and restarts.
+const COOLDOWN_SECONDS = 60; // minimum seconds between registrations for same student+type
 
 /**
  * POST /api/attendance/recognize
@@ -40,14 +39,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 });
   }
 
-  // ── Server-side cooldown check ────────────────────────────────────
-  const cooldownKey = `${studentId}:${type}`;
-  const lastTime = cooldownMap.get(cooldownKey);
-  const now = Date.now();
-  if (lastTime && now - lastTime < COOLDOWN_MS) {
+  // ── Database-backed cooldown (works across multiple cameras/instances) ──
+  const cooldownCutoff = new Date(Date.now() - COOLDOWN_SECONDS * 1000);
+  const recentEvent = await prisma.attendanceEvent.findFirst({
+    where: {
+      studentId,
+      eventType: type,
+      timestamp: { gte: cooldownCutoff },
+    },
+    orderBy: { timestamp: 'desc' },
+  });
+  if (recentEvent) {
     return NextResponse.json({ skipped: true, reason: 'cooldown' }, { status: 200 });
   }
-  cooldownMap.set(cooldownKey, now);
 
   // ── Find student ──────────────────────────────────────────────────
   const student = await prisma.student.findFirst({

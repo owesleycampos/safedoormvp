@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { Baby, LogIn, LogOut, Clock, Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Baby, LogIn, LogOut, Clock, Bell, Plus, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/shared/logo';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { toast } from '@/components/ui/toaster';
 import { cn, getInitials, formatTime, formatRelativeTime } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 
@@ -15,8 +18,12 @@ interface ChildrenClientProps {
 }
 
 export function ChildrenClient({ children }: ChildrenClientProps) {
+  const router = useRouter();
   const [pushEnabled, setPushEnabled] = useState(false);
   const [requestingPush, setRequestingPush] = useState(false);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -94,22 +101,101 @@ export function ChildrenClient({ children }: ChildrenClientProps) {
           </button>
         )}
 
+        {/* Link child dialog */}
+        {showLinkDialog && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+            <p className="text-sm font-semibold">Vincular Filho(a)</p>
+            <p className="text-xs text-muted-foreground">
+              Digite o código de acesso fornecido pela escola.
+            </p>
+            <Input
+              placeholder="Ex: A3X9K2"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+              maxLength={6}
+              className="text-center text-lg font-mono tracking-widest"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => { setShowLinkDialog(false); setAccessCode(''); }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                disabled={accessCode.length < 6 || linking}
+                onClick={async () => {
+                  setLinking(true);
+                  try {
+                    const res = await fetch('/api/students/link', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ accessCode }),
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                      toast({ variant: 'success', title: data.message, description: data.student?.className });
+                      setShowLinkDialog(false);
+                      setAccessCode('');
+                      router.refresh();
+                    } else {
+                      toast({ variant: 'destructive', title: 'Erro', description: data.error });
+                    }
+                  } catch {
+                    toast({ variant: 'destructive', title: 'Erro de conexão' });
+                  } finally {
+                    setLinking(false);
+                  }
+                }}
+              >
+                {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Vincular'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Children */}
-        {children.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        {children.length === 0 && !showLinkDialog ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
             <Baby className="h-10 w-10 text-muted-foreground/20" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Nenhum filho vinculado</p>
               <p className="text-xs text-muted-foreground/60 mt-1">
-                Entre em contato com a escola para vincular.
+                Use o código de acesso fornecido pela escola.
               </p>
             </div>
+            <Button size="sm" onClick={() => setShowLinkDialog(true)} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Vincular Filho
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
             {children.map((child) => (
               <ChildCard key={child.id} child={child} />
             ))}
+
+            {/* Add another child button */}
+            {!showLinkDialog && (
+              <button
+                type="button"
+                onClick={() => setShowLinkDialog(true)}
+                className="w-full flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-left hover:bg-accent/30 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                  <Plus className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Vincular outro filho(a)</p>
+                  <p className="text-xs text-muted-foreground/60">Usando o código da escola</p>
+                </div>
+              </button>
+            )}
           </div>
         )}
       </div>

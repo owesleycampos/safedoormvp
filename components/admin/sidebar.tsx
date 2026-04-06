@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard, GraduationCap, Users, UserCheck,
   BarChart2, ScanFace, Settings, LogOut,
-  ChevronRight, Video,
+  ChevronRight, Video, ClipboardList,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { Logo } from '@/components/shared/logo';
@@ -22,7 +22,7 @@ const nav = [
   { href: '/admin/classes',      icon: Users,           label: 'Turmas'           },
   { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis'     },
   { href: '/admin/camera',       icon: Video,           label: 'Câmera ao Vivo'   },
-  // { href: '/admin/devices',      icon: Monitor,         label: 'Dispositivos'     },
+  { href: '/admin/daily',        icon: ClipboardList,   label: 'Chamada Diária'   },
   { href: '/admin/reports',      icon: BarChart2,       label: 'Relatórios'       },
   { href: '/admin/unrecognized', icon: ScanFace,        label: 'Não Identificados'},
 ];

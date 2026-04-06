@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   Menu, LayoutDashboard, GraduationCap, Users, UserCheck,
-  Monitor, BarChart2, ScanFace, Settings, LogOut, X,
+  Video, BarChart2, ScanFace, Settings, LogOut, X, ClipboardList,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { Logo } from '@/components/shared/logo';
@@ -22,7 +22,8 @@ const nav = [
   { href: '/admin/students',     icon: GraduationCap,   label: 'Alunos'            },
   { href: '/admin/classes',      icon: Users,           label: 'Turmas'            },
   { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis'      },
-  { href: '/admin/camera',       icon: Monitor,         label: 'Câmera ao Vivo'   },
+  { href: '/admin/camera',       icon: Video,           label: 'Câmera ao Vivo'   },
+  { href: '/admin/daily',        icon: ClipboardList,   label: 'Chamada Diária'   },
   { href: '/admin/reports',      icon: BarChart2,       label: 'Relatórios'        },
   { href: '/admin/unrecognized', icon: ScanFace,        label: 'Não Identificados' },
   { href: '/admin/settings',     icon: Settings,        label: 'Configurações'     },

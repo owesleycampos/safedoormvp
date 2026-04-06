@@ -23,6 +23,24 @@ export async function POST(req: NextRequest) {
   });
   if (!student) return NextResponse.json({ error: 'Aluno não encontrado.' }, { status: 404 });
 
+  // ── Prevent duplicate ENTRY per day (same as camera recognition) ──
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (eventType === 'ENTRY') {
+    const existingEntry = await prisma.attendanceEvent.findFirst({
+      where: { studentId, eventType: 'ENTRY', timestamp: { gte: today, lt: tomorrow } },
+    });
+    if (existingEntry) {
+      return NextResponse.json({
+        skipped: true,
+        reason: 'Entrada já registrada hoje para este aluno.',
+      });
+    }
+  }
+
   const event = await prisma.attendanceEvent.create({
     data: {
       studentId,

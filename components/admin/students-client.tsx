@@ -346,7 +346,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <Camera className="h-4 w-4" />
                             Foto / biometria
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push(`/admin/reports?studentId=${student.id}`)}>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/attendance?studentId=${student.id}`)}>
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>

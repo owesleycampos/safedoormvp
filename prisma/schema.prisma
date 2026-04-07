@@ -89,6 +89,8 @@ model School {
   unrecognizedLogs  UnrecognizedFaceLog[]
   pushSubscriptions PushSubscription[]
   settings          SchoolSettings?
+  invites           ClassInvite[]
+  subjects          Subject[]
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 }
@@ -114,16 +116,74 @@ model SchoolSettings {
 // ============================================================
 
 model Class {
-  id        String    @id @default(cuid())
+  id        String          @id @default(cuid())
   name      String
   grade     String?
   schoolId  String
-  school    School    @relation(fields: [schoolId], references: [id])
+  school    School          @relation(fields: [schoolId], references: [id])
   students  Student[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  invites   ClassInvite[]
+  schedules ClassSchedule[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   @@unique([name, schoolId])
+}
+
+// ============================================================
+// CLASS INVITE (bulk parent linking)
+// ============================================================
+
+model ClassInvite {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdBy String
+  expiresAt DateTime
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// SUBJECT (discipline/matéria)
+// ============================================================
+
+model Subject {
+  id        String            @id @default(cuid())
+  name      String
+  schoolId  String
+  school    School            @relation(fields: [schoolId], references: [id])
+  schedules ClassSchedule[]
+  events    AttendanceEvent[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([name, schoolId])
+}
+
+// ============================================================
+// CLASS SCHEDULE (timetable/grade horária)
+// ============================================================
+
+model ClassSchedule {
+  id          String   @id @default(cuid())
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id])
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  dayOfWeek   Int      // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+  period      Int      // 1, 2, 3... (aula/período do dia)
+  startTime   String   // "08:00"
+  endTime     String   // "08:50"
+  teacherName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([classId, dayOfWeek, period])
+  @@index([classId, dayOfWeek])
 }
 
 // ============================================================
@@ -197,23 +257,27 @@ model StudentParent {
 // ============================================================
 
 model AttendanceEvent {
-  id        String   @id @default(cuid())
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
-  deviceId  String?
-  device    Device?  @relation(fields: [deviceId], references: [id])
-  timestamp DateTime @default(now())
-  eventType String   // "ENTRY" | "EXIT"
-  photoUrl  String?
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  deviceId   String?
+  device     Device?  @relation(fields: [deviceId], references: [id])
+  subjectId  String?
+  subject    Subject? @relation(fields: [subjectId], references: [id])
+  period     Int?
+  timestamp  DateTime @default(now())
+  eventType  String   // "ENTRY" | "EXIT"
+  photoUrl   String?
   confidence Float?
-  isManual  Boolean  @default(false)
-  notes     String?
-  notified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isManual   Boolean  @default(false)
+  notes      String?
+  notified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([studentId, timestamp])
   @@index([deviceId, timestamp])
+  @@index([subjectId])
 }
 
 // ============================================================

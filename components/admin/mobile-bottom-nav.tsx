@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, GraduationCap, Video, BarChart2, MoreHorizontal } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, Video, ClipboardList, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { AdminMobileHeader } from './mobile-header';
@@ -11,7 +11,7 @@ const tabs = [
   { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/students',  icon: GraduationCap,   label: 'Alunos'    },
   { href: '/admin/camera',    icon: Video,           label: 'Câmera'    },
-  { href: '/admin/reports',   icon: BarChart2,       label: 'Relatórios'},
+  { href: '/admin/attendance', icon: ClipboardList,   label: 'Frequência'},
 ];
 
 export function AdminMobileBottomNav() {

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   Plus, Search, GraduationCap, Edit, Trash2, Users, MoreHorizontal,
+  Send, Copy, Check, Link2, Loader2, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +66,10 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+  const [inviteDialog, setInviteDialog] = useState<{ classId: string; className: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const filtered = classes.filter((c) => {
     const q = search.toLowerCase();
@@ -157,6 +162,56 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erro ao excluir', description: err.message });
     }
+  }
+
+  async function handleGenerateInvite(classId: string, className: string) {
+    setInviteDialog({ classId, className });
+    setInviteLink(null);
+    setCopied(false);
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const link = `${window.location.origin}/vincular/${data.invite.token}`;
+        setInviteLink(link);
+      } else {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        setInviteDialog(null);
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao gerar convite' });
+      setInviteDialog(null);
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  function getWhatsAppMessage() {
+    if (!inviteLink || !inviteDialog) return '';
+    return `Olá! A escola disponibilizou o link abaixo para você vincular seu filho(a) da turma *${inviteDialog.className}* ao sistema Safe Door.\n\nAcesse o link e siga as instruções:\n${inviteLink}\n\nCom o Safe Door você acompanha a entrada e saída do seu filho em tempo real.`;
+  }
+
+  function handleCopyLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({ variant: 'success', title: 'Link copiado!' });
+  }
+
+  function handleShareWhatsApp() {
+    const msg = encodeURIComponent(getWhatsAppMessage());
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+
+  function handleCopyWhatsAppMessage() {
+    navigator.clipboard.writeText(getWhatsAppMessage());
+    toast({ variant: 'success', title: 'Mensagem copiada! Cole no WhatsApp.' });
   }
 
   const totalStudents = classes.reduce((sum, c) => sum + c._count.students, 0);
@@ -256,6 +311,10 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                               <Edit className="h-4 w-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleGenerateInvite(cls.id, cls.name)}>
+                              <Send className="h-4 w-4 mr-2" />
+                              Enviar Convite
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleDelete(cls)}
@@ -286,6 +345,53 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
             </div>
           ))
       )}
+
+      {/* Invite Dialog */}
+      <Dialog open={!!inviteDialog} onOpenChange={(open) => { if (!open) setInviteDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Convite para Pais</DialogTitle>
+            <DialogDescription>
+              Compartilhe o link abaixo com os responsáveis da turma{' '}
+              <strong>{inviteDialog?.className}</strong>. Cada pai seleciona seu filho e confirma com a data de nascimento.
+            </DialogDescription>
+          </DialogHeader>
+
+          {inviteLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : inviteLink ? (
+            <div className="space-y-4 mt-2">
+              {/* Link display */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded-md border border-input bg-secondary/50 px-3 py-2 text-xs text-muted-foreground truncate font-mono">
+                  {inviteLink}
+                </div>
+                <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                  {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {/* Actions */}
+              <div className="grid grid-cols-1 gap-2">
+                <Button onClick={handleShareWhatsApp} className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700">
+                  <Send className="h-4 w-4" />
+                  Enviar via WhatsApp
+                </Button>
+                <Button variant="outline" onClick={handleCopyWhatsAppMessage} className="w-full gap-2">
+                  <Copy className="h-4 w-4" />
+                  Copiar mensagem completa
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground text-center">
+                O link expira em 30 dias. Gerar um novo convite invalida o anterior.
+              </p>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>

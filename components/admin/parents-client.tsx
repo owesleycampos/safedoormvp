@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Plus, Search, Mail, Phone, Users, MoreHorizontal, Edit, Trash2,
-  UserCheck, Shield, ChevronRight,
+  UserCheck, Shield, ChevronRight, Link2, Unlink, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,6 +77,11 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
   const [editingParent, setEditingParent] = useState<ParentItem | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkParent, setLinkParent] = useState<ParentItem | null>(null);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkStudents, setLinkStudents] = useState<Array<{ id: string; name: string; class: { name: string } | null }>>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
 
   const filtered = parents.filter((p) => {
     const q = search.toLowerCase();
@@ -186,6 +191,81 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
       toast({ variant: 'destructive', title: 'Erro ao excluir', description: err.message });
     }
   }
+
+  async function openLinkDialog(parent: ParentItem) {
+    setLinkParent(parent);
+    setLinkSearch('');
+    setLinkOpen(true);
+    try {
+      const res = await fetch('/api/students?limit=500');
+      const data = await res.json();
+      setLinkStudents(data.students ?? data ?? []);
+    } catch {
+      setLinkStudents([]);
+    }
+  }
+
+  async function handleLinkStudent(studentId: string) {
+    if (!linkParent) return;
+    setLinkLoading(true);
+    try {
+      const res = await fetch(`/api/parents/${linkParent.id}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ variant: 'success', title: `${data.student.name} vinculado(a)!` });
+        setLinkOpen(false);
+        // Refresh page to get updated data
+        window.location.reload();
+      } else {
+        toast({ variant: 'destructive', title: data.error });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setLinkLoading(false);
+    }
+  }
+
+  async function handleUnlinkStudent(parentId: string, studentId: string, studentName: string) {
+    if (!confirm(`Desvincular "${studentName}" deste responsável?`)) return;
+    try {
+      const res = await fetch(`/api/parents/${parentId}/link`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
+      if (res.ok) {
+        toast({ variant: 'success', title: `${studentName} desvinculado(a)` });
+        setParents(prev => prev.map(p => {
+          if (p.id === parentId) {
+            return { ...p, students: p.students.filter(sp => sp.studentId !== studentId) };
+          }
+          return p;
+        }));
+        if (detailParent?.id === parentId) {
+          setDetailParent(prev => prev ? {
+            ...prev,
+            students: prev.students.filter(sp => sp.studentId !== studentId),
+          } : null);
+        }
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao desvincular' });
+    }
+  }
+
+  const filteredLinkStudents = linkStudents.filter(s => {
+    const q = linkSearch.toLowerCase();
+    if (!q) return true;
+    return s.name.toLowerCase().includes(q);
+  }).filter(s => {
+    // Exclude already linked
+    return !linkParent?.students.some(sp => sp.studentId === s.id);
+  });
 
   return (
     <div className="space-y-6">
@@ -491,9 +571,15 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
 
                 {/* Linked students */}
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Alunos vinculados ({detailParent.students.length})
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Alunos vinculados ({detailParent.students.length})
+                    </p>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openLinkDialog(detailParent)}>
+                      <Link2 className="h-3 w-3" />
+                      Vincular Aluno
+                    </Button>
+                  </div>
                   {detailParent.students.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhum aluno vinculado.</p>
                   ) : (
@@ -520,9 +606,13 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
                             <Badge variant={sp.isPrimary ? 'success' : 'outline'} className="text-xs">
                               {sp.relationship}
                             </Badge>
-                            {sp.isPrimary && (
-                              <Badge variant="success" className="text-xs">Primário</Badge>
-                            )}
+                            <button
+                              onClick={() => handleUnlinkStudent(detailParent.id, sp.studentId, sp.student.name)}
+                              className="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Desvincular"
+                            >
+                              <Unlink className="h-3 w-3" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -544,6 +634,50 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Student Dialog */}
+      <Dialog open={linkOpen} onOpenChange={(open) => { if (!open) setLinkOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular Aluno</DialogTitle>
+            <DialogDescription>
+              Selecione um aluno para vincular a {linkParent?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <Input
+              placeholder="Buscar aluno..."
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+              leftIcon={<Search className="h-4 w-4" />}
+              autoFocus
+            />
+            <div className="max-h-[300px] overflow-y-auto rounded-md border border-border divide-y divide-border">
+              {filteredLinkStudents.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Nenhum aluno disponível</p>
+              ) : (
+                filteredLinkStudents.slice(0, 50).map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleLinkStudent(s.id)}
+                    disabled={linkLoading}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors text-left"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                      <span className="text-[10px] font-semibold">{getInitials(s.name)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground">{s.class?.name || 'Sem turma'}</p>
+                    </div>
+                    <Link2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

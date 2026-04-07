@@ -121,7 +121,9 @@ interface StatusMenuProps {
 function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMenuProps) {
   const [open, setOpen] = useState(false);
   const [timePicker, setTimePicker] = useState<{ action: string; title: string } | null>(null);
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const status = getEffectiveStatus(student);
   const cfg = STATUS_CONFIG[status];
   const Icon = cfg.icon;
@@ -160,10 +162,20 @@ function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMen
     }
   }
 
+  function handleToggle() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setDropUp(spaceBelow < 200);
+    }
+    setOpen(o => !o);
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={handleToggle}
         disabled={busy}
         className={cn(
           'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors',
@@ -177,7 +189,10 @@ function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMen
       </button>
 
       {open && isToday && actions.length > 0 && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border border-border bg-card shadow-lg py-1">
+        <div className={cn(
+          'absolute right-0 z-50 min-w-[180px] rounded-lg border border-border bg-card shadow-lg py-1',
+          dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+        )}>
           {actions.map(a => (
             <button
               key={a.key}

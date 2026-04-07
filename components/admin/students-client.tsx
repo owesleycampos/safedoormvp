@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
-  Upload, KeyRound, Loader2, Share2, Copy,
+  Upload, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { StudentDialog } from '@/components/admin/student-dialog';
 import { toast } from '@/components/ui/toaster';
 import { cn, getInitials } from '@/lib/utils';
@@ -34,7 +39,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [editingStudent, setEditingStudent] = useState<any>(null);
   const [dialogDefaultTab, setDialogDefaultTab] = useState<'info' | 'photos' | 'parents'>('info');
   const [importing, setImporting] = useState(false);
-  const [generatingCodes, setGeneratingCodes] = useState(false);
+  const [importDialog, setImportDialog] = useState(false);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [nameCol, setNameCol] = useState(0);
+  const [birthCol, setBirthCol] = useState(-1);
 
   const filtered = students.filter((s) => {
     const matchSearch =
@@ -58,29 +67,6 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
       setStudents((prev) => prev.filter((s) => s.id !== student.id));
       toast({ variant: 'success', title: 'Aluno removido', description: student.name });
     }
-  }
-
-  function handleShareCode(student: any) {
-    if (!student.accessCode) {
-      toast({ variant: 'destructive', title: 'Sem código', description: 'Gere o código primeiro.' });
-      return;
-    }
-    const msg = encodeURIComponent(
-      `Olá! Para vincular *${student.name}* ao app Safe Door, ` +
-      `baixe o aplicativo e use o código: *${student.accessCode}*\n\n` +
-      `O código é único e pode ser usado uma vez por responsável.`
-    );
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  }
-
-  function handleCopyCode(student: any) {
-    if (!student.accessCode) {
-      toast({ variant: 'destructive', title: 'Sem código', description: 'Gere o código primeiro.' });
-      return;
-    }
-    navigator.clipboard.writeText(student.accessCode).then(() => {
-      toast({ variant: 'success', title: 'Código copiado!', description: student.accessCode });
-    });
   }
 
   async function handleToggleRecognition(student: any) {
@@ -116,47 +102,62 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     setEditingStudent(null);
   }
 
-  async function handleImportCsv() {
+  function handleImportCsv() {
     if (filterClass === 'all') {
       toast({ variant: 'destructive', title: 'Selecione uma turma', description: 'Filtre por turma antes de importar.' });
       return;
     }
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv,.txt';
+    input.accept = '.csv,.txt,.xlsx';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      setImporting(true);
-      try {
-        const form = new FormData();
-        form.append('file', file);
-        form.append('classId', filterClass);
-        const res = await fetch('/api/students/import', { method: 'POST', body: form });
-        const data = await res.json();
-        if (res.ok) {
-          toast({ variant: 'success', title: data.message });
-          router.refresh();
-        } else {
-          toast({ variant: 'destructive', title: 'Erro', description: data.error });
-        }
-      } catch {
-        toast({ variant: 'destructive', title: 'Erro de conexão' });
-      } finally {
-        setImporting(false);
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length === 0) {
+        toast({ variant: 'destructive', title: 'Arquivo vazio' });
+        return;
       }
+      const parsed = lines.map(line => {
+        const sep = line.includes(';') ? ';' : ',';
+        return line.split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''));
+      });
+      // Auto-detect header row
+      const first = parsed[0].map(h => h.toLowerCase());
+      const hasHeader = first.some(h => ['nome', 'name', 'aluno', 'estudante'].includes(h));
+      if (hasHeader) {
+        setCsvHeaders(parsed[0]);
+        setCsvRows(parsed.slice(1));
+        // Auto-map columns
+        const ni = first.findIndex(h => ['nome', 'name', 'aluno', 'estudante'].includes(h));
+        const bi = first.findIndex(h => ['nascimento', 'birth', 'data_nascimento', 'data de nascimento', 'birthdate', 'dt_nasc'].includes(h));
+        setNameCol(ni >= 0 ? ni : 0);
+        setBirthCol(bi >= 0 ? bi : -1);
+      } else {
+        setCsvHeaders(parsed[0].map((_, i) => `Coluna ${i + 1}`));
+        setCsvRows(parsed);
+        setNameCol(0);
+        setBirthCol(parsed[0].length > 1 ? 1 : -1);
+      }
+      setImportDialog(true);
     };
     input.click();
   }
 
-  async function handleGenerateCodes() {
-    setGeneratingCodes(true);
+  async function handleConfirmImport() {
+    setImporting(true);
     try {
-      const body = filterClass !== 'all' ? { classId: filterClass } : {};
-      const res = await fetch('/api/students/generate-codes', {
+      const students = csvRows
+        .map(row => ({
+          name: row[nameCol] || '',
+          birthDate: birthCol >= 0 ? row[birthCol] : undefined,
+        }))
+        .filter(s => s.name.trim());
+      const res = await fetch('/api/students/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ classId: filterClass, students }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -165,10 +166,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
       } else {
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
       }
+      setImportDialog(false);
     } catch {
       toast({ variant: 'destructive', title: 'Erro de conexão' });
     } finally {
-      setGeneratingCodes(false);
+      setImporting(false);
     }
   }
 
@@ -227,17 +229,6 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
           {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           <span className="hidden sm:inline">Importar CSV</span>
           <span className="sm:hidden">CSV</span>
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-xs"
-          onClick={handleGenerateCodes}
-          disabled={generatingCodes}
-        >
-          {generatingCodes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-          <span className="hidden sm:inline">Gerar Códigos</span>
-          <span className="sm:hidden">Códigos</span>
         </Button>
 
         <div className="flex-1" />
@@ -350,18 +341,6 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <Eye className="h-4 w-4" />
                             Ver histórico
                           </DropdownMenuItem>
-                          {student.accessCode && (
-                            <>
-                              <DropdownMenuItem onClick={() => handleCopyCode(student)}>
-                                <Copy className="h-4 w-4" />
-                                Copiar código
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleShareCode(student)}>
-                                <Share2 className="h-4 w-4" />
-                                Enviar via WhatsApp
-                              </DropdownMenuItem>
-                            </>
-                          )}
                           {(student.azurePersonId || student.faceVector) && (
                             <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
                               <ScanFace className="h-4 w-4" />
@@ -395,6 +374,74 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         onSaved={handleSaved}
         defaultTab={dialogDefaultTab}
       />
+
+      {/* Import CSV Dialog */}
+      <Dialog open={importDialog} onOpenChange={(open) => { if (!open) setImportDialog(false); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Importar Alunos</DialogTitle>
+            <DialogDescription>
+              Mapeie as colunas do seu arquivo. {csvRows.length} aluno{csvRows.length !== 1 ? 's' : ''} encontrado{csvRows.length !== 1 ? 's' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Coluna do Nome *</Label>
+                <select
+                  value={nameCol}
+                  onChange={(e) => setNameCol(Number(e.target.value))}
+                  className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                >
+                  {csvHeaders.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Coluna da Data de Nasc.</Label>
+                <select
+                  value={birthCol}
+                  onChange={(e) => setBirthCol(Number(e.target.value))}
+                  className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                >
+                  <option value={-1}>Não importar</option>
+                  {csvHeaders.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">Pré-visualização (primeiros 5)</p>
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-secondary/30">
+                      <th className="text-left px-3 py-1.5 font-medium">Nome</th>
+                      {birthCol >= 0 && <th className="text-left px-3 py-1.5 font-medium">Data Nasc.</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {csvRows.slice(0, 5).map((row, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-1.5">{row[nameCol] || <span className="text-muted-foreground italic">vazio</span>}</td>
+                        {birthCol >= 0 && <td className="px-3 py-1.5">{row[birthCol] || '—'}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportDialog(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmImport} loading={importing}>
+              Importar {csvRows.filter(r => r[nameCol]?.trim()).length} alunos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

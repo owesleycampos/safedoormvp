@@ -79,6 +79,13 @@ export default function SubjectsPage() {
 
 // ─── Subjects Tab ─────────────────────────────────────────────────────────────
 
+const PRESET_SUBJECTS = [
+  'Português', 'Matemática', 'História', 'Geografia', 'Ciências',
+  'Física', 'Química', 'Biologia', 'Inglês', 'Espanhol',
+  'Educação Física', 'Artes', 'Música', 'Filosofia', 'Sociologia',
+  'Redação', 'Literatura', 'Informática', 'Religião', 'Educação Financeira',
+];
+
 function SubjectsTab() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +94,7 @@ function SubjectsTab() {
   const [editing, setEditing] = useState<Subject | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [addingPreset, setAddingPreset] = useState<string | null>(null);
 
   const fetchSubjects = useCallback(async () => {
     try {
@@ -147,6 +155,51 @@ function SubjectsTab() {
     }
   }
 
+  async function handleQuickAdd(presetName: string) {
+    setAddingPreset(presetName);
+    try {
+      const res = await fetch('/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: presetName }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      toast({ variant: 'success', title: `${presetName} criada` });
+      fetchSubjects();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: err.message || 'Erro' });
+    } finally {
+      setAddingPreset(null);
+    }
+  }
+
+  async function handleAddAll() {
+    const missing = PRESET_SUBJECTS.filter(p => !existingNames.has(p.toLowerCase()));
+    if (missing.length === 0) {
+      toast({ variant: 'warning', title: 'Todas as matérias já existem' });
+      return;
+    }
+    setAddingPreset('all');
+    try {
+      for (const name of missing) {
+        await fetch('/api/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+      }
+      toast({ variant: 'success', title: `${missing.length} matérias criadas` });
+      fetchSubjects();
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao criar matérias' });
+    } finally {
+      setAddingPreset(null);
+    }
+  }
+
+  const existingNames = new Set(subjects.map(s => s.name.toLowerCase()));
+  const availablePresets = PRESET_SUBJECTS.filter(p => !existingNames.has(p.toLowerCase()));
+
   async function handleDelete(s: Subject) {
     if (!confirm(`Excluir matéria "${s.name}"?`)) return;
     try {
@@ -182,6 +235,35 @@ function SubjectsTab() {
           Nova Matéria
         </Button>
       </div>
+
+      {/* Quick-add presets */}
+      {availablePresets.length > 0 && (
+        <Card className="p-3 md:p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-muted-foreground">Adicionar rapidamente</p>
+            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleAddAll} disabled={!!addingPreset}>
+              {addingPreset === 'all' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              Adicionar todas ({availablePresets.length})
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {availablePresets.map((p) => (
+              <button
+                key={p}
+                onClick={() => handleQuickAdd(p)}
+                disabled={!!addingPreset}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs border border-border hover:bg-accent hover:border-primary/30 transition-colors',
+                  addingPreset === p && 'opacity-50'
+                )}
+              >
+                {addingPreset === p ? <Loader2 className="h-3 w-3 animate-spin inline mr-1" /> : <Plus className="h-3 w-3 inline mr-0.5" />}
+                {p}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {filtered.length === 0 ? (
         <Card className="p-12 flex flex-col items-center justify-center text-center gap-3">

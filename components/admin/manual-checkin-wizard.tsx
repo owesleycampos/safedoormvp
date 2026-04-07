@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, LogIn, LogOut, Check, X, GraduationCap, Users,
+  ChevronLeft, ChevronRight, LogIn, LogOut, Check, X, GraduationCap, Users, Clock,
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -46,6 +46,10 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
   const [submitting, setSubmitting] = useState(false);
   const [lastRegistered, setLastRegistered] = useState<StudentItem | null>(null);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [manualTime, setManualTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   // Reset on close
   useEffect(() => {
@@ -58,6 +62,8 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
         setCarouselIndex(0);
         setEventType('ENTRY');
         setLastRegistered(null);
+        const now = new Date();
+        setManualTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
       }, 300);
     }
   }, [open]);
@@ -118,10 +124,15 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
     if (!student) return;
     setSubmitting(true);
     try {
+      // Build timestamp from manualTime (HH:MM) + today's date
+      const [hh, mm] = manualTime.split(':').map(Number);
+      const ts = new Date();
+      ts.setHours(hh, mm, 0, 0);
+
       const res = await fetch('/api/events/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student.id, eventType }),
+        body: JSON.stringify({ studentId: student.id, eventType, timestamp: ts.toISOString() }),
       });
       if (res.ok) {
         setLastRegistered(student);
@@ -359,8 +370,19 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
                     </div>
                   </div>
 
-                  {/* Entry/Exit + Register */}
+                  {/* Time + Entry/Exit + Register */}
                   <div className="px-5 pb-8 space-y-3 flex-shrink-0">
+                    {/* Time picker */}
+                    <div className="flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="time"
+                        value={manualTime}
+                        onChange={(e) => setManualTime(e.target.value)}
+                        className="h-9 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
+                      />
+                    </div>
+
                     {/* Toggle */}
                     <div className="grid grid-cols-2 gap-2">
                       <button

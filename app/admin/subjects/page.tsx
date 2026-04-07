@@ -651,7 +651,7 @@ function ScheduleTab() {
 
   // Build grid data
   const maxPeriod = schedules.reduce((max, s) => Math.max(max, s.period), 0);
-  const periods = Array.from({ length: Math.max(maxPeriod, 6) }, (_, i) => i + 1);
+  const periods = Array.from({ length: maxPeriod + 1 }, (_, i) => i + 1);
   const grid: Record<string, ScheduleEntry | undefined> = {};
   schedules.forEach(s => { grid[`${s.dayOfWeek}-${s.period}`] = s; });
 

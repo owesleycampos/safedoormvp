@@ -32,8 +32,20 @@ interface ClassItem {
   id: string;
   name: string;
   grade: string | null;
+  shift: string | null;
   _count: { students: number };
   createdAt?: Date | string;
+}
+
+const SHIFT_OPTIONS = [
+  { value: 'MANHA', label: 'Manhã' },
+  { value: 'TARDE', label: 'Tarde' },
+  { value: 'NOITE', label: 'Noite' },
+  { value: 'INTEGRAL', label: 'Integral' },
+];
+
+function shiftLabel(shift: string | null): string {
+  return SHIFT_OPTIONS.find(s => s.value === shift)?.label || '';
 }
 
 interface ClassesClientProps {
@@ -57,7 +69,7 @@ const GRADE_OPTIONS = [
   '3º Ano EM',
 ];
 
-const EMPTY_FORM = { name: '', grade: '' };
+const EMPTY_FORM = { name: '', grade: '', shift: '' };
 
 export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClientProps) {
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
@@ -95,7 +107,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
 
   function openEdit(cls: ClassItem) {
     setEditingClass(cls);
-    setForm({ name: cls.name, grade: cls.grade ?? '' });
+    setForm({ name: cls.name, grade: cls.grade ?? '', shift: cls.shift ?? '' });
     setDialogOpen(true);
   }
 
@@ -117,7 +129,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
         const res = await fetch(`/api/classes/${editingClass.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: form.name, grade: form.grade || null }),
+          body: JSON.stringify({ name: form.name, grade: form.grade || null, shift: form.shift || null }),
         });
         if (!res.ok) throw new Error(await res.text());
         const updated: ClassItem = await res.json();
@@ -129,7 +141,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
         const res = await fetch('/api/classes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: form.name, grade: form.grade || null }),
+          body: JSON.stringify({ name: form.name, grade: form.grade || null, shift: form.shift || null }),
         });
         if (!res.ok) throw new Error(await res.text());
         const created: ClassItem & { _count?: { students: number } } = await res.json();
@@ -329,9 +341,9 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                     </CardHeader>
                     <CardContent className="pt-0">
                       <CardTitle className="text-base mb-1">{cls.name}</CardTitle>
-                      {cls.grade && (
-                        <p className="text-xs text-muted-foreground mb-3">{cls.grade}</p>
-                      )}
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {[cls.grade, shiftLabel(cls.shift)].filter(Boolean).join(' · ') || 'Sem série'}
+                      </p>
                       <div className="flex items-center justify-between">
                         <Badge variant="default" className="text-xs">
                           <Users className="h-3 w-3 mr-1" />
@@ -423,11 +435,26 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                 id="class-grade"
                 value={form.grade}
                 onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value }))}
-                className="w-full h-11 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                className="w-full h-11 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 text-foreground"
               >
                 <option value="">Selecionar série...</option>
                 {GRADE_OPTIONS.map((g) => (
                   <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="class-shift">Turno</Label>
+              <select
+                id="class-shift"
+                value={form.shift}
+                onChange={(e) => setForm((f) => ({ ...f, shift: e.target.value }))}
+                className="w-full h-11 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 text-foreground"
+              >
+                <option value="">Selecionar turno...</option>
+                {SHIFT_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>

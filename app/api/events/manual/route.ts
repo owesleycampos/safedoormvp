@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
+import { determineAttendanceStatus } from '@/lib/attendance-rules';
 
 /**
  * POST /api/events/manual
@@ -47,14 +48,21 @@ export async function POST(req: NextRequest) {
   const dayStart = new Date(eventTime); dayStart.setHours(0, 0, 0, 0);
   const dayEnd   = new Date(dayStart);  dayEnd.setDate(dayEnd.getDate() + 1);
 
+  // Auto-determine status from school schedule if no explicit notes
+  const autoStatus = await determineAttendanceStatus(studentId, eventType as 'ENTRY' | 'EXIT', eventTime);
+
   // Build notes string
   let notesStr: string;
   if (notes && validNotes.includes(notes)) {
     const labelMap: Record<string, string> = {
-      ATRASO: 'Atraso registrado manualmente',
-      SAIDA_ANTECIPADA: 'Saída antecipada registrada manualmente',
+      ATRASO: 'ATRASO',
+      SAIDA_ANTECIPADA: 'SAIDA_ANTECIPADA',
     };
     notesStr = labelMap[notes];
+  } else if (!notes && autoStatus === 'ATRASO') {
+    notesStr = 'ATRASO';
+  } else if (!notes && autoStatus === 'SAIDA_ANTECIPADA') {
+    notesStr = 'SAIDA_ANTECIPADA';
   } else {
     notesStr = notes || `Registro manual por ${adminName}`;
   }

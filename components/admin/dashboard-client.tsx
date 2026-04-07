@@ -133,73 +133,39 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
       <div className="flex-1 p-4 md:p-6 space-y-6">
 
         {/* Period + Class filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Period filter */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium">Período:</span>
-            <div className="flex items-center gap-1.5">
-              {([
-                { key: 'today', label: 'Hoje' },
-                { key: '7d', label: '7 dias' },
-                { key: '30d', label: '30 dias' },
-                { key: 'custom', label: 'Personalizado' },
-              ] as { key: Period; label: string }[]).map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => {
-                    if (p.key === 'custom') {
-                      setCustomOpen(true);
-                      setPeriod('custom');
-                    } else {
-                      setPeriod(p.key);
-                      setCustomOpen(false);
-                    }
-                  }}
-                  className={cn(
-                    'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
-                    period === p.key
-                      ? 'bg-primary text-primary-foreground shadow-apple-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Period selector */}
+          <select
+            value={period}
+            onChange={(e) => {
+              const v = e.target.value as Period;
+              if (v === 'custom') {
+                setCustomOpen(true);
+              } else {
+                setCustomOpen(false);
+              }
+              setPeriod(v);
+            }}
+            className="h-9 rounded-xl border border-input bg-card px-3 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+          >
+            <option value="today">Hoje</option>
+            <option value="7d">Últimos 7 dias</option>
+            <option value="30d">Últimos 30 dias</option>
+            <option value="custom">Personalizado</option>
+          </select>
 
-          {/* Class filter */}
+          {/* Class selector */}
           {data.classes.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-muted-foreground font-medium">Turma:</span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={() => setClassFilter('all')}
-                  className={cn(
-                    'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
-                    classFilter === 'all'
-                      ? 'bg-primary text-primary-foreground shadow-apple-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  )}
-                >
-                  Todas
-                </button>
-                {data.classes.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setClassFilter(c.id)}
-                    className={cn(
-                      'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
-                      classFilter === c.id
-                        ? 'bg-primary text-primary-foreground shadow-apple-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    )}
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <select
+              value={classFilter}
+              onChange={(e) => setClassFilter(e.target.value)}
+              className="h-9 rounded-xl border border-input bg-card px-3 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+            >
+              <option value="all">Todas as turmas</option>
+              {data.classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           )}
         </div>
 
@@ -420,8 +386,8 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
                         }
                       </span>
                     </Badge>
-                    <span className="text-xs text-muted-foreground w-14 md:w-16 text-right">
-                      {formatRelativeTime(event.timestamp)}
+                    <span className="text-xs text-muted-foreground tabular-nums text-right" title={formatRelativeTime(event.timestamp)}>
+                      {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>

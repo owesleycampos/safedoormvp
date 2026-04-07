@@ -103,6 +103,8 @@ model SchoolSettings {
   entryEndTime   String   @default("09:00")
   exitStartTime  String   @default("11:00")
   exitEndTime    String   @default("18:00")
+  // Per-shift schedule overrides (JSON: { "MANHA": { entry: "07:00", entryLimit: "07:30", exit: "12:00" }, ... })
+  shiftSchedules String?  @db.Text
   minConfidence  Float    @default(0.90)
   notifyOnEntry  Boolean  @default(true)
   notifyOnExit   Boolean  @default(true)
@@ -119,6 +121,7 @@ model Class {
   id        String          @id @default(cuid())
   name      String
   grade     String?
+  shift     String?         // "MANHA" | "TARDE" | "NOITE" (turno)
   schoolId  String
   school    School          @relation(fields: [schoolId], references: [id])
   students  Student[]

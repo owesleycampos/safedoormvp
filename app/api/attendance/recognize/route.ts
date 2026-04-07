@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
+import { determineAttendanceStatus } from '@/lib/attendance-rules';
 
 // Database-backed cooldown: prevents duplicate registrations across
 // multiple cameras, server instances, and restarts.
@@ -128,6 +129,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Determine attendance status (late/early) from school schedule ──
+  const status = await determineAttendanceStatus(studentId, eventType, timestamp);
+  const autoNotes = status === 'ATRASO' ? 'ATRASO' : status === 'SAIDA_ANTECIPADA' ? 'SAIDA_ANTECIPADA' : undefined;
+
   // ── Create new event ────────────────────────────────────────────
   const event = await prisma.attendanceEvent.create({
     data: {
@@ -136,6 +141,7 @@ export async function POST(req: NextRequest) {
       timestamp,
       confidence,
       isManual: false,
+      ...(autoNotes && { notes: autoNotes }),
     },
   });
 

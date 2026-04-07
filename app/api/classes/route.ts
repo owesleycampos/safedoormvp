@@ -25,14 +25,14 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId;
-  const { name, grade } = await req.json();
+  const { name, grade, shift } = await req.json();
 
   if (!name) return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 });
 
   const cls = await prisma.class.create({
-    data: { name, grade: grade || name, schoolId },
+    data: { name, grade: grade || name, shift: shift || null, schoolId },
     include: { _count: { select: { students: true } } },
   });
 
-  return NextResponse.json({ class: cls }, { status: 201 });
+  return NextResponse.json(cls, { status: 201 });
 }

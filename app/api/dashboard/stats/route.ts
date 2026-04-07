@@ -57,7 +57,10 @@ export async function GET(req: NextRequest) {
       distinct: ['studentId'],
     }),
     prisma.attendanceEvent.findMany({
-      where: { student: studentWhere },
+      where: {
+        student: studentWhere,
+        timestamp: { gte: rangeStart, lt: rangeEnd },
+      },
       include: {
         student: {
           select: {

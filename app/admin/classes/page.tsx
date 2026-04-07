@@ -9,7 +9,8 @@ export const metadata = { title: 'Turmas' };
 async function getClassesData(schoolId: string) {
   const classes = await prisma.class.findMany({
     where: { schoolId },
-    include: {
+    select: {
+      id: true, name: true, grade: true, shift: true, createdAt: true,
       _count: { select: { students: true } },
     },
     orderBy: [{ grade: 'asc' }, { name: 'asc' }],

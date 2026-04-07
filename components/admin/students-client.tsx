@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
-  Upload, Loader2,
+  Upload, Loader2, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [nameCol, setNameCol] = useState(0);
   const [birthCol, setBirthCol] = useState(-1);
+  const [orphanAlertOpen, setOrphanAlertOpen] = useState(true);
+
+  const orphanStudents = students.filter((s) => !s.parents || s.parents.length === 0);
 
   const filtered = students.filter((s) => {
     const matchSearch =
@@ -242,6 +245,42 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         </div>
       </div>
 
+      {/* Alert: students without parents */}
+      {orphanStudents.length > 0 && (
+        <Card className="border border-yellow-500/30 bg-yellow-500/5 overflow-hidden">
+          <button
+            onClick={() => setOrphanAlertOpen(!orphanAlertOpen)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+          >
+            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+            <p className="text-xs text-yellow-700 dark:text-yellow-400 flex-1">
+              <span className="font-semibold">{orphanStudents.length} aluno{orphanStudents.length !== 1 ? 's' : ''}</span> sem responsável vinculado
+            </p>
+            {orphanAlertOpen ? <ChevronUp className="h-3.5 w-3.5 text-yellow-600" /> : <ChevronDown className="h-3.5 w-3.5 text-yellow-600" />}
+          </button>
+          {orphanAlertOpen && (
+            <div className="px-4 pb-3 space-y-1.5">
+              {orphanStudents.slice(0, 10).map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => handleEdit(s, 'parents')}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 flex-shrink-0" />
+                  <span className="truncate">{s.name}</span>
+                  <span className="text-muted-foreground/60">· {s.class?.name}</span>
+                </button>
+              ))}
+              {orphanStudents.length > 10 && (
+                <p className="text-[10px] text-muted-foreground pl-3.5">
+                  e mais {orphanStudents.length - 10} aluno{orphanStudents.length - 10 !== 1 ? 's' : ''}...
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* List */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -301,11 +340,6 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
 
                       {/* Badges */}
                       <div className="hidden md:flex items-center gap-2">
-                        {student.accessCode && (
-                          <Badge variant="outline" className="text-[10px] font-mono tracking-wider">
-                            {student.accessCode}
-                          </Badge>
-                        )}
                         {(student.azurePersonId || student.faceVector) && student.recognitionEnabled === false && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
                             <ScanLine className="h-3 w-3" />

@@ -5,6 +5,7 @@ import {
   Users, UserCheck, UserX, Clock, LogIn, LogOut,
   Loader2, RefreshCw, ChevronLeft, ChevronRight,
   CheckCircle2, AlertTriangle, MinusCircle, ChevronDown,
+  CheckCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -233,6 +234,7 @@ export default function DailyTab() {
   const [data, setData] = useState<DailyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyStudent, setBusyStudent] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
 
   const dateStr = date.toISOString().slice(0, 10);
   const isToday = dateStr === today.toISOString().slice(0, 10);
@@ -280,6 +282,33 @@ export default function DailyTab() {
     absent: filtered.filter(s => getEffectiveStatus(s) === 'absent').length,
     late: filtered.filter(s => getEffectiveStatus(s) === 'late').length,
   };
+
+  async function handleBatchPresent() {
+    const absentStudents = filtered.filter(s => getEffectiveStatus(s) === 'absent');
+    if (absentStudents.length === 0) {
+      toast({ variant: 'warning', title: 'Todos já estão presentes' });
+      return;
+    }
+    setBatchBusy(true);
+    let count = 0;
+    try {
+      for (const s of absentStudents) {
+        const res = await fetch('/api/events/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: s.id, eventType: 'ENTRY' }),
+        });
+        const d = await res.json();
+        if (d.success) count++;
+      }
+      toast({ variant: 'success', title: `${count} aluno${count !== 1 ? 's' : ''} marcado${count !== 1 ? 's' : ''} como presente` });
+      fetchData();
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao registrar em lote' });
+    } finally {
+      setBatchBusy(false);
+    }
+  }
 
   async function handleAction(studentId: string, action: string, entryEventId?: string | null, timestamp?: string) {
     setBusyStudent(studentId);
@@ -368,6 +397,12 @@ export default function DailyTab() {
         )}
 
         <div className="flex items-center gap-2 ml-auto">
+          {isToday && stats.absent > 0 && (
+            <Button variant="outline" size="sm" onClick={handleBatchPresent} disabled={batchBusy || loading} className="gap-1.5">
+              {batchBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">Todos presentes</span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-1.5">
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             <span className="hidden sm:inline">Atualizar</span>
@@ -440,6 +475,7 @@ export default function DailyTab() {
                   className={cn('flex items-center gap-3 px-3 md:px-4 py-2.5 border-l-4 transition-colors', cfg.border)}
                 >
                   <Avatar className="h-8 w-8 flex-shrink-0">
+                    {s.photoUrl && <AvatarImage src={s.photoUrl} alt={s.name} />}
                     <AvatarFallback className="text-[10px] bg-secondary">{getInitials(s.name)}</AvatarFallback>
                   </Avatar>
 

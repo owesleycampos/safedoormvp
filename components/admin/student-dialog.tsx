@@ -59,6 +59,12 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ name: '', classId: '', birthDate: '' });
 
+  // Quick parent link on create
+  const [quickParentSearch, setQuickParentSearch] = useState('');
+  const [quickParentResults, setQuickParentResults] = useState<any[]>([]);
+  const [quickParentSelected, setQuickParentSelected] = useState<any | null>(null);
+  const [quickParentSearching, setQuickParentSearching] = useState(false);
+
   // Photos state
   const [photos, setPhotos] = useState<StudentPhoto[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -86,6 +92,9 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
       setEnrollMessage('');
       setParentSearch('');
       setParentResults([]);
+      setQuickParentSearch('');
+      setQuickParentResults([]);
+      setQuickParentSelected(null);
 
       if (isEdit) {
         loadPhotos(student.id);
@@ -126,6 +135,22 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     }, 300);
     return () => clearTimeout(t);
   }, [parentSearch, parentLinks]);
+
+  // Quick parent search for create mode
+  useEffect(() => {
+    if (isEdit || quickParentSearch.length < 2) { setQuickParentResults([]); return; }
+    const t = setTimeout(async () => {
+      setQuickParentSearching(true);
+      try {
+        const res = await fetch(`/api/parents?search=${encodeURIComponent(quickParentSearch)}&limit=5`);
+        const data = await res.json();
+        setQuickParentResults(data.parents || []);
+      } finally {
+        setQuickParentSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [quickParentSearch, isEdit]);
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -290,6 +315,20 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
         setErrors({ general: data.error || 'Erro ao salvar.' });
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
       } else {
+        // Quick parent linking after create
+        if (!isEdit && quickParentSelected && data.student?.id) {
+          try {
+            await fetch(`/api/students/${data.student.id}/parents`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                parentId: quickParentSelected.id,
+                relationship: 'Responsável',
+                isPrimary: true,
+              }),
+            });
+          } catch {}
+        }
         toast({
           variant: 'success',
           title: isEdit ? 'Aluno atualizado!' : 'Aluno cadastrado!',
@@ -749,8 +788,73 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
               </div>
             </div>
 
+            {/* Quick parent link */}
+            <div className="space-y-1.5">
+              <Label>Vincular responsável (opcional)</Label>
+              {quickParentSelected ? (
+                <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-secondary/30">
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="text-[10px] bg-secondary">
+                      {getInitials(quickParentSelected.name || quickParentSelected.user?.name || '')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{quickParentSelected.name || quickParentSelected.user?.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{quickParentSelected.user?.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQuickParentSelected(null)}
+                    className="h-5 w-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nome ou e-mail..."
+                      value={quickParentSearch}
+                      onChange={(e) => setQuickParentSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                  {quickParentSearching && (
+                    <div className="flex justify-center py-1">
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {quickParentResults.length > 0 && (
+                    <div className="rounded-md border border-border overflow-hidden divide-y divide-border max-h-32 overflow-y-auto">
+                      {quickParentResults.map((p) => {
+                        const pName = p.name || p.user?.name || p.user?.email;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => { setQuickParentSelected(p); setQuickParentSearch(''); setQuickParentResults([]); }}
+                            className="w-full flex items-center gap-2 p-2 hover:bg-accent transition-colors text-left"
+                          >
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-[9px] bg-secondary">{getInitials(pName)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium truncate">{pName}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{p.user?.email}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
             <div className="rounded-md bg-secondary/40 p-3 text-xs text-muted-foreground">
-              🔒 As fotos são processadas para gerar vetores faciais biométricos com criptografia AES-256 (LGPD). Após cadastrar, adicione fotos na aba "Fotos".
+              Após cadastrar, adicione fotos na aba "Fotos" para ativar o reconhecimento facial.
             </div>
 
             <DialogFooter className="gap-2 pt-1">

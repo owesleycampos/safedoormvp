@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
-  const { name } = await req.json();
+  const { name, color } = await req.json();
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Nome obrigatório.' }, { status: 400 });
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const subject = await prisma.subject.create({
-    data: { name: name.trim(), schoolId },
+    data: { name: name.trim(), schoolId, color: color || null },
   });
 
   return NextResponse.json(subject, { status: 201 });

@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
 
   const studentWhere = { schoolId, isActive: true, ...(classId ? { classId } : {}) };
 
-  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes] = await Promise.all([
+  // 7-day trend data
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
       where: {
@@ -55,14 +59,85 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    // Trend: entries per day for last 7 days
+    prisma.attendanceEvent.findMany({
+      where: {
+        student: studentWhere,
+        timestamp: { gte: sevenDaysAgo, lt: tomorrow },
+        eventType: 'ENTRY',
+      },
+      select: { studentId: true, timestamp: true },
+    }),
+    // Late arrivals today
+    prisma.attendanceEvent.findMany({
+      where: {
+        student: studentWhere,
+        timestamp: { gte: today, lt: tomorrow },
+        eventType: 'ENTRY',
+        notes: { contains: 'ATRASO' },
+      },
+      select: { studentId: true },
+      distinct: ['studentId'],
+    }),
   ]);
+
+  // Build 7-day trend
+  const trend: { date: string; present: number; total: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      trend.push({ date: dateStr, present: 0, total: 0 });
+      continue;
+    }
+    const uniqueStudents = new Set(
+      trendEvents
+        .filter(e => e.timestamp.toISOString().slice(0, 10) === dateStr)
+        .map(e => e.studentId)
+    );
+    trend.push({ date: dateStr, present: uniqueStudents.size, total: totalStudents });
+  }
+
+  // Average stay time today (students who have both entry and exit)
+  const todayExits = await prisma.attendanceEvent.findMany({
+    where: {
+      student: studentWhere,
+      timestamp: { gte: today, lt: tomorrow },
+      eventType: 'EXIT',
+    },
+    select: { studentId: true, timestamp: true },
+  });
+
+  const todayEntries = new Map(
+    trendEvents
+      .filter(e => e.timestamp.toISOString().slice(0, 10) === today.toISOString().slice(0, 10))
+      .map(e => [e.studentId, e.timestamp])
+  );
+
+  let totalMinutes = 0;
+  let stayCount = 0;
+  for (const exit of todayExits) {
+    const entry = todayEntries.get(exit.studentId);
+    if (entry) {
+      const diff = (exit.timestamp.getTime() - entry.getTime()) / 60000;
+      if (diff > 0 && diff < 1440) {
+        totalMinutes += diff;
+        stayCount++;
+      }
+    }
+  }
 
   return NextResponse.json({
     totalStudents,
     presentCount: presentToday.length,
     absentCount: totalStudents - presentToday.length,
+    lateCount: lateEvents.length,
     recentEvents,
     unrecognizedCount,
     classes,
+    trend,
+    avgStayMinutes: stayCount > 0 ? Math.round(totalMinutes / stayCount) : null,
   });
 }

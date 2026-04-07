@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       class: { schoolId },
     },
     include: {
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, color: true } },
     },
     orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   });
@@ -88,6 +88,64 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(schedule, { status: 201 });
+}
+
+/**
+ * PUT /api/schedules (copy timetable)
+ * Body: { fromClassId, toClassId }
+ * Copies all schedule entries from one class to another.
+ */
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+
+  const schoolId = (session.user as any)?.schoolId as string;
+  const { fromClassId, toClassId } = await req.json();
+
+  if (!fromClassId || !toClassId) {
+    return NextResponse.json({ error: 'fromClassId e toClassId obrigatórios.' }, { status: 400 });
+  }
+
+  // Verify both classes belong to school
+  const [fromClass, toClass] = await Promise.all([
+    prisma.class.findFirst({ where: { id: fromClassId, schoolId } }),
+    prisma.class.findFirst({ where: { id: toClassId, schoolId } }),
+  ]);
+  if (!fromClass || !toClass) {
+    return NextResponse.json({ error: 'Turma não encontrada.' }, { status: 404 });
+  }
+
+  // Get source schedules
+  const source = await prisma.classSchedule.findMany({
+    where: { classId: fromClassId },
+  });
+
+  if (source.length === 0) {
+    return NextResponse.json({ error: 'Turma de origem não tem grade horária.' }, { status: 400 });
+  }
+
+  // Clear target and copy
+  await prisma.classSchedule.deleteMany({ where: { classId: toClassId } });
+
+  let copied = 0;
+  for (const s of source) {
+    await prisma.classSchedule.create({
+      data: {
+        classId: toClassId,
+        subjectId: s.subjectId,
+        dayOfWeek: s.dayOfWeek,
+        period: s.period,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        teacherName: s.teacherName,
+      },
+    });
+    copied++;
+  }
+
+  return NextResponse.json({ success: true, copied });
 }
 
 /**

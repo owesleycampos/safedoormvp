@@ -58,15 +58,20 @@ export async function GET(req: NextRequest) {
       select: {
         studentId: true,
         timestamp: true,
+        notes: true,
       },
     }),
   ]);
 
   // Build a Set of "studentId:YYYY-MM-DD" for O(1) lookup
   const presentSet = new Set<string>();
+  const lateSet = new Set<string>();
   for (const ev of events) {
     const day = ev.timestamp.toISOString().slice(0, 10);
     presentSet.add(`${ev.studentId}:${day}`);
+    if (ev.notes?.includes('ATRASO') || ev.notes?.includes('Atraso')) {
+      lateSet.add(`${ev.studentId}:${day}`);
+    }
   }
 
   // Generate date array
@@ -85,7 +90,8 @@ export async function GET(req: NextRequest) {
       dates.map((d) => {
         const dayOfWeek = new Date(d + 'T12:00:00').getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        return [d, isWeekend ? 'weekend' : presentSet.has(`${s.id}:${d}`) ? 'present' : 'absent'];
+        const key = `${s.id}:${d}`;
+        return [d, isWeekend ? 'weekend' : !presentSet.has(key) ? 'absent' : lateSet.has(key) ? 'late' : 'present'];
       })
     ),
   }));

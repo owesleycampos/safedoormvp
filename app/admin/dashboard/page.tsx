@@ -10,11 +10,15 @@ async function getDashboardData(schoolId: string) {
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes] = await Promise.all([
-    prisma.student.count({ where: { schoolId, isActive: true } }),
+  const studentWhere = { schoolId, isActive: true };
+
+  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
+    prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
-      where: { student: { schoolId }, timestamp: { gte: today, lt: tomorrow }, eventType: 'ENTRY' },
+      where: { student: studentWhere, timestamp: { gte: today, lt: tomorrow }, eventType: 'ENTRY' },
       select: { studentId: true },
       distinct: ['studentId'],
     }),
@@ -32,15 +36,45 @@ async function getDashboardData(schoolId: string) {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.attendanceEvent.findMany({
+      where: { student: studentWhere, timestamp: { gte: sevenDaysAgo, lt: tomorrow }, eventType: 'ENTRY' },
+      select: { studentId: true, timestamp: true },
+    }),
+    prisma.attendanceEvent.findMany({
+      where: { student: studentWhere, timestamp: { gte: today, lt: tomorrow }, eventType: 'ENTRY', notes: { contains: 'ATRASO' } },
+      select: { studentId: true },
+      distinct: ['studentId'],
+    }),
   ]);
+
+  // Build 7-day trend
+  const trend: { date: string; present: number; total: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      trend.push({ date: dateStr, present: 0, total: 0 });
+      continue;
+    }
+    const uniqueStudents = new Set(
+      trendEvents
+        .filter((e: any) => e.timestamp.toISOString().slice(0, 10) === dateStr)
+        .map((e: any) => e.studentId)
+    );
+    trend.push({ date: dateStr, present: uniqueStudents.size, total: totalStudents });
+  }
 
   return {
     totalStudents,
     presentCount: presentToday.length,
     absentCount: totalStudents - presentToday.length,
+    lateCount: lateEvents.length,
     recentEvents,
     unrecognizedCount,
     classes,
+    trend,
   };
 }
 

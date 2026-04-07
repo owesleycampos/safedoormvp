@@ -100,7 +100,8 @@ export function formatAttendanceNotification(
   studentName: string,
   eventType: 'ENTRY' | 'EXIT',
   timestamp: Date,
-  schoolName: string
+  schoolName: string,
+  notes?: string | null
 ): NotificationPayload {
   const time = timestamp.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
@@ -109,21 +110,38 @@ export function formatAttendanceNotification(
   });
 
   const isEntry = eventType === 'ENTRY';
+  const isLate = notes?.includes('ATRASO');
+  const isEarlyExit = notes?.includes('SAIDA_ANTECIPADA');
+
+  let title: string;
+  let body: string;
+
+  if (isLate) {
+    title = `Safe Door — Atraso Registrado`;
+    body = `${studentName} chegou com atraso na ${schoolName} às ${time}`;
+  } else if (isEarlyExit) {
+    title = `Safe Door — Saída Antecipada`;
+    body = `${studentName} saiu antecipadamente da ${schoolName} às ${time}`;
+  } else {
+    title = `Safe Door — ${isEntry ? 'Entrada' : 'Saída'} Registrada`;
+    body = isEntry
+      ? `${studentName} entrou na ${schoolName} às ${time}`
+      : `${studentName} saiu da ${schoolName} às ${time}`;
+  }
 
   return {
-    title: `Safe Door — ${isEntry ? 'Entrada' : 'Saída'} Registrada`,
-    body: isEntry
-      ? `${studentName} entrou na ${schoolName} às ${time}`
-      : `${studentName} saiu da ${schoolName} às ${time}`,
+    title,
+    body,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/badge-72x72.png',
-    tag: `attendance-${eventType.toLowerCase()}`,
+    tag: `attendance-${eventType.toLowerCase()}-${timestamp.toISOString().slice(0, 10)}`,
     data: {
       type: 'attendance',
       eventType,
       studentName,
       timestamp: timestamp.toISOString(),
+      isLate,
     },
-    requireInteraction: false,
+    requireInteraction: isLate || isEarlyExit, // Require interaction for important events
   };
 }

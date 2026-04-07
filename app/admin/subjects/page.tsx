@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, BookOpen, Edit, Trash2, MoreHorizontal,
-  Loader2, Calendar, Clock,
+  Loader2, Calendar, Clock, Copy, Upload, Palette,
+  CheckSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +19,6 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
-import { AdminHeader } from '@/components/admin/header';
 import { toast } from '@/components/ui/toaster';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 interface Subject {
   id: string;
   name: string;
+  color: string | null;
   _count: { schedules: number; events: number };
 }
 
@@ -44,11 +45,49 @@ interface ScheduleEntry {
   startTime: string;
   endTime: string;
   teacherName: string | null;
-  subject: { id: string; name: string };
+  subject: { id: string; name: string; color: string | null };
 }
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS = [1, 2, 3, 4, 5]; // Mon-Fri
+
+const SUBJECT_COLORS = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+  '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
+  '#E11D48', '#84CC16', '#0EA5E9', '#A855F7', '#D946EF',
+];
+
+// ─── Preset subjects by level ─────────────────────────────────────────────
+
+const LEVEL_PRESETS: Record<string, string[]> = {
+  'Fundamental I': [
+    'Português', 'Matemática', 'Ciências', 'História', 'Geografia',
+    'Educação Física', 'Artes', 'Música', 'Religião', 'Inglês',
+  ],
+  'Fundamental II': [
+    'Português', 'Matemática', 'Ciências', 'História', 'Geografia',
+    'Educação Física', 'Artes', 'Inglês', 'Redação', 'Informática',
+  ],
+  'Ensino Médio': [
+    'Português', 'Matemática', 'Física', 'Química', 'Biologia',
+    'História', 'Geografia', 'Filosofia', 'Sociologia', 'Inglês',
+    'Espanhol', 'Educação Física', 'Artes', 'Redação', 'Literatura',
+  ],
+  'Todas': [
+    'Português', 'Matemática', 'História', 'Geografia', 'Ciências',
+    'Física', 'Química', 'Biologia', 'Inglês', 'Espanhol',
+    'Educação Física', 'Artes', 'Música', 'Filosofia', 'Sociologia',
+    'Redação', 'Literatura', 'Informática', 'Religião', 'Educação Financeira',
+  ],
+};
+
+// ─── Default color assignment ──────────────────────────────────────────────
+
+function getDefaultColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return SUBJECT_COLORS[Math.abs(hash) % SUBJECT_COLORS.length];
+}
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -79,13 +118,6 @@ export default function SubjectsPage() {
 
 // ─── Subjects Tab ─────────────────────────────────────────────────────────────
 
-const PRESET_SUBJECTS = [
-  'Português', 'Matemática', 'História', 'Geografia', 'Ciências',
-  'Física', 'Química', 'Biologia', 'Inglês', 'Espanhol',
-  'Educação Física', 'Artes', 'Música', 'Filosofia', 'Sociologia',
-  'Redação', 'Literatura', 'Informática', 'Religião', 'Educação Financeira',
-];
-
 function SubjectsTab() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,8 +125,13 @@ function SubjectsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Subject | null>(null);
   const [name, setName] = useState('');
+  const [color, setColor] = useState('');
   const [saving, setSaving] = useState(false);
   const [addingPreset, setAddingPreset] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<string>('Todas');
+  const [importDialog, setImportDialog] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
 
   const fetchSubjects = useCallback(async () => {
     try {
@@ -115,12 +152,14 @@ function SubjectsTab() {
   function openCreate() {
     setEditing(null);
     setName('');
+    setColor(SUBJECT_COLORS[Math.floor(Math.random() * SUBJECT_COLORS.length)]);
     setDialogOpen(true);
   }
 
   function openEdit(s: Subject) {
     setEditing(s);
     setName(s.name);
+    setColor(s.color || getDefaultColor(s.name));
     setDialogOpen(true);
   }
 
@@ -133,7 +172,7 @@ function SubjectsTab() {
         const res = await fetch(`/api/subjects/${editing.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, color }),
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
         toast({ variant: 'success', title: 'Matéria atualizada' });
@@ -141,7 +180,7 @@ function SubjectsTab() {
         const res = await fetch('/api/subjects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, color }),
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
         toast({ variant: 'success', title: 'Matéria criada' });
@@ -161,7 +200,7 @@ function SubjectsTab() {
       const res = await fetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: presetName }),
+        body: JSON.stringify({ name: presetName, color: getDefaultColor(presetName) }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       toast({ variant: 'success', title: `${presetName} criada` });
@@ -174,18 +213,19 @@ function SubjectsTab() {
   }
 
   async function handleAddAll() {
-    const missing = PRESET_SUBJECTS.filter(p => !existingNames.has(p.toLowerCase()));
+    const presets = LEVEL_PRESETS[selectedLevel] || [];
+    const missing = presets.filter(p => !existingNames.has(p.toLowerCase()));
     if (missing.length === 0) {
       toast({ variant: 'warning', title: 'Todas as matérias já existem' });
       return;
     }
     setAddingPreset('all');
     try {
-      for (const name of missing) {
+      for (const n of missing) {
         await fetch('/api/subjects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name: n, color: getDefaultColor(n) }),
         });
       }
       toast({ variant: 'success', title: `${missing.length} matérias criadas` });
@@ -197,8 +237,37 @@ function SubjectsTab() {
     }
   }
 
+  async function handleImportCsv() {
+    const names = csvText.split(/[\n,;]+/).map(n => n.trim()).filter(n => n.length > 0 && !existingNames.has(n.toLowerCase()));
+    if (names.length === 0) {
+      toast({ variant: 'warning', title: 'Nenhuma matéria nova encontrada' });
+      return;
+    }
+    setImportBusy(true);
+    try {
+      let count = 0;
+      for (const n of names) {
+        const res = await fetch('/api/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: n, color: getDefaultColor(n) }),
+        });
+        if (res.ok) count++;
+      }
+      toast({ variant: 'success', title: `${count} matérias importadas` });
+      setImportDialog(false);
+      setCsvText('');
+      fetchSubjects();
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao importar' });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   const existingNames = new Set(subjects.map(s => s.name.toLowerCase()));
-  const availablePresets = PRESET_SUBJECTS.filter(p => !existingNames.has(p.toLowerCase()));
+  const currentPresets = LEVEL_PRESETS[selectedLevel] || [];
+  const availablePresets = currentPresets.filter(p => !existingNames.has(p.toLowerCase()));
 
   async function handleDelete(s: Subject) {
     if (!confirm(`Excluir matéria "${s.name}"?`)) return;
@@ -222,7 +291,7 @@ function SubjectsTab() {
 
   return (
     <div className="flex-1 p-3 md:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <Input
           placeholder="Buscar matéria..."
           value={search}
@@ -230,19 +299,43 @@ function SubjectsTab() {
           leftIcon={<Search className="h-4 w-4" />}
           className="max-w-xs"
         />
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Nova Matéria
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setImportDialog(true)}>
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Importar</span>
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Nova Matéria
+          </Button>
+        </div>
       </div>
 
-      {/* Quick-add presets */}
+      {/* Quick-add presets by level */}
       {availablePresets.length > 0 && (
         <Card className="p-3 md:p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-muted-foreground">Adicionar rapidamente</p>
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-muted-foreground">Adicionar por nível</p>
+              <div className="flex items-center gap-1">
+                {Object.keys(LEVEL_PRESETS).map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setSelectedLevel(level)}
+                    className={cn(
+                      'px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors',
+                      selectedLevel === level
+                        ? 'bg-foreground text-background'
+                        : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleAddAll} disabled={!!addingPreset}>
-              {addingPreset === 'all' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              {addingPreset === 'all' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckSquare className="h-3 w-3 mr-1" />}
               Adicionar todas ({availablePresets.length})
             </Button>
           </div>
@@ -253,11 +346,14 @@ function SubjectsTab() {
                 onClick={() => handleQuickAdd(p)}
                 disabled={!!addingPreset}
                 className={cn(
-                  'px-2.5 py-1 rounded-full text-xs border border-border hover:bg-accent hover:border-primary/30 transition-colors',
+                  'px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1',
+                  'hover:bg-accent hover:border-primary/30',
                   addingPreset === p && 'opacity-50'
                 )}
+                style={{ borderColor: getDefaultColor(p) + '40' }}
               >
-                {addingPreset === p ? <Loader2 className="h-3 w-3 animate-spin inline mr-1" /> : <Plus className="h-3 w-3 inline mr-0.5" />}
+                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: getDefaultColor(p) }} />
+                {addingPreset === p ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                 {p}
               </button>
             ))}
@@ -278,51 +374,59 @@ function SubjectsTab() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {filtered.map((s) => (
-            <Card key={s.id} className="group relative overflow-hidden hover:border-border transition-all">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="h-8 w-8 rounded-md border border-border flex items-center justify-center">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+          {filtered.map((s) => {
+            const c = s.color || getDefaultColor(s.name);
+            return (
+              <Card key={s.id} className="group relative overflow-hidden hover:border-border transition-all">
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div
+                      className="h-8 w-8 rounded-md flex items-center justify-center"
+                      style={{ backgroundColor: c + '20', border: `1px solid ${c}40` }}
+                    >
+                      <BookOpen className="h-4 w-4" style={{ color: c }} strokeWidth={1.5} />
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(s)}>
+                          <Edit className="h-4 w-4 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDelete(s)} className="text-destructive focus:text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(s)}>
-                        <Edit className="h-4 w-4 mr-2" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleDelete(s)} className="text-destructive focus:text-destructive">
-                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <CardTitle className="text-base mb-2">{s.name}</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">
-                    <Calendar className="h-2.5 w-2.5 mr-1" />
-                    {s._count.schedules} aula{s._count.schedules !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <CardTitle className="text-base mb-2">{s.name}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px]">
+                      <Calendar className="h-2.5 w-2.5 mr-1" />
+                      {s._count.schedules} aula{s._count.schedules !== 1 ? 's' : ''}
+                    </Badge>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c }} />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
+      {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) setDialogOpen(false); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar Matéria' : 'Nova Matéria'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Atualize o nome da matéria.' : 'Informe o nome da nova matéria.'}
+              {editing ? 'Atualize o nome e cor da matéria.' : 'Informe o nome e escolha uma cor.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
@@ -336,6 +440,23 @@ function SubjectsTab() {
                 autoFocus
               />
             </div>
+            <div className="space-y-2">
+              <Label>Cor</Label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {SUBJECT_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      'h-7 w-7 rounded-full transition-all',
+                      color === c ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110' : 'hover:scale-110'
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button type="submit" loading={saving}>{editing ? 'Salvar' : 'Criar'}</Button>
@@ -343,11 +464,39 @@ function SubjectsTab() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={importDialog} onOpenChange={(o) => { if (!o) setImportDialog(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Importar Matérias</DialogTitle>
+            <DialogDescription>
+              Cole os nomes das matérias, um por linha, ou separados por vírgula/ponto-e-vírgula.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              placeholder="Matemática&#10;Português&#10;História&#10;..."
+              className="w-full h-32 rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              {csvText.split(/[\n,;]+/).filter(n => n.trim()).length} matéria(s) detectada(s)
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportDialog(false)}>Cancelar</Button>
+            <Button onClick={handleImportCsv} loading={importBusy}>Importar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ─── Schedule Tab ─────────────────────────────────────────────────────────────
+// ─── Schedule Tab (Visual Grid) ──────────────────────────────────────────────
 
 function ScheduleTab() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -363,6 +512,11 @@ function ScheduleTab() {
     subjectId: '', dayOfWeek: '1', period: '1', startTime: '08:00', endTime: '08:50', teacherName: '',
   });
   const [addSaving, setAddSaving] = useState(false);
+
+  // Copy dialog
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [copyBusy, setCopyBusy] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -428,6 +582,39 @@ function ScheduleTab() {
     }
   }
 
+  async function handleCopySchedule() {
+    if (!copyFrom || !selectedClass) return;
+    setCopyBusy(true);
+    try {
+      const res = await fetch('/api/schedules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromClassId: copyFrom, toClassId: selectedClass }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast({ variant: 'success', title: `${data.copied} aulas copiadas` });
+      setCopyOpen(false);
+      fetchSchedule();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: err.message || 'Erro ao copiar' });
+    } finally {
+      setCopyBusy(false);
+    }
+  }
+
+  function openAddForSlot(day: number, period: number) {
+    setAddForm({
+      subjectId: subjects[0]?.id || '',
+      dayOfWeek: String(day),
+      period: String(period),
+      startTime: `${String(7 + period).padStart(2, '0')}:00`,
+      endTime: `${String(7 + period).padStart(2, '0')}:50`,
+      teacherName: '',
+    });
+    setAddOpen(true);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -436,12 +623,11 @@ function ScheduleTab() {
     );
   }
 
-  // Group schedules by day
-  const byDay: Record<number, ScheduleEntry[]> = {};
-  schedules.forEach((s) => {
-    if (!byDay[s.dayOfWeek]) byDay[s.dayOfWeek] = [];
-    byDay[s.dayOfWeek].push(s);
-  });
+  // Build grid data
+  const maxPeriod = schedules.reduce((max, s) => Math.max(max, s.period), 0);
+  const periods = Array.from({ length: Math.max(maxPeriod, 6) }, (_, i) => i + 1);
+  const grid: Record<string, ScheduleEntry | undefined> = {};
+  schedules.forEach(s => { grid[`${s.dayOfWeek}-${s.period}`] = s; });
 
   return (
     <div className="flex-1 p-3 md:p-6 space-y-4">
@@ -460,13 +646,16 @@ function ScheduleTab() {
         </select>
 
         {selectedClass && (
-          <Button size="sm" onClick={() => {
-            setAddForm({ subjectId: subjects[0]?.id || '', dayOfWeek: '1', period: '1', startTime: '08:00', endTime: '08:50', teacherName: '' });
-            setAddOpen(true);
-          }}>
-            <Plus className="h-4 w-4" />
-            Adicionar Aula
-          </Button>
+          <>
+            <Button size="sm" onClick={() => openAddForSlot(1, periods.length + 1)}>
+              <Plus className="h-4 w-4" />
+              Adicionar Aula
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setCopyFrom(''); setCopyOpen(true); }}>
+              <Copy className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Copiar de outra turma</span>
+            </Button>
+          </>
         )}
       </div>
 
@@ -486,57 +675,80 @@ function ScheduleTab() {
         </div>
       )}
 
+      {/* Visual Grid Table */}
       {selectedClass && !scheduleLoading && (
-        <>
-          {schedules.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Clock className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Nenhuma aula cadastrada. Adicione aulas à grade horária.
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {WEEKDAYS.map((day) => {
-                const daySchedules = (byDay[day] || []).sort((a, b) => a.period - b.period);
-                if (daySchedules.length === 0) return null;
-                return (
-                  <div key={day}>
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-secondary/20">
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-muted-foreground w-[60px]">
+                    Aula
+                  </th>
+                  {WEEKDAYS.map((day) => (
+                    <th key={day} className="text-center px-2 py-2.5 text-xs font-semibold text-muted-foreground min-w-[120px]">
                       {DAYS[day]}
-                    </h3>
-                    <Card className="overflow-hidden">
-                      <div className="divide-y divide-border">
-                        {daySchedules.map((s) => (
-                          <div key={s.id} className="flex items-center gap-3 px-4 py-2.5">
-                            <Badge variant="outline" className="text-[10px] font-mono w-7 justify-center">
-                              {s.period}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground w-[90px]">
-                              {s.startTime} — {s.endTime}
-                            </span>
-                            <span className="text-sm font-medium flex-1">{s.subject.name}</span>
-                            {s.teacherName && (
-                              <span className="text-xs text-muted-foreground hidden sm:inline">
-                                {s.teacherName}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => handleDeleteSchedule(s.id)}
-                              className="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periods.map((period) => (
+                  <tr key={period} className="border-b border-border/50">
+                    <td className="px-3 py-1.5 text-center">
+                      <span className="text-xs font-mono text-muted-foreground">{period}ª</span>
+                    </td>
+                    {WEEKDAYS.map((day) => {
+                      const entry = grid[`${day}-${period}`];
+                      if (entry) {
+                        const c = entry.subject.color || getDefaultColor(entry.subject.name);
+                        return (
+                          <td key={day} className="px-1 py-1">
+                            <div
+                              className="group relative rounded-md px-2 py-1.5 cursor-default transition-all hover:shadow-md"
+                              style={{ backgroundColor: c + '18', border: `1px solid ${c}30` }}
                             >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  </div>
-                );
-              })}
+                              <p className="text-xs font-medium truncate" style={{ color: c }}>
+                                {entry.subject.name}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {entry.startTime}–{entry.endTime}
+                              </p>
+                              {entry.teacherName && (
+                                <p className="text-[10px] text-muted-foreground/70 truncate">{entry.teacherName}</p>
+                              )}
+                              <button
+                                onClick={() => handleDeleteSchedule(entry.id)}
+                                className="absolute top-1 right-1 h-4 w-4 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={day} className="px-1 py-1">
+                          <button
+                            onClick={() => openAddForSlot(day, period)}
+                            className="w-full h-[52px] rounded-md border border-dashed border-border/40 hover:border-primary/30 hover:bg-accent/30 transition-all flex items-center justify-center"
+                          >
+                            <Plus className="h-3 w-3 text-muted-foreground/30" />
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {schedules.length > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2.5 border-t border-border bg-secondary/10 flex-wrap">
+              <p className="text-xs text-muted-foreground">{schedules.length} aula{schedules.length !== 1 ? 's' : ''} cadastrada{schedules.length !== 1 ? 's' : ''}</p>
             </div>
           )}
-        </>
+        </Card>
       )}
 
       {/* Add Schedule Dialog */}
@@ -608,6 +820,40 @@ function ScheduleTab() {
               <Button type="submit" loading={addSaving}>Adicionar</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Copy Schedule Dialog */}
+      <Dialog open={copyOpen} onOpenChange={(o) => { if (!o) setCopyOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copiar Grade Horária</DialogTitle>
+            <DialogDescription>
+              Selecione a turma de origem. A grade atual será substituída.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-2">
+              <Label>Copiar de</Label>
+              <select
+                value={copyFrom}
+                onChange={(e) => setCopyFrom(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              >
+                <option value="">Selecionar turma...</option>
+                {classes.filter(c => c.id !== selectedClass).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.grade ? ` (${c.grade})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCopyOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCopySchedule} loading={copyBusy} disabled={!copyFrom}>
+              <Copy className="h-4 w-4 mr-1" />
+              Copiar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

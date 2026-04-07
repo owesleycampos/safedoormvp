@@ -13,7 +13,7 @@ export async function PATCH(
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
-  const { name } = await req.json();
+  const { name, color } = await req.json();
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Nome obrigatório.' }, { status: 400 });
@@ -29,7 +29,7 @@ export async function PATCH(
 
   const updated = await prisma.subject.update({
     where: { id: params.id },
-    data: { name: name.trim() },
+    data: { name: name.trim(), ...(color !== undefined ? { color: color || null } : {}) },
   });
 
   return NextResponse.json(updated);

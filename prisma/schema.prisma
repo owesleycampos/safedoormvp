@@ -154,6 +154,7 @@ model ClassInvite {
 model Subject {
   id        String            @id @default(cuid())
   name      String
+  color     String?           // hex color e.g. "#3B82F6"
   schoolId  String
   school    School            @relation(fields: [schoolId], references: [id])
   schedules ClassSchedule[]

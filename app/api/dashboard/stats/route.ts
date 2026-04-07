@@ -16,24 +16,41 @@ export async function GET(req: NextRequest) {
   const schoolId = (session.user as any)?.schoolId as string;
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId') || undefined;
+  const periodParam = searchParams.get('period') || 'today'; // today | 7d | 30d | custom
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
+  // Determine date range for stats
+  let rangeStart = new Date(today);
+  let rangeEnd = new Date(tomorrow);
+
+  if (periodParam === '7d') {
+    rangeStart.setDate(rangeStart.getDate() - 6);
+  } else if (periodParam === '30d') {
+    rangeStart.setDate(rangeStart.getDate() - 29);
+  } else if (periodParam === 'custom' && fromParam && toParam) {
+    rangeStart = new Date(fromParam + 'T00:00:00');
+    rangeEnd = new Date(toParam + 'T00:00:00');
+    rangeEnd.setDate(rangeEnd.getDate() + 1);
+  }
+  // for 'today', rangeStart = today, rangeEnd = tomorrow (default)
+
   const studentWhere = { schoolId, isActive: true, ...(classId ? { classId } : {}) };
 
-  // 7-day trend data
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  // Trend data (always relative to range)
+  const trendStart = periodParam === 'today' ? (() => { const d = new Date(today); d.setDate(d.getDate() - 6); return d; })() : new Date(rangeStart);
 
-  const [totalStudents, presentToday, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
+  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
       where: {
         student: studentWhere,
-        timestamp: { gte: today, lt: tomorrow },
+        timestamp: { gte: rangeStart, lt: rangeEnd },
         eventType: 'ENTRY',
       },
       select: { studentId: true },
@@ -59,20 +76,20 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    // Trend: entries per day for last 7 days
+    // Trend: entries per day for range
     prisma.attendanceEvent.findMany({
       where: {
         student: studentWhere,
-        timestamp: { gte: sevenDaysAgo, lt: tomorrow },
+        timestamp: { gte: trendStart, lt: rangeEnd },
         eventType: 'ENTRY',
       },
       select: { studentId: true, timestamp: true },
     }),
-    // Late arrivals today
+    // Late arrivals in range
     prisma.attendanceEvent.findMany({
       where: {
         student: studentWhere,
-        timestamp: { gte: today, lt: tomorrow },
+        timestamp: { gte: rangeStart, lt: rangeEnd },
         eventType: 'ENTRY',
         notes: { contains: 'ATRASO' },
       },
@@ -81,11 +98,14 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  // Build 7-day trend
+  // Build trend (day by day from trendStart to rangeEnd-1)
   const trend: { date: string; present: number; total: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
+  const trendEndDate = new Date(rangeEnd);
+  trendEndDate.setDate(trendEndDate.getDate() - 1);
+  const numDays = Math.round((trendEndDate.getTime() - trendStart.getTime()) / 86400000) + 1;
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(trendStart);
+    d.setDate(d.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10);
     const dayOfWeek = d.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -100,26 +120,27 @@ export async function GET(req: NextRequest) {
     trend.push({ date: dateStr, present: uniqueStudents.size, total: totalStudents });
   }
 
-  // Average stay time today (students who have both entry and exit)
-  const todayExits = await prisma.attendanceEvent.findMany({
+  // Average stay time in range (students who have both entry and exit)
+  const rangeExits = await prisma.attendanceEvent.findMany({
     where: {
       student: studentWhere,
-      timestamp: { gte: today, lt: tomorrow },
+      timestamp: { gte: rangeStart, lt: rangeEnd },
       eventType: 'EXIT',
     },
     select: { studentId: true, timestamp: true },
   });
 
-  const todayEntries = new Map(
+  const entryMap = new Map(
     trendEvents
-      .filter(e => e.timestamp.toISOString().slice(0, 10) === today.toISOString().slice(0, 10))
-      .map(e => [e.studentId, e.timestamp])
+      .filter(e => e.timestamp >= rangeStart && e.timestamp < rangeEnd)
+      .map(e => [e.studentId + '_' + e.timestamp.toISOString().slice(0, 10), e.timestamp])
   );
 
   let totalMinutes = 0;
   let stayCount = 0;
-  for (const exit of todayExits) {
-    const entry = todayEntries.get(exit.studentId);
+  for (const exit of rangeExits) {
+    const key = exit.studentId + '_' + exit.timestamp.toISOString().slice(0, 10);
+    const entry = entryMap.get(key);
     if (entry) {
       const diff = (exit.timestamp.getTime() - entry.getTime()) / 60000;
       if (diff > 0 && diff < 1440) {
@@ -131,13 +152,14 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     totalStudents,
-    presentCount: presentToday.length,
-    absentCount: totalStudents - presentToday.length,
+    presentCount: presentInRange.length,
+    absentCount: totalStudents - presentInRange.length,
     lateCount: lateEvents.length,
     recentEvents,
     unrecognizedCount,
     classes,
     trend,
     avgStayMinutes: stayCount > 0 ? Math.round(totalMinutes / stayCount) : null,
+    period: periodParam,
   });
 }

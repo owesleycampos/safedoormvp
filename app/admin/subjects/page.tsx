@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, BookOpen, Edit, Trash2, MoreHorizontal,
   Loader2, Calendar, Clock, Copy, Upload, Palette,
-  CheckSquare,
+  CheckSquare, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,26 +92,26 @@ function getDefaultColor(name: string): string {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SubjectsPage() {
-  const [tab, setTab] = useState<'subjects' | 'schedule'>('subjects');
+  const [tab, setTab] = useState<'subjects' | 'schedule'>('schedule');
 
   return (
     <div className="flex flex-col flex-1">
       <div className="border-b border-border bg-background/80 backdrop-blur-sm px-3 md:px-6 pt-3">
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'subjects' | 'schedule')}>
           <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="subjects" className="flex-1 sm:flex-initial gap-1.5 text-xs">
-              <BookOpen className="h-3.5 w-3.5" />
-              Matérias
-            </TabsTrigger>
             <TabsTrigger value="schedule" className="flex-1 sm:flex-initial gap-1.5 text-xs">
               <Calendar className="h-3.5 w-3.5" />
               Grade Horária
+            </TabsTrigger>
+            <TabsTrigger value="subjects" className="flex-1 sm:flex-initial gap-1.5 text-xs">
+              <BookOpen className="h-3.5 w-3.5" />
+              Matérias
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {tab === 'subjects' ? <SubjectsTab /> : <ScheduleTab />}
+      {tab === 'schedule' ? <ScheduleTab /> : <SubjectsTab />}
     </div>
   );
 }
@@ -132,6 +132,7 @@ function SubjectsTab() {
   const [importDialog, setImportDialog] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [importBusy, setImportBusy] = useState(false);
+  const [presetsDialog, setPresetsDialog] = useState(false);
 
   const fetchSubjects = useCallback(async () => {
     try {
@@ -300,66 +301,29 @@ function SubjectsTab() {
           className="max-w-xs"
         />
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setImportDialog(true)}>
-            <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">Importar</span>
-          </Button>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Nova Matéria
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4" />
+                Adicionar
+                <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-2" /> Nova Matéria
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPresetsDialog(true)}>
+                <CheckSquare className="h-4 w-4 mr-2" /> Adicionar por Nível
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setImportDialog(true)}>
+                <Upload className="h-4 w-4 mr-2" /> Importar Lista
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-
-      {/* Quick-add presets by level */}
-      {availablePresets.length > 0 && (
-        <Card className="p-3 md:p-4">
-          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold text-muted-foreground">Adicionar por nível</p>
-              <div className="flex items-center gap-1">
-                {Object.keys(LEVEL_PRESETS).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setSelectedLevel(level)}
-                    className={cn(
-                      'px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors',
-                      selectedLevel === level
-                        ? 'bg-foreground text-background'
-                        : 'bg-secondary text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleAddAll} disabled={!!addingPreset}>
-              {addingPreset === 'all' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckSquare className="h-3 w-3 mr-1" />}
-              Adicionar todas ({availablePresets.length})
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {availablePresets.map((p) => (
-              <button
-                key={p}
-                onClick={() => handleQuickAdd(p)}
-                disabled={!!addingPreset}
-                className={cn(
-                  'px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1',
-                  'hover:bg-accent hover:border-primary/30',
-                  addingPreset === p && 'opacity-50'
-                )}
-                style={{ borderColor: getDefaultColor(p) + '40' }}
-              >
-                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: getDefaultColor(p) }} />
-                {addingPreset === p ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                {p}
-              </button>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {filtered.length === 0 ? (
         <Card className="p-12 flex flex-col items-center justify-center text-center gap-3">
@@ -479,7 +443,7 @@ function SubjectsTab() {
               value={csvText}
               onChange={(e) => setCsvText(e.target.value)}
               placeholder="Matemática&#10;Português&#10;História&#10;..."
-              className="w-full h-32 rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-32 rounded-xl border border-input bg-card px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
@@ -489,6 +453,68 @@ function SubjectsTab() {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setImportDialog(false)}>Cancelar</Button>
             <Button onClick={handleImportCsv} loading={importBusy}>Importar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Presets Dialog */}
+      <Dialog open={presetsDialog} onOpenChange={(o) => { if (!o) setPresetsDialog(false); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Adicionar por Nível</DialogTitle>
+            <DialogDescription>
+              Selecione o nível de ensino e adicione matérias padrão rapidamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {Object.keys(LEVEL_PRESETS).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => setSelectedLevel(level)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                    selectedLevel === level
+                      ? 'bg-primary text-primary-foreground shadow-apple-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+            {availablePresets.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Todas as matérias deste nível já foram adicionadas.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {availablePresets.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => handleQuickAdd(p)}
+                    disabled={!!addingPreset}
+                    className={cn(
+                      'px-2.5 py-1.5 rounded-full text-xs border transition-colors flex items-center gap-1.5',
+                      'hover:bg-accent hover:border-primary/30',
+                      addingPreset === p && 'opacity-50'
+                    )}
+                    style={{ borderColor: getDefaultColor(p) + '40' }}
+                  >
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: getDefaultColor(p) }} />
+                    {addingPreset === p ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPresetsDialog(false)}>Fechar</Button>
+            <Button onClick={handleAddAll} disabled={!!addingPreset || availablePresets.length === 0}>
+              {addingPreset === 'all' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckSquare className="h-3 w-3 mr-1" />}
+              Adicionar todas ({availablePresets.length})
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -635,7 +661,7 @@ function ScheduleTab() {
         <select
           value={selectedClass}
           onChange={(e) => setSelectedClass(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="h-9 rounded-xl border border-input bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="">Selecionar turma...</option>
           {classes.map((c) => (
@@ -764,7 +790,7 @@ function ScheduleTab() {
               <select
                 value={addForm.subjectId}
                 onChange={(e) => setAddForm((f) => ({ ...f, subjectId: e.target.value }))}
-                className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                className="w-full h-10 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
               >
                 {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -775,7 +801,7 @@ function ScheduleTab() {
                 <select
                   value={addForm.dayOfWeek}
                   onChange={(e) => setAddForm((f) => ({ ...f, dayOfWeek: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                  className="w-full h-10 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
                 >
                   {WEEKDAYS.map((d) => <option key={d} value={d}>{DAYS[d]}</option>)}
                 </select>
@@ -838,7 +864,7 @@ function ScheduleTab() {
               <select
                 value={copyFrom}
                 onChange={(e) => setCopyFrom(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-secondary/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                className="w-full h-10 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
               >
                 <option value="">Selecionar turma...</option>
                 {classes.filter(c => c.id !== selectedClass).map((c) => (

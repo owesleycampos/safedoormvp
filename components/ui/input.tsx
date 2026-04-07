@@ -12,23 +12,23 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       return (
         <div className="relative flex items-center">
           {leftIcon && (
-            <div className="absolute left-2.5 flex items-center text-muted-foreground pointer-events-none">
+            <div className="absolute left-3 flex items-center text-muted-foreground pointer-events-none">
               {leftIcon}
             </div>
           )}
           <input
             type={type}
             className={cn(
-              'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-              leftIcon  && 'pl-8',
-              rightIcon && 'pr-8',
+              'flex h-10 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm transition-all duration-200 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50',
+              leftIcon  && 'pl-9',
+              rightIcon && 'pr-9',
               className
             )}
             ref={ref}
             {...props}
           />
           {rightIcon && (
-            <div className="absolute right-2.5 flex items-center text-muted-foreground">
+            <div className="absolute right-3 flex items-center text-muted-foreground">
               {rightIcon}
             </div>
           )}
@@ -40,7 +40,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm transition-all duration-200 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
         ref={ref}

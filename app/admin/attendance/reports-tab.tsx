@@ -3,14 +3,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   FileSpreadsheet, Search,
-  Users, TrendingUp, XCircle, CalendarDays, Loader2,
-  Clock, AlertTriangle, FileText,
+  Users, TrendingUp, XCircle, Loader2,
+  Clock, AlertTriangle, FileText, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,7 +32,6 @@ interface AlertStudent {
 }
 
 type Preset = '7d' | '30d' | 'custom';
-type ReportView = 'frequency' | 'alerts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toDateStr(d: Date): string { return d.toISOString().slice(0, 10); }
@@ -136,14 +134,13 @@ export default function ReportsTab() {
   const [customTo, setCustomTo] = useState(toDateStr(today));
   const [classFilter, setClassFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ReportView>('frequency');
 
   const [allRows, setAllRows] = useState<StudentRow[]>([]);
   const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [alerts, setAlerts] = useState<AlertStudent[]>([]);
-  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
 
   const { from, to } = useMemo(() => {
     if (preset === '7d') return { from: toDateStr(addDays(today, -6)), to: toDateStr(today) };
@@ -168,7 +165,6 @@ export default function ReportsTab() {
   }, [from, to]);
 
   const fetchAlerts = useCallback(async () => {
-    setAlertsLoading(true);
     try {
       const params = new URLSearchParams({ days: '30' });
       if (classFilter !== 'all') params.set('classId', classFilter);
@@ -179,13 +175,11 @@ export default function ReportsTab() {
       }
     } catch {
       setAlerts([]);
-    } finally {
-      setAlertsLoading(false);
     }
   }, [classFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { if (view === 'alerts') fetchAlerts(); }, [view, fetchAlerts]);
+  useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
   const classNames = useMemo(
     () => Array.from(new Set(allRows.map((r) => r.className))).sort(),
@@ -207,6 +201,47 @@ export default function ReportsTab() {
   return (
     <div className="flex-1 p-3 md:p-6 space-y-4 overflow-x-hidden">
 
+      {/* Alerts banner (inline, collapsible) */}
+      {alerts.length > 0 && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5 overflow-hidden">
+          <button
+            onClick={() => setAlertsExpanded(v => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+          >
+            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+            <p className="text-xs text-yellow-700 flex-1">
+              <span className="font-semibold">{alerts.length} aluno{alerts.length !== 1 ? 's' : ''}</span> com frequência abaixo de 75% nos últimos 30 dias
+            </p>
+            {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-yellow-600" /> : <ChevronDown className="h-3.5 w-3.5 text-yellow-600" />}
+          </button>
+          {alertsExpanded && (
+            <div className="border-t border-yellow-500/20 divide-y divide-yellow-500/10">
+              {alerts.map((a) => (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className={cn(
+                    'h-2 w-2 rounded-full flex-shrink-0',
+                    a.status === 'critical' ? 'bg-red-500' : 'bg-yellow-500'
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{a.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{a.className}</p>
+                  </div>
+                  <span className={cn(
+                    'text-xs font-bold',
+                    a.status === 'critical' ? 'text-red-500' : 'text-yellow-600'
+                  )}>
+                    {Math.round(100 - a.absenceRate)}%
+                  </span>
+                  <Badge variant={a.status === 'critical' ? 'destructive' : 'warning'} className="text-[9px]">
+                    {a.status === 'critical' ? 'Crítico' : 'Alerta'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
         {[
@@ -225,372 +260,298 @@ export default function ReportsTab() {
         ))}
       </div>
 
-      {/* View toggle + Filter Bar */}
+      {/* Toolbar */}
       <Card className="p-3 md:p-4">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Report type tabs */}
-            <Tabs value={view} onValueChange={(v) => setView(v as ReportView)}>
-              <TabsList>
-                <TabsTrigger value="frequency" className="text-xs gap-1">
-                  <TrendingUp className="h-3 w-3" />
-                  Frequência
-                </TabsTrigger>
-                <TabsTrigger value="alerts" className="text-xs gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Alertas
-                  {alerts.length > 0 && (
-                    <Badge variant="destructive" className="ml-1 text-[9px] px-1 py-0 min-w-[16px] h-4">
-                      {alerts.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Period pills */}
+          <div className="flex items-center gap-1.5">
+            {(['7d', '30d', 'custom'] as Preset[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPreset(p)}
+                className={cn(
+                  'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
+                  preset === p
+                    ? 'bg-primary text-primary-foreground shadow-apple-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                )}
+              >
+                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : 'Personalizado'}
+              </button>
+            ))}
+          </div>
 
-            <div className="flex-1" />
+          <div className="flex-1" />
 
-            {view === 'frequency' && (
-              <>
-                <Tabs value={preset} onValueChange={(v) => setPreset(v as Preset)}>
-                  <TabsList>
-                    <TabsTrigger value="7d" className="text-xs">7d</TabsTrigger>
-                    <TabsTrigger value="30d" className="text-xs">30d</TabsTrigger>
-                    <TabsTrigger value="custom" className="text-xs">Custom</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => exportPdf(filteredRows, dates, classFilter)}
+            disabled={loading || filteredRows.length === 0}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">PDF</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => exportCsv(filteredRows, dates)}
+            disabled={loading || filteredRows.length === 0}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">CSV</span>
+          </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => exportPdf(filteredRows, dates, classFilter)}
-                  disabled={loading || filteredRows.length === 0}
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">PDF</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => exportCsv(filteredRows, dates)}
-                  disabled={loading || filteredRows.length === 0}
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">CSV</span>
-                </Button>
-              </>
-            )}
+          <select
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="all">Todas as turmas</option>
+            {classNames.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
 
-            <select
-              value={classFilter}
-              onChange={(e) => setClassFilter(e.target.value)}
-              className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="all">Todas as turmas</option>
-              {classNames.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              placeholder="Buscar aluno..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-7 h-8 text-xs w-[130px] md:w-[160px]"
+            />
+          </div>
+        </div>
 
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-              <Input
-                placeholder="Buscar aluno..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-7 h-8 text-xs w-[130px] md:w-[160px]"
+        {preset === 'custom' && (
+          <div className="pt-3 mt-3 border-t border-border flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">De</label>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">Até</label>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
           </div>
-
-          {view === 'frequency' && preset === 'custom' && (
-            <div className="pt-1 border-t border-border flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">De</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">Até</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  min={customFrom}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </Card>
 
-      {/* ── Alerts View ────────────────────────────────────────────────────── */}
-      {view === 'alerts' && (
-        <>
-          {alertsLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : alerts.length === 0 ? (
-            <Card className="p-12 flex flex-col items-center justify-center text-center gap-3">
-              <AlertTriangle className="h-8 w-8 text-muted-foreground/30" />
-              <p className="font-semibold">Nenhum aluno em risco</p>
-              <p className="text-sm text-muted-foreground">
-                Todos os alunos estão acima do limite de 75% de frequência nos últimos 30 dias.
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground px-1">
-                {alerts.length} aluno{alerts.length !== 1 ? 's' : ''} com frequência abaixo de 75% (últimos 30 dias)
-              </p>
-              <Card className="overflow-hidden">
-                <div className="divide-y divide-border">
-                  {alerts.map((a) => (
-                    <div key={a.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className={cn(
-                        'h-2 w-2 rounded-full flex-shrink-0',
-                        a.status === 'critical' ? 'bg-red-500' : 'bg-yellow-500'
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{a.name}</p>
-                        <p className="text-xs text-muted-foreground">{a.className}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className={cn(
-                          'text-sm font-bold',
-                          a.status === 'critical' ? 'text-red-500' : 'text-yellow-600'
-                        )}>
-                          {Math.round(100 - a.absenceRate)}%
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {a.absentDays} falta{a.absentDays !== 1 ? 's' : ''} / {a.totalDays} dias
-                        </p>
-                      </div>
-                      <Badge variant={a.status === 'critical' ? 'destructive' : 'warning'} className="text-[10px]">
-                        {a.status === 'critical' ? 'Crítico' : 'Alerta'}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          )}
-        </>
+      {/* ── Frequency Table ──────────────────────────────────────────────────── */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       )}
 
-      {/* ── Frequency View ──────────────────────────────────────────────────── */}
-      {view === 'frequency' && (
-        <>
-          {loading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
+      {/* Mobile: card list */}
+      {!loading && filteredRows.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {filteredRows.map((row) => {
+            const weekdays = dates.filter((d) => row.attendance[d] !== 'weekend');
+            const presences = weekdays.filter((d) => row.attendance[d] === 'present' || row.attendance[d] === 'late').length;
+            const lateCount = weekdays.filter((d) => row.attendance[d] === 'late').length;
+            const freq = weekdays.length > 0 ? Math.round((presences / weekdays.length) * 100) : 0;
+            const absences = weekdays.length - presences;
 
-          {/* Mobile: card list */}
-          {!loading && filteredRows.length > 0 && (
-            <div className="md:hidden space-y-3">
-              {filteredRows.map((row) => {
-                const weekdays = dates.filter((d) => row.attendance[d] !== 'weekend');
-                const presences = weekdays.filter((d) => row.attendance[d] === 'present' || row.attendance[d] === 'late').length;
-                const lateCount = weekdays.filter((d) => row.attendance[d] === 'late').length;
-                const freq = weekdays.length > 0 ? Math.round((presences / weekdays.length) * 100) : 0;
-                const absences = weekdays.length - presences;
-
-                return (
-                  <Card key={row.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <p className="text-sm font-semibold">{row.name}</p>
-                        <Badge variant="outline" className="text-[10px] mt-1">{row.className}</Badge>
-                      </div>
-                      <span className={cn(
-                        'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-sm font-bold',
-                        freq >= 75 ? 'bg-success/10 text-success'
-                          : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
-                          : 'bg-destructive/10 text-destructive'
-                      )}>
-                        {freq}%
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                      <div className="rounded-md bg-secondary/50 p-2">
-                        <p className="text-muted-foreground text-[10px]">Dias</p>
-                        <p className="font-semibold mt-0.5">{weekdays.length}</p>
-                      </div>
-                      <div className="rounded-md bg-success/10 p-2">
-                        <p className="text-muted-foreground text-[10px]">Presente</p>
-                        <p className="font-semibold text-success mt-0.5">{presences}</p>
-                      </div>
-                      <div className="rounded-md bg-destructive/10 p-2">
-                        <p className="text-muted-foreground text-[10px]">Ausente</p>
-                        <p className="font-semibold text-destructive mt-0.5">{absences}</p>
-                      </div>
-                      <div className="rounded-md bg-yellow-500/10 p-2">
-                        <p className="text-muted-foreground text-[10px]">Atraso</p>
-                        <p className="font-semibold text-yellow-600 mt-0.5">{lateCount}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 mt-3 overflow-hidden">
-                      {dates.slice(-7).map((d) => {
-                        const status = row.attendance[d];
-                        return (
-                          <div key={d} className="flex-1 flex flex-col items-center gap-0.5">
-                            <span className={cn(
-                              'inline-block h-2.5 w-full max-w-[2.5rem] rounded-sm',
-                              status === 'weekend' ? 'bg-border/40'
-                                : status === 'present' ? 'bg-success'
-                                : status === 'late' ? 'bg-yellow-500'
-                                : 'bg-destructive/40'
-                            )} />
-                            <span className="text-[9px] text-muted-foreground">
-                              {new Date(d + 'T12:00:00').getDate()}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Desktop: table */}
-          {!loading && (
-            <Card className="hidden md:block overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/20">
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap sticky left-0 bg-secondary/20 backdrop-blur-sm z-10 min-w-[140px]">
-                        Aluno
-                      </th>
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                        Turma
-                      </th>
-                      {dates.map((d) => {
-                        const dt = new Date(d + 'T12:00:00');
-                        const isWknd = dt.getDay() === 0 || dt.getDay() === 6;
-                        const isTdy = d === toDateStr(today);
-                        return (
-                          <th
-                            key={d}
-                            className={cn(
-                              'text-center px-1.5 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap min-w-[40px]',
-                              isWknd && 'opacity-30',
-                              isTdy && 'text-foreground'
-                            )}
-                          >
-                            <div className="text-[10px]">{DAY_SHORT[dt.getDay()]}</div>
-                            <div className="text-[10px] font-normal">{dt.getDate()}/{dt.getMonth() + 1}</div>
-                          </th>
-                        );
-                      })}
-                      <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                        Freq.
-                      </th>
-                      <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                        Atrasos
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={dates.length + 4} className="text-center py-10 text-sm text-muted-foreground">
-                          Nenhum aluno encontrado
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredRows.map((row) => {
-                        const weekdays = dates.filter((d) => row.attendance[d] !== 'weekend');
-                        const presences = weekdays.filter((d) => row.attendance[d] === 'present' || row.attendance[d] === 'late').length;
-                        const lateCount = weekdays.filter((d) => row.attendance[d] === 'late').length;
-                        const freq = weekdays.length > 0 ? Math.round((presences / weekdays.length) * 100) : 0;
-                        return (
-                          <tr key={row.id} className="hover:bg-secondary/20 transition-colors group">
-                            <td className="px-4 py-2.5 font-medium text-xs whitespace-nowrap sticky left-0 bg-card group-hover:bg-secondary/20 z-10">
-                              {row.name}
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              <Badge variant="outline" className="text-[10px]">{row.className}</Badge>
-                            </td>
-                            {dates.map((d) => {
-                              const status = row.attendance[d];
-                              return (
-                                <td key={d} className={cn('text-center px-1.5 py-2.5', status === 'weekend' && 'opacity-25')}>
-                                  {status === 'weekend' ? (
-                                    <span className="text-muted-foreground text-[10px]">—</span>
-                                  ) : status === 'present' ? (
-                                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                                  ) : status === 'late' ? (
-                                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
-                                  ) : (
-                                    <span className="inline-block h-2 w-2 rounded-full bg-destructive/40" />
-                                  )}
-                                </td>
-                              );
-                            })}
-                            <td className="text-center px-3 py-2.5">
-                              <span className={cn(
-                                'inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium',
-                                freq >= 75 ? 'bg-success/10 text-success'
-                                  : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
-                                  : 'bg-destructive/10 text-destructive'
-                              )}>
-                                {freq}%
-                              </span>
-                            </td>
-                            <td className="text-center px-3 py-2.5">
-                              {lateCount > 0 && (
-                                <span className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-yellow-500/10 text-yellow-600">
-                                  {lateCount}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border bg-secondary/10 flex-wrap">
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-success" />Presente
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-yellow-500" />Atraso
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-destructive/40" />Ausente
+            return (
+              <Card key={row.id} className="p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-sm font-semibold">{row.name}</p>
+                    <Badge variant="outline" className="text-[10px] mt-1">{row.className}</Badge>
+                  </div>
+                  <span className={cn(
+                    'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-sm font-bold',
+                    freq >= 75 ? 'bg-success/10 text-success'
+                      : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
+                      : 'bg-destructive/10 text-destructive'
+                  )}>
+                    {freq}%
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {filteredRows.length} aluno{filteredRows.length !== 1 ? 's' : ''} · {dates.length} dia{dates.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-            </Card>
-          )}
 
-          {!loading && filteredRows.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users className="h-8 w-8 text-muted-foreground/20 mb-3" />
-              <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>
+                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="rounded-md bg-secondary/50 p-2">
+                    <p className="text-muted-foreground text-[10px]">Dias</p>
+                    <p className="font-semibold mt-0.5">{weekdays.length}</p>
+                  </div>
+                  <div className="rounded-md bg-success/10 p-2">
+                    <p className="text-muted-foreground text-[10px]">Presente</p>
+                    <p className="font-semibold text-success mt-0.5">{presences}</p>
+                  </div>
+                  <div className="rounded-md bg-destructive/10 p-2">
+                    <p className="text-muted-foreground text-[10px]">Ausente</p>
+                    <p className="font-semibold text-destructive mt-0.5">{absences}</p>
+                  </div>
+                  <div className="rounded-md bg-yellow-500/10 p-2">
+                    <p className="text-muted-foreground text-[10px]">Atraso</p>
+                    <p className="font-semibold text-yellow-600 mt-0.5">{lateCount}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 mt-3 overflow-hidden">
+                  {dates.slice(-7).map((d) => {
+                    const status = row.attendance[d];
+                    return (
+                      <div key={d} className="flex-1 flex flex-col items-center gap-0.5">
+                        <span className={cn(
+                          'inline-block h-2.5 w-full max-w-[2.5rem] rounded-sm',
+                          status === 'weekend' ? 'bg-border/40'
+                            : status === 'present' ? 'bg-success'
+                            : status === 'late' ? 'bg-yellow-500'
+                            : 'bg-destructive/40'
+                        )} />
+                        <span className="text-[9px] text-muted-foreground">
+                          {new Date(d + 'T12:00:00').getDate()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Desktop: table */}
+      {!loading && (
+        <Card className="hidden md:block overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-secondary/20">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap sticky left-0 bg-secondary/20 backdrop-blur-sm z-10 min-w-[140px]">
+                    Aluno
+                  </th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                    Turma
+                  </th>
+                  {dates.map((d) => {
+                    const dt = new Date(d + 'T12:00:00');
+                    const isWknd = dt.getDay() === 0 || dt.getDay() === 6;
+                    const isTdy = d === toDateStr(today);
+                    return (
+                      <th
+                        key={d}
+                        className={cn(
+                          'text-center px-1.5 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap min-w-[40px]',
+                          isWknd && 'opacity-30',
+                          isTdy && 'text-foreground'
+                        )}
+                      >
+                        <div className="text-[10px]">{DAY_SHORT[dt.getDay()]}</div>
+                        <div className="text-[10px] font-normal">{dt.getDate()}/{dt.getMonth() + 1}</div>
+                      </th>
+                    );
+                  })}
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                    Freq.
+                  </th>
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                    Atrasos
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={dates.length + 4} className="text-center py-10 text-sm text-muted-foreground">
+                      Nenhum aluno encontrado
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRows.map((row) => {
+                    const weekdays = dates.filter((d) => row.attendance[d] !== 'weekend');
+                    const presences = weekdays.filter((d) => row.attendance[d] === 'present' || row.attendance[d] === 'late').length;
+                    const lateCount = weekdays.filter((d) => row.attendance[d] === 'late').length;
+                    const freq = weekdays.length > 0 ? Math.round((presences / weekdays.length) * 100) : 0;
+                    return (
+                      <tr key={row.id} className="hover:bg-secondary/20 transition-colors group">
+                        <td className="px-4 py-2.5 font-medium text-xs whitespace-nowrap sticky left-0 bg-card group-hover:bg-secondary/20 z-10">
+                          {row.name}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <Badge variant="outline" className="text-[10px]">{row.className}</Badge>
+                        </td>
+                        {dates.map((d) => {
+                          const status = row.attendance[d];
+                          return (
+                            <td key={d} className={cn('text-center px-1.5 py-2.5', status === 'weekend' && 'opacity-25')}>
+                              {status === 'weekend' ? (
+                                <span className="text-muted-foreground text-[10px]">—</span>
+                              ) : status === 'present' ? (
+                                <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                              ) : status === 'late' ? (
+                                <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
+                              ) : (
+                                <span className="inline-block h-2 w-2 rounded-full bg-destructive/40" />
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="text-center px-3 py-2.5">
+                          <span className={cn(
+                            'inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium',
+                            freq >= 75 ? 'bg-success/10 text-success'
+                              : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
+                              : 'bg-destructive/10 text-destructive'
+                          )}>
+                            {freq}%
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-2.5">
+                          {lateCount > 0 && (
+                            <span className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-yellow-500/10 text-yellow-600">
+                              {lateCount}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border bg-secondary/10 flex-wrap">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-success" />Presente
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-yellow-500" />Atraso
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-destructive/40" />Ausente
+              </span>
             </div>
-          )}
-        </>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {filteredRows.length} aluno{filteredRows.length !== 1 ? 's' : ''} · {dates.length} dia{dates.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {!loading && filteredRows.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Users className="h-8 w-8 text-muted-foreground/20 mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>
+        </div>
       )}
     </div>
   );

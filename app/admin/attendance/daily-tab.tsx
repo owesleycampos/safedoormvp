@@ -97,7 +97,7 @@ function TimePicker({ open, onClose, onConfirm, title }: TimePickerProps) {
           type="time"
           value={time}
           onChange={(e) => setTime(e.target.value)}
-          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full h-10 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           autoFocus
         />
         <div className="flex gap-2">
@@ -414,7 +414,7 @@ export default function DailyTab() {
         <select
           value={classFilter}
           onChange={e => setClassFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring flex-shrink-0"
+          className="h-9 rounded-xl border border-input bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring flex-shrink-0"
         >
           <option value="all">Todas as turmas</option>
           {classes.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -425,7 +425,7 @@ export default function DailyTab() {
           placeholder="Buscar aluno..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full sm:w-[160px]"
+          className="h-9 rounded-xl border border-input bg-card px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full sm:w-[160px]"
         />
       </div>
 

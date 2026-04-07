@@ -150,7 +150,7 @@ export default function StudentHistoryPage() {
             onClick={() => setDays(d)}
             className={cn(
               'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-              days === d ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground hover:text-foreground'
+              days === d ? 'bg-primary text-primary-foreground shadow-apple-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             )}
           >
             {d} dias

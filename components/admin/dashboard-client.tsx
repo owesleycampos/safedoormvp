@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Users, UserCheck, UserX, Eye, LogIn, LogOut, Clock, ClipboardEdit,
-  TrendingUp, TrendingDown, AlertTriangle,
+  TrendingUp, TrendingDown, AlertTriangle, CalendarDays, X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -65,15 +65,31 @@ function formatMinutes(min: number): string {
   return h > 0 ? `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}` : `${m}min`;
 }
 
+type Period = 'today' | '7d' | '30d' | 'custom';
+
+function toDateStr(d: Date): string { return d.toISOString().slice(0, 10); }
+
 export function DashboardClient({ data: initialData }: DashboardClientProps) {
   const [manualOpen, setManualOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('all');
+  const [period, setPeriod] = useState<Period>('today');
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6); return toDateStr(d);
+  });
+  const [customTo, setCustomTo] = useState(() => toDateStr(new Date()));
+  const [customOpen, setCustomOpen] = useState(false);
   const [data, setData] = useState<StatsData>(initialData);
 
-  const fetchStats = useCallback(async (cid?: string) => {
+  const fetchStats = useCallback(async (cid?: string, p?: Period) => {
     try {
       const params = new URLSearchParams();
       if (cid && cid !== 'all') params.set('classId', cid);
+      const currentPeriod = p || period;
+      params.set('period', currentPeriod);
+      if (currentPeriod === 'custom') {
+        params.set('from', customFrom);
+        params.set('to', customTo);
+      }
       const res = await fetch(`/api/dashboard/stats?${params}`);
       if (!res.ok) return;
       const json = await res.json();
@@ -81,7 +97,7 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
     } catch {
       // silent — keep stale data
     }
-  }, []);
+  }, [period, customFrom, customTo]);
 
   useEffect(() => {
     const id = setInterval(() => fetchStats(classFilter), POLL_INTERVAL_MS);
@@ -90,7 +106,7 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
 
   useEffect(() => {
     fetchStats(classFilter);
-  }, [classFilter, fetchStats]);
+  }, [classFilter, period, customFrom, customTo, fetchStats]);
 
   const presenceRate = data.totalStudents > 0
     ? Math.round((data.presentCount / data.totalStudents) * 100) : 0;
@@ -116,38 +132,108 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
 
       <div className="flex-1 p-4 md:p-6 space-y-6">
 
-        {/* Class filter */}
-        {data.classes.length > 0 && (
+        {/* Period + Class filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Period filter */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium">Turma:</span>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setClassFilter('all')}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  classFilter === 'all'
-                    ? 'bg-foreground text-background'
-                    : 'bg-secondary text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Todas
-              </button>
-              {data.classes.map((c) => (
+            <span className="text-xs text-muted-foreground font-medium">Período:</span>
+            <div className="flex items-center gap-1.5">
+              {([
+                { key: 'today', label: 'Hoje' },
+                { key: '7d', label: '7 dias' },
+                { key: '30d', label: '30 dias' },
+                { key: 'custom', label: 'Personalizado' },
+              ] as { key: Period; label: string }[]).map((p) => (
                 <button
-                  key={c.id}
-                  onClick={() => setClassFilter(c.id)}
+                  key={p.key}
+                  onClick={() => {
+                    if (p.key === 'custom') {
+                      setCustomOpen(true);
+                      setPeriod('custom');
+                    } else {
+                      setPeriod(p.key);
+                      setCustomOpen(false);
+                    }
+                  }}
                   className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                    classFilter === c.id
-                      ? 'bg-foreground text-background'
-                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
+                    period === p.key
+                      ? 'bg-primary text-primary-foreground shadow-apple-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
-                  {c.name}
+                  {p.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Class filter */}
+          {data.classes.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground font-medium">Turma:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setClassFilter('all')}
+                  className={cn(
+                    'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
+                    classFilter === 'all'
+                      ? 'bg-primary text-primary-foreground shadow-apple-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  Todas
+                </button>
+                {data.classes.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setClassFilter(c.id)}
+                    className={cn(
+                      'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
+                      classFilter === c.id
+                        ? 'bg-primary text-primary-foreground shadow-apple-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    )}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Custom date range picker */}
+        {period === 'custom' && customOpen && (
+          <Card className="p-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">De</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Até</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <button
+                onClick={() => { setCustomOpen(false); setPeriod('today'); }}
+                className="h-6 w-6 rounded-full flex items-center justify-center hover:bg-secondary text-muted-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </Card>
         )}
 
         {/* Metric cards */}
@@ -174,9 +260,9 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
                 </div>
                 {trendData.length >= 2 && <Sparkline data={trendData} color="#10B981" />}
               </div>
-              <div className="mt-3 h-1 bg-border rounded-full overflow-hidden">
+              <div className="mt-3 h-1.5 bg-secondary rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 transition-all duration-700 rounded-full"
+                  className="h-full bg-success transition-all duration-700 rounded-full"
                   style={{ width: `${presenceRate}%` }}
                 />
               </div>
@@ -235,7 +321,9 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
         {data.trend && data.trend.some(t => t.total > 0) && (
           <Card>
             <CardHeader className="px-5 py-4 border-b border-border">
-              <CardTitle className="text-sm">Frequência - Últimos 7 dias</CardTitle>
+              <CardTitle className="text-sm">
+                Frequência — {period === 'today' ? 'Últimos 7 dias' : period === '7d' ? 'Últimos 7 dias' : period === '30d' ? 'Últimos 30 dias' : `${customFrom} a ${customTo}`}
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
               <div className="flex items-end gap-2 h-24">
@@ -248,14 +336,14 @@ export function DashboardClient({ data: initialData }: DashboardClientProps) {
                     <div key={t.date} className="flex-1 flex flex-col items-center gap-1">
                       <div className="w-full flex items-end justify-center" style={{ height: '72px' }}>
                         {isWeekend ? (
-                          <div className="w-full max-w-[32px] h-1 rounded-full bg-border/40" />
+                          <div className="w-full max-w-[32px] h-1 rounded-full bg-secondary" />
                         ) : (
                           <div
                             className={cn(
-                              'w-full max-w-[32px] rounded-t-md transition-all',
-                              rate >= 75 ? 'bg-emerald-500' : rate >= 50 ? 'bg-yellow-500' : rate > 0 ? 'bg-red-400' : 'bg-border/40'
+                              'w-full max-w-[32px] rounded-lg transition-all duration-500',
+                              rate >= 75 ? 'bg-success' : rate >= 50 ? 'bg-warn' : rate > 0 ? 'bg-destructive/60' : 'bg-secondary'
                             )}
-                            style={{ height: `${Math.max(rate * 0.72, 2)}px` }}
+                            style={{ height: `${Math.max(rate * 0.72, 3)}px` }}
                           />
                         )}
                       </div>

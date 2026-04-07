@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
         mono: ['"Geist Mono"', '"Fira Code"', 'monospace'],
       },
       colors: {
@@ -50,16 +50,25 @@ const config: Config = {
           DEFAULT: 'hsl(var(--sidebar))',
           border:  'hsl(var(--sidebar-border))',
         },
-        // Status colors — used only for micro-details
-        success: '#22c55e',   // green-500
-        danger:  '#ef4444',   // red-500
-        warn:    '#eab308',   // yellow-500
-        info:    '#3b82f6',   // blue-500 — used minimally
+        // Apple system colors
+        success: '#34C759',   // Apple green
+        danger:  '#FF3B30',   // Apple red
+        warn:    '#FF9500',   // Apple orange
+        info:    '#007AFF',   // Apple blue
       },
       borderRadius: {
-        lg:  'var(--radius)',
-        md:  'calc(var(--radius) - 2px)',
-        sm:  'calc(var(--radius) - 4px)',
+        lg:  'var(--radius)',          // 12px
+        md:  'calc(var(--radius) - 2px)', // 10px
+        sm:  'calc(var(--radius) - 4px)', // 8px
+        xl:  'calc(var(--radius) + 4px)', // 16px
+        '2xl': 'calc(var(--radius) + 8px)', // 20px
+      },
+      boxShadow: {
+        'apple-sm':    'var(--shadow-sm)',
+        'apple':       'var(--shadow-md)',
+        'apple-lg':    'var(--shadow-lg)',
+        'apple-card':  'var(--shadow-card)',
+        'apple-hover': 'var(--shadow-card-hover)',
       },
       keyframes: {
         'accordion-down': {
@@ -71,11 +80,11 @@ const config: Config = {
           to:   { height: '0' },
         },
         'fade-in': {
-          from: { opacity: '0', transform: 'translateY(4px)' },
+          from: { opacity: '0', transform: 'translateY(6px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
         },
         'scale-in': {
-          from: { opacity: '0', transform: 'scale(0.96)' },
+          from: { opacity: '0', transform: 'scale(0.95)' },
           to:   { opacity: '1', transform: 'scale(1)' },
         },
         shimmer: {
@@ -86,8 +95,8 @@ const config: Config = {
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up':   'accordion-up 0.2s ease-out',
-        'fade-in':        'fade-in 0.18s ease-out',
-        'scale-in':       'scale-in 0.15s ease-out',
+        'fade-in':        'fade-in 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        'scale-in':       'scale-in 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)',
         shimmer:          'shimmer 1.6s infinite linear',
       },
     },

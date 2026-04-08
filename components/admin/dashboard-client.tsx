@@ -1,23 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion } from 'framer-motion';
 import {
-  Users, UserCheck, UserX, Eye, LogIn, LogOut, Clock, ClipboardEdit,
-  TrendingUp, TrendingDown, AlertTriangle, CalendarDays, X,
+  LogIn, LogOut, Clock, ClipboardEdit, TrendingUp, TrendingDown,
+  Video, AlertTriangle, WifiOff,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { ManualCheckinWizard } from '@/components/admin/manual-checkin-wizard';
-import { AdminHeader } from '@/components/admin/header';
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils';
+import Link from 'next/link';
 
-interface TrendPoint {
-  date: string;
-  present: number;
-  total: number;
-}
+interface TrendPoint { date: string; present: number; total: number }
 
 interface StatsData {
   totalStudents: number;
@@ -28,373 +23,340 @@ interface StatsData {
   unrecognizedCount: number;
   classes: { id: string; name: string }[];
   trend?: TrendPoint[];
-  avgStayMinutes?: number | null;
-}
-
-interface DashboardClientProps {
-  data: StatsData;
 }
 
 const POLL_INTERVAL_MS = 15_000;
 
-function Sparkline({ data, color = 'currentColor' }: { data: number[]; color?: string }) {
-  if (data.length < 2) return null;
-  const max = Math.max(...data, 1);
-  const h = 28;
-  const w = 80;
-  const step = w / (data.length - 1);
-  const points = data.map((v, i) => `${i * step},${h - (v / max) * h}`).join(' ');
+/* ── Animated Counter ─────────────────────────────────────────── */
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const from = prev.current;
+    const start = performance.now();
+    function tick(now: number) {
+      const p = Math.min((now - start) / 500, 1);
+      setDisplay(Math.round(from + (value - from) * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    prev.current = value;
+  }, [value]);
+  return <>{display}</>;
+}
+
+/* ── Line Chart ───────────────────────────────────────────────── */
+function LineChart({ data }: { data: TrendPoint[] }) {
+  const workdays = data.filter(t => {
+    const d = new Date(t.date + 'T12:00:00').getDay();
+    return d !== 0 && d !== 6;
+  });
+  if (workdays.length < 2) return null;
+
+  const rates = workdays.map(t => t.total > 0 ? (t.present / t.total) * 100 : 0);
+  const w = 600, h = 160, px = 40, py = 20;
+  const cW = w - px * 2, cH = h - py * 2;
+
+  const pts = rates.map((r, i) => ({
+    x: px + (i / (rates.length - 1)) * cW,
+    y: py + cH - (r / 100) * cH,
+  }));
+
+  const line = pts.reduce((a, p, i) => {
+    if (i === 0) return `M ${p.x} ${p.y}`;
+    const prev = pts[i - 1];
+    const cx = (prev.x + p.x) / 2;
+    return `${a} C ${cx} ${prev.y}, ${cx} ${p.y}, ${p.x} ${p.y}`;
+  }, '');
+
+  const area = `${line} L ${pts[pts.length - 1].x} ${py + cH} L ${pts[0].x} ${py + cH} Z`;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-20 h-7" preserveAspectRatio="none">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 180 }}>
+      {[0, 25, 50, 75, 100].map(v => {
+        const y = py + cH - (v / 100) * cH;
+        return (
+          <g key={v}>
+            <line x1={px} y1={y} x2={w - px} y2={y} stroke="currentColor" className="text-border" strokeWidth="1" />
+            <text x={px - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize="10">{v}%</text>
+          </g>
+        );
+      })}
+      <defs>
+        <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity="0.06" />
+          <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#aGrad)" />
+      <path d={line} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1.5" strokeLinecap="round" />
+      {pts.map((p, i) => {
+        const dt = new Date(workdays[i].date + 'T12:00:00');
+        const day = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dt.getDay()];
+        return (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3" fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
+            <text x={p.x} y={h - 2} textAnchor="middle" className="fill-muted-foreground" fontSize="10">{day}</text>
+            <text x={p.x} y={p.y - 8} textAnchor="middle" className="fill-foreground" fontSize="10" fontWeight="500">{Math.round(rates[i])}%</text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
-function formatMinutes(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}` : `${m}min`;
-}
-
-type Period = 'today' | '7d' | '30d' | 'custom';
-
-function toDateStr(d: Date): string { return d.toISOString().slice(0, 10); }
-
-export function DashboardClient({ data: initialData }: DashboardClientProps) {
+/* ── Main ─────────────────────────────────────────────────────── */
+export function DashboardClient({ data: initialData }: { data: StatsData }) {
   const [manualOpen, setManualOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('all');
-  const [period, setPeriod] = useState<Period>('today');
-  const [customFrom, setCustomFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 6); return toDateStr(d);
-  });
-  const [customTo, setCustomTo] = useState(() => toDateStr(new Date()));
-  const [customOpen, setCustomOpen] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
   const [data, setData] = useState<StatsData>(initialData);
 
-  const fetchStats = useCallback(async (cid?: string, p?: Period) => {
+  // KPIs always fetch "today", chart fetches the selected period
+  const fetchStats = useCallback(async (cid?: string) => {
     try {
       const params = new URLSearchParams();
       if (cid && cid !== 'all') params.set('classId', cid);
-      const currentPeriod = p || period;
-      params.set('period', currentPeriod);
-      if (currentPeriod === 'custom') {
-        params.set('from', customFrom);
-        params.set('to', customTo);
-      }
+      params.set('period', 'today');
+      params.set('trendDays', chartPeriod === '7d' ? '7' : '30');
       const res = await fetch(`/api/dashboard/stats?${params}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      setData(json);
-    } catch {
-      // silent — keep stale data
-    }
-  }, [period, customFrom, customTo]);
+      if (res.ok) setData(await res.json());
+    } catch { /* silent */ }
+  }, [chartPeriod]);
 
   useEffect(() => {
     const id = setInterval(() => fetchStats(classFilter), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [classFilter, fetchStats]);
 
-  useEffect(() => {
-    fetchStats(classFilter);
-  }, [classFilter, period, customFrom, customTo, fetchStats]);
+  useEffect(() => { fetchStats(classFilter); }, [classFilter, chartPeriod, fetchStats]);
 
   const presenceRate = data.totalStudents > 0
     ? Math.round((data.presentCount / data.totalStudents) * 100) : 0;
 
-  const trendData = data.trend?.map(t => t.present) ?? [];
+  // Calculate trend from chart data
   const trendRates = data.trend?.filter(t => t.total > 0).map(t => Math.round((t.present / t.total) * 100)) ?? [];
-  const yesterdayRate = trendRates.length >= 2 ? trendRates[trendRates.length - 2] : null;
-  const trendDirection = yesterdayRate !== null ? presenceRate - yesterdayRate : 0;
+  const avgRate = trendRates.length > 0 ? Math.round(trendRates.reduce((a, b) => a + b, 0) / trendRates.length) : 0;
+
+  const today = new Date();
+
+  // Alerts — actionable items
+  const alerts: { text: string; href: string; urgent: boolean }[] = [];
+  if (data.unrecognizedCount > 0) {
+    alerts.push({
+      text: `${data.unrecognizedCount} rosto${data.unrecognizedCount > 1 ? 's' : ''} não identificado${data.unrecognizedCount > 1 ? 's' : ''} — revisar`,
+      href: '/admin/unrecognized',
+      urgent: data.unrecognizedCount >= 5,
+    });
+  }
+  if ((data.lateCount ?? 0) > 3) {
+    alerts.push({
+      text: `${data.lateCount} atrasos hoje — acima do normal`,
+      href: '/admin/attendance',
+      urgent: false,
+    });
+  }
 
   return (
     <>
-      <AdminHeader
-        title="Dashboard"
-        subtitle={new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        actions={
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setManualOpen(true)}>
-            <ClipboardEdit className="h-4 w-4" />
-            <span className="hidden sm:inline">Registrar Manualmente</span>
-            <span className="sm:hidden">Registrar</span>
-          </Button>
-        }
-      />
+      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
 
-      <div className="flex-1 p-4 md:p-6 space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="flex items-start justify-between gap-4"
+        >
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setManualOpen(true)}
+              className="hidden md:flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <ClipboardEdit className="h-3.5 w-3.5" />
+              Registrar
+            </button>
+            <Link
+              href="/admin/camera"
+              className="flex items-center gap-2 h-9 px-3 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors"
+            >
+              <Video className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Câmera</span>
+            </Link>
+          </div>
+        </motion.div>
 
-        {/* Period + Class filters */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Period selector */}
-          <select
-            value={period}
-            onChange={(e) => {
-              const v = e.target.value as Period;
-              if (v === 'custom') {
-                setCustomOpen(true);
-              } else {
-                setCustomOpen(false);
-              }
-              setPeriod(v);
-            }}
-            className="h-9 rounded-xl border border-input bg-card px-3 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
-          >
-            <option value="today">Hoje</option>
-            <option value="7d">Últimos 7 dias</option>
-            <option value="30d">Últimos 30 dias</option>
-            <option value="custom">Personalizado</option>
-          </select>
-
-          {/* Class selector */}
-          {data.classes.length > 0 && (
+        {/* Class filter — applies to everything */}
+        {data.classes.length > 0 && (
+          <div className="flex items-center">
             <select
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
-              className="h-9 rounded-xl border border-input bg-card px-3 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-8 rounded-md border border-border bg-card px-2.5 pr-7 text-xs font-medium text-foreground focus:outline-none"
             >
               <option value="all">Todas as turmas</option>
               {data.classes.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-          )}
-        </div>
-
-        {/* Custom date range picker */}
-        {period === 'custom' && customOpen && (
-          <Card className="p-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">De</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">Até</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  min={customFrom}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <button
-                onClick={() => { setCustomOpen(false); setPeriod('today'); }}
-                className="h-6 w-6 rounded-full flex items-center justify-center hover:bg-secondary text-muted-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          </Card>
+          </div>
         )}
 
-        {/* Metric cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Presentes */}
-          <Card>
-            <CardContent className="p-4 md:p-5">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-xs text-muted-foreground">Presentes</p>
-                <UserCheck className="h-4 w-4 text-emerald-500/60" />
-              </div>
-              <div className="flex items-end justify-between">
+        {/* Alerts */}
+        {alerts.length > 0 && (
+          <div className="space-y-2">
+            {alerts.map((alert, i) => (
+              <Link key={i} href={alert.href}>
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-md border border-border hover:bg-accent transition-colors">
+                  <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs">{alert.text}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* KPIs — ALWAYS TODAY */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: 0.05 }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hoje</h2>
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <Card className="p-4">
+              <span className="text-[11px] text-muted-foreground">Presentes</span>
+              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.presentCount} /></p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">de {data.totalStudents}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-[11px] text-muted-foreground">Ausentes</span>
+              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.absentCount} /></p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{data.totalStudents > 0 ? Math.round((data.absentCount / data.totalStudents) * 100) : 0}%</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-[11px] text-muted-foreground">Atrasos</span>
+              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.lateCount ?? 0} /></p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-[11px] text-muted-foreground">Presença</span>
+              <p className="text-2xl font-semibold tracking-tight mt-1">{presenceRate}%</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">taxa geral</p>
+            </Card>
+          </div>
+        </motion.div>
+
+        {/* Chart + Feed */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+
+          {/* Trend Chart — THIS has period selector */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.1 }}
+            className="lg:col-span-3"
+          >
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="metric-number">{data.presentCount}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-xs text-muted-foreground">{presenceRate}%</span>
-                    {trendDirection !== 0 && (
-                      <span className={cn('text-[10px] flex items-center', trendDirection > 0 ? 'text-emerald-500' : 'text-red-500')}>
-                        {trendDirection > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {Math.abs(trendDirection)}%
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="text-sm font-semibold">Tendência de Frequência</h3>
+                  {avgRate > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Média: {avgRate}% nos dias úteis</p>
+                  )}
                 </div>
-                {trendData.length >= 2 && <Sparkline data={trendData} color="#10B981" />}
-              </div>
-              <div className="mt-3 h-1.5 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-success transition-all duration-700 rounded-full"
-                  style={{ width: `${presenceRate}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Ausentes */}
-          <Card>
-            <CardContent className="p-4 md:p-5">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-xs text-muted-foreground">Ausentes</p>
-                <UserX className="h-4 w-4 text-red-500/60" />
-              </div>
-              <p className="metric-number">{data.absentCount}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {data.totalStudents > 0 ? Math.round((data.absentCount / data.totalStudents) * 100) : 0}% do total
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Atrasos */}
-          <Card>
-            <CardContent className="p-4 md:p-5">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-xs text-muted-foreground">Atrasos Hoje</p>
-                <Clock className="h-4 w-4 text-yellow-500/60" />
-              </div>
-              <p className="metric-number">{data.lateCount ?? 0}</p>
-              {data.avgStayMinutes && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Perm. média: {formatMinutes(data.avgStayMinutes)}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Não Identificados */}
-          <Card>
-            <CardContent className="p-4 md:p-5">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-xs text-muted-foreground">Não Identificados</p>
-                <Eye className="h-4 w-4 text-muted-foreground/50" />
-              </div>
-              <p className="metric-number">{data.unrecognizedCount}</p>
-              {data.unrecognizedCount > 0 && (
-                <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Requer revisão
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Trend chart (larger) */}
-        {data.trend && data.trend.some(t => t.total > 0) && (
-          <Card>
-            <CardHeader className="px-5 py-4 border-b border-border">
-              <CardTitle className="text-sm">
-                Frequência — {period === 'today' ? 'Últimos 7 dias' : period === '7d' ? 'Últimos 7 dias' : period === '30d' ? 'Últimos 30 dias' : `${customFrom} a ${customTo}`}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <div className="flex items-end gap-2 h-24">
-                {data.trend.map((t, i) => {
-                  const isWeekend = new Date(t.date + 'T12:00:00').getDay() % 6 === 0;
-                  const rate = t.total > 0 ? (t.present / t.total) * 100 : 0;
-                  const dt = new Date(t.date + 'T12:00:00');
-                  const dayName = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dt.getDay()];
-                  return (
-                    <div key={t.date} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full flex items-end justify-center" style={{ height: '72px' }}>
-                        {isWeekend ? (
-                          <div className="w-full max-w-[32px] h-1 rounded-full bg-secondary" />
-                        ) : (
-                          <div
-                            className={cn(
-                              'w-full max-w-[32px] rounded-lg transition-all duration-500',
-                              rate >= 75 ? 'bg-success' : rate >= 50 ? 'bg-warn' : rate > 0 ? 'bg-destructive/60' : 'bg-secondary'
-                            )}
-                            style={{ height: `${Math.max(rate * 0.72, 3)}px` }}
-                          />
-                        )}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">{dayName}</span>
-                      {!isWeekend && t.total > 0 && (
-                        <span className="text-[10px] font-medium">{Math.round(rate)}%</span>
+                <div className="flex items-center gap-1">
+                  {(['7d', '30d'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setChartPeriod(p)}
+                      className={cn(
+                        'h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors',
+                        chartPeriod === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
                       )}
-                    </div>
-                  );
-                })}
+                    >
+                      {p === '7d' ? '7 dias' : '30 dias'}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              {data.trend && data.trend.some(t => t.total > 0) ? (
+                <LineChart data={data.trend} />
+              ) : (
+                <div className="flex items-center justify-center h-[180px]">
+                  <p className="text-xs text-muted-foreground">Sem dados no período</p>
+                </div>
+              )}
+            </Card>
+          </motion.div>
 
-        {/* Recent events */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <CardTitle>Eventos Recentes</CardTitle>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setManualOpen(true)}
-              className="gap-1.5 h-7 text-xs text-muted-foreground"
-            >
-              <ClipboardEdit className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Registrar manual</span>
-            </Button>
-          </CardHeader>
-
-          {data.recentEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Clock className="h-8 w-8 text-muted-foreground/20 mb-3" />
-              <p className="text-sm text-muted-foreground">Nenhum evento registrado</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {data.recentEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex items-center gap-3 px-4 md:px-5 py-3 table-row-hover"
+          {/* Live Feed */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.15 }}
+            className="lg:col-span-2"
+          >
+            <Card className="h-full flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">Ao vivo</h3>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <button
+                  onClick={() => setManualOpen(true)}
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarImage src={event.student.photoUrl || ''} alt={event.student.name} />
-                    <AvatarFallback className="text-[10px] bg-secondary">
-                      {getInitials(event.student.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  + Manual
+                </button>
+              </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{event.student.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {event.student.class?.name}
-                      {event.isManual && <span className="ml-1.5 opacity-60">· Manual</span>}
-                      {event.notes?.includes('ATRASO') && (
-                        <span className="ml-1.5 text-yellow-600">· Atraso</span>
-                      )}
-                    </p>
+              <div className="flex-1 overflow-y-auto max-h-[360px]">
+                {data.recentEvents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4">
+                    <p className="text-xs text-muted-foreground">Nenhum evento hoje</p>
                   </div>
-
-                  <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-                    <Badge variant={event.eventType === 'ENTRY' ? 'entry' : 'exit'}>
-                      <span className="hidden sm:inline">{event.eventType === 'ENTRY' ? 'Entrada' : 'Saída'}</span>
-                      <span className="sm:hidden">
-                        {event.eventType === 'ENTRY'
-                          ? <LogIn className="h-3 w-3" />
-                          : <LogOut className="h-3 w-3" />
-                        }
-                      </span>
-                    </Badge>
-                    <span className="text-xs text-muted-foreground tabular-nums text-right" title={formatRelativeTime(event.timestamp)}>
-                      {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {data.recentEvents.slice(0, 20).map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent/30 transition-colors"
+                      >
+                        <Avatar className="h-7 w-7 flex-shrink-0">
+                          <AvatarImage src={event.student.photoUrl || ''} />
+                          <AvatarFallback className="text-[9px] font-medium bg-muted text-muted-foreground">
+                            {getInitials(event.student.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{event.student.name}</p>
+                        </div>
+                        <span className={cn(
+                          'text-[10px]',
+                          event.eventType === 'ENTRY' ? 'text-foreground' : 'text-muted-foreground'
+                        )}>
+                          {event.eventType === 'ENTRY' ? 'Entrada' : 'Saída'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+                )}
+              </div>
+            </Card>
+          </motion.div>
+        </div>
       </div>
 
       <ManualCheckinWizard open={manualOpen} onOpenChange={setManualOpen} />

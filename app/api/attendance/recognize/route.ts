@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
 import { determineAttendanceStatus } from '@/lib/attendance-rules';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 // Database-backed cooldown: prevents duplicate registrations across
 // multiple cameras, server instances, and restarts.
@@ -16,12 +15,10 @@ const COOLDOWN_SECONDS = 60; // minimum seconds between registrations for same s
  * Body: { studentId: string, type: 'ENTRY' | 'EXIT', confidence: number }
  */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId;
+  const schoolId = auth.schoolId;
 
   let studentId: string;
   let type: string;

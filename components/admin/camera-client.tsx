@@ -6,11 +6,8 @@ import {
   LogIn, LogOut, List, X,
 } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface FaceMatch {
   studentId: string | null;
@@ -31,13 +28,9 @@ interface RecentRecognition {
   confidence: number;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const SCAN_INTERVAL_MS = 2_000;
 const CLIENT_COOLDOWN_MS = 60_000;
 const MAX_RECENT = 10;
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function CameraClient() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -50,36 +43,27 @@ export function CameraClient() {
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [mode, setMode] = useState<'ENTRY' | 'EXIT'>('ENTRY');
-  // Pre-selection: must choose mode before camera opens
   const [modeChosen, setModeChosen] = useState(false);
   const [detectedFaces, setDetectedFaces] = useState<FaceMatch[]>([]);
   const [recentRecognitions, setRecentRecognitions] = useState<RecentRecognition[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [rekognitionConfigured, setRekognitionConfigured] = useState<boolean | null>(null);
-  // Mobile panel toggle (replaces sidebar)
   const [panelOpen, setPanelOpen] = useState(false);
 
-  // Keep mode ref in sync
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
-  // Check AWS Rekognition config on mount
   useEffect(() => {
     fetch('/api/camera/recognize')
       .then((r) => setRekognitionConfigured(r.ok || r.status !== 503))
       .catch(() => setRekognitionConfigured(false));
   }, []);
 
-  // ── Register attendance ───────────────────────────────────────────────────
   const registerAttendance = useCallback((match: FaceMatch) => {
     const currentMode = modeRef.current;
     fetch('/api/attendance/recognize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        studentId: match.studentId,
-        type: currentMode,
-        confidence: match.confidence,
-      }),
+      body: JSON.stringify({ studentId: match.studentId, type: currentMode, confidence: match.confidence }),
     })
       .then(async (r) => {
         const data = await r.json();
@@ -87,18 +71,7 @@ export function CameraClient() {
           if (data.reason && data.reason !== 'cooldown') {
             setRecentRecognitions((prev) => {
               if (prev.some((e) => e.studentId === match.studentId)) return prev;
-              return [
-                {
-                  id: crypto.randomUUID(),
-                  studentId: match.studentId!,
-                  name: match.name,
-                  photoUrl: match.photoUrl,
-                  type: currentMode,
-                  timestamp: new Date(),
-                  confidence: match.confidence,
-                },
-                ...prev,
-              ].slice(0, MAX_RECENT);
+              return [{ id: crypto.randomUUID(), studentId: match.studentId!, name: match.name, photoUrl: match.photoUrl, type: currentMode, timestamp: new Date(), confidence: match.confidence }, ...prev].slice(0, MAX_RECENT);
             });
           }
           return;
@@ -106,33 +79,18 @@ export function CameraClient() {
         if (data.success) {
           const label = currentMode === 'ENTRY' ? 'Entrada registrada!' : 'Saída registrada!';
           toast({ variant: 'success', title: label, description: match.name });
-
           setRecentRecognitions((prev) =>
-            [
-              {
-                id: data.event?.id ?? crypto.randomUUID(),
-                studentId: match.studentId!,
-                name: match.name,
-                photoUrl: match.photoUrl,
-                type: currentMode,
-                timestamp: new Date(),
-                confidence: match.confidence,
-              },
-              ...prev,
-            ].slice(0, MAX_RECENT)
+            [{ id: data.event?.id ?? crypto.randomUUID(), studentId: match.studentId!, name: match.name, photoUrl: match.photoUrl, type: currentMode, timestamp: new Date(), confidence: match.confidence }, ...prev].slice(0, MAX_RECENT)
           );
         } else if (data.error) {
-          console.error('[attendance] server error:', data.error);
           toast({ variant: 'destructive', title: 'Erro ao registrar', description: data.error });
         }
       })
       .catch((err) => console.error('[attendance] error:', err));
   }, []);
 
-  // ── Capture frame ─────────────────────────────────────────────────────────
   const scanFrame = useCallback(async () => {
     if (scanningRef.current) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < 2) return;
@@ -147,23 +105,14 @@ export function CameraClient() {
       if (!ctx) return;
       ctx.drawImage(video, 0, 0);
 
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', 0.85)
-      );
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
       if (!blob) return;
 
       const formData = new FormData();
       formData.append('image', blob, 'frame.jpg');
 
-      const res = await fetch('/api/camera/recognize', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        if (res.status === 503) setRekognitionConfigured(false);
-        return;
-      }
+      const res = await fetch('/api/camera/recognize', { method: 'POST', body: formData });
+      if (!res.ok) { if (res.status === 503) setRekognitionConfigured(false); return; }
 
       const data = await res.json();
       const matches: FaceMatch[] = data.matches ?? [];
@@ -173,74 +122,47 @@ export function CameraClient() {
         if (!match.studentId) continue;
         const cooldownKey = `${match.studentId}:${modeRef.current}`;
         const lastTime = cooldownRef.current.get(cooldownKey) ?? 0;
-        const now = Date.now();
-        if (now - lastTime > CLIENT_COOLDOWN_MS) {
-          cooldownRef.current.set(cooldownKey, now);
+        if (Date.now() - lastTime > CLIENT_COOLDOWN_MS) {
+          cooldownRef.current.set(cooldownKey, Date.now());
           registerAttendance(match);
         }
       }
-    } catch (err) {
-      console.error('[scan] error:', err);
-    } finally {
-      scanningRef.current = false;
-      setIsScanning(false);
-    }
+    } catch (err) { console.error('[scan] error:', err); }
+    finally { scanningRef.current = false; setIsScanning(false); }
   }, [registerAttendance]);
 
-  // ── Camera controls ───────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
     setCameraStatus('starting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-        audio: false,
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
       setCameraStatus('active');
     } catch (err: any) {
-      console.error('[camera] error:', err);
       setCameraStatus('error');
       toast({ variant: 'destructive', title: 'Erro na câmera', description: err.message });
     }
   }, []);
 
   const stopCamera = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
     setCameraStatus('idle');
     setModeChosen(false);
     setDetectedFaces([]);
   }, []);
 
-  // ── Scan loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (cameraStatus === 'active') {
       const timeout = setTimeout(() => {
         scanFrame();
         intervalRef.current = setInterval(scanFrame, SCAN_INTERVAL_MS);
       }, 600);
-      return () => {
-        clearTimeout(timeout);
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      };
+      return () => { clearTimeout(timeout); if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     }
   }, [cameraStatus, scanFrame]);
 
@@ -248,37 +170,37 @@ export function CameraClient() {
 
   const isLoading = rekognitionConfigured === null;
 
-  // ── Mode pre-selection screen ─────────────────────────────────────────────
+  // Mode pre-selection — monochrome
   if (!modeChosen) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 bg-background px-6 gap-8">
         <div className="text-center">
-          <h2 className="text-xl font-semibold">Câmera ao Vivo</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Câmera ao Vivo</h2>
           <p className="text-sm text-muted-foreground mt-1">Selecione o modo antes de iniciar</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-sm">
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs sm:max-w-sm">
           <button
             onClick={() => { setMode('ENTRY'); setModeChosen(true); }}
-            className="flex-1 flex flex-col items-center gap-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-[0.98] transition-all p-6"
+            className="flex-1 flex flex-col items-center gap-3 rounded-lg border border-border hover:bg-accent active:scale-[0.98] transition-all p-6"
           >
-            <LogIn className="h-10 w-10 text-emerald-500" strokeWidth={1.5} />
-            <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">ENTRADA</span>
-            <span className="text-xs text-muted-foreground text-center">Registrar chegada dos alunos</span>
+            <LogIn className="h-8 w-8 text-foreground" strokeWidth={1.5} />
+            <span className="text-sm font-semibold">ENTRADA</span>
+            <span className="text-[11px] text-muted-foreground text-center">Registrar chegada dos alunos</span>
           </button>
 
           <button
             onClick={() => { setMode('EXIT'); setModeChosen(true); }}
-            className="flex-1 flex flex-col items-center gap-3 rounded-xl border-2 border-orange-500 bg-orange-500/10 hover:bg-orange-500/20 active:scale-[0.98] transition-all p-6"
+            className="flex-1 flex flex-col items-center gap-3 rounded-lg border border-border hover:bg-accent active:scale-[0.98] transition-all p-6"
           >
-            <LogOut className="h-10 w-10 text-orange-500" strokeWidth={1.5} />
-            <span className="text-base font-bold text-orange-600 dark:text-orange-400">SAÍDA</span>
-            <span className="text-xs text-muted-foreground text-center">Registrar saída dos alunos</span>
+            <LogOut className="h-8 w-8 text-foreground" strokeWidth={1.5} />
+            <span className="text-sm font-semibold">SAÍDA</span>
+            <span className="text-[11px] text-muted-foreground text-center">Registrar saída dos alunos</span>
           </button>
         </div>
 
         {rekognitionConfigured === false && (
-          <div className="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 rounded-lg px-4 py-3 max-w-sm text-center">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted rounded-md px-4 py-3 max-w-sm text-center">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             AWS Rekognition não configurado. Verifique as variáveis de ambiente.
           </div>
@@ -287,25 +209,25 @@ export function CameraClient() {
     );
   }
 
-  // ── Camera active view ────────────────────────────────────────────────────
+  // Camera active view
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-border flex-shrink-0">
+      <div className="flex items-center justify-between px-3 md:px-5 py-2.5 border-b border-border flex-shrink-0">
         <div className="hidden md:block">
-          <h1 className="text-base font-semibold">Câmera ao Vivo</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">AWS Rekognition</p>
+          <h1 className="text-sm font-semibold">Câmera ao Vivo</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">AWS Rekognition</p>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-          {/* Mode toggle — allow changing without restarting */}
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-secondary/40">
+          {/* Mode toggle — monochrome */}
+          <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
             <button
               onClick={() => setMode('ENTRY')}
               className={cn(
-                'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-                mode === 'ENTRY' ? 'bg-emerald-500 text-white' : 'text-muted-foreground hover:text-foreground'
+                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
+                mode === 'ENTRY' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               ENTRADA
@@ -313,8 +235,8 @@ export function CameraClient() {
             <button
               onClick={() => setMode('EXIT')}
               className={cn(
-                'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-                mode === 'EXIT' ? 'bg-orange-500 text-white' : 'text-muted-foreground hover:text-foreground'
+                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
+                mode === 'EXIT' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               SAÍDA
@@ -322,26 +244,20 @@ export function CameraClient() {
           </div>
 
           {cameraStatus === 'idle' || cameraStatus === 'error' ? (
-            <Button
-              size="sm"
-              onClick={startCamera}
-              disabled={isLoading || rekognitionConfigured === false}
-              className="gap-1.5"
-            >
+            <Button size="sm" onClick={startCamera} disabled={isLoading || rekognitionConfigured === false} className="gap-1.5">
               <Video className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Iniciar Câmera</span>
               <span className="sm:hidden">Iniciar</span>
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={stopCamera} className="gap-1.5">
-              <VideoOff className="h-3.5 w-3.5" />
-              Parar
+              <VideoOff className="h-3.5 w-3.5" /> Parar
             </Button>
           )}
         </div>
       </div>
 
-      {/* Main — camera takes full width/height, sidebar only on desktop */}
+      {/* Main */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* Camera area */}
@@ -349,13 +265,12 @@ export function CameraClient() {
 
           {rekognitionConfigured === false && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20 px-8">
-              <AlertCircle className="h-10 w-10 text-yellow-400" />
+              <AlertCircle className="h-8 w-8 text-muted-foreground" />
               <div className="text-center">
-                <p className="text-white text-sm font-semibold">AWS Rekognition não configurado</p>
-                <p className="text-white/60 text-xs mt-2 leading-relaxed">
-                  Adicione as variáveis de ambiente no Vercel:<br />
-                  <code className="text-yellow-400">AWS_ACCESS_KEY_ID</code> e{' '}
-                  <code className="text-yellow-400">AWS_SECRET_ACCESS_KEY</code>
+                <p className="text-white text-sm font-medium">AWS Rekognition não configurado</p>
+                <p className="text-white/50 text-xs mt-2 leading-relaxed">
+                  Adicione <code className="text-white/70">AWS_ACCESS_KEY_ID</code> e{' '}
+                  <code className="text-white/70">AWS_SECRET_ACCESS_KEY</code>
                 </p>
               </div>
             </div>
@@ -363,41 +278,35 @@ export function CameraClient() {
 
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-20">
-              <Loader2 className="h-6 w-6 text-white/60 animate-spin" />
+              <Loader2 className="h-6 w-6 text-white/40 animate-spin" />
             </div>
           )}
 
           {cameraStatus === 'idle' && rekognitionConfigured && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/60 z-10">
-              <Video className="h-16 w-16 text-white/30" strokeWidth={1} />
+              <Video className="h-12 w-12 text-white/20" strokeWidth={1} />
               <div className="text-center">
-                <p className="text-white text-sm font-medium">Câmera inativa</p>
-                <p className="text-white/60 text-xs mt-1">Clique em &quot;Iniciar Câmera&quot; para começar</p>
+                <p className="text-white/80 text-sm font-medium">Câmera inativa</p>
+                <p className="text-white/40 text-xs mt-1">Clique em &quot;Iniciar Câmera&quot;</p>
               </div>
             </div>
           )}
 
           {cameraStatus === 'starting' && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
-              <Loader2 className="h-8 w-8 text-white animate-spin" />
+              <Loader2 className="h-6 w-6 text-white animate-spin" />
             </div>
           )}
 
           {cameraStatus === 'error' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 z-10">
-              <AlertCircle className="h-8 w-8 text-destructive" />
-              <p className="text-white text-sm">Não foi possível acessar a câmera.</p>
-              <p className="text-white/60 text-xs">Verifique as permissões do navegador.</p>
+              <AlertCircle className="h-6 w-6 text-white/60" />
+              <p className="text-white/80 text-sm">Não foi possível acessar a câmera.</p>
+              <p className="text-white/40 text-xs">Verifique as permissões do navegador.</p>
             </div>
           )}
 
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            playsInline
-          />
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
           <canvas ref={canvasRef} className="hidden" />
 
           {/* Bounding boxes */}
@@ -408,41 +317,29 @@ export function CameraClient() {
                 const isKnown = face.studentId !== null;
                 const box = face.box;
                 const boxPx = box ? {
-                  left: box.left * video.clientWidth,
-                  top: box.top * video.clientHeight,
-                  width: box.width * video.clientWidth,
-                  height: box.height * video.clientHeight,
+                  left: box.left * video.clientWidth, top: box.top * video.clientHeight,
+                  width: box.width * video.clientWidth, height: box.height * video.clientHeight,
                 } : null;
 
                 return (
                   <div key={idx}>
                     {boxPx && (
                       <div
-                        className={cn(
-                          'absolute border-2 rounded-md transition-all',
-                          isKnown ? 'border-emerald-400' : 'border-red-400'
-                        )}
+                        className={cn('absolute border-2 rounded-sm transition-all', isKnown ? 'border-white' : 'border-white/40')}
                         style={{ left: boxPx.left, top: boxPx.top, width: boxPx.width, height: boxPx.height }}
                       />
                     )}
                     <div
-                      className={cn(
-                        'absolute flex items-center gap-2 rounded-lg px-2.5 py-1.5 shadow-lg',
-                        isKnown ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'
-                      )}
-                      style={{
-                        left: boxPx ? boxPx.left : 16,
-                        top: boxPx ? Math.max(0, boxPx.top - 40) : 16,
-                        maxWidth: 240,
-                      }}
+                      className="absolute flex items-center gap-2 rounded-md px-2.5 py-1.5 shadow-lg bg-black/70 backdrop-blur-sm text-white"
+                      style={{ left: boxPx ? boxPx.left : 16, top: boxPx ? Math.max(0, boxPx.top - 40) : 16, maxWidth: 240 }}
                     >
                       {face.photoUrl && isKnown && (
-                        <img src={face.photoUrl} alt="" className="h-6 w-6 rounded-full object-cover border border-white/30 flex-shrink-0" />
+                        <img src={face.photoUrl} alt="" className="h-6 w-6 rounded-full object-cover border border-white/20 flex-shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold truncate leading-tight">{face.name}</p>
+                        <p className="text-xs font-medium truncate leading-tight">{face.name}</p>
                         {isKnown && (
-                          <p className="text-[10px] text-white/80 leading-tight">
+                          <p className="text-[10px] text-white/60 leading-tight">
                             {Math.round(face.confidence * 100)}%{face.className ? ` · ${face.className}` : ''}
                           </p>
                         )}
@@ -456,8 +353,8 @@ export function CameraClient() {
 
           {/* Scanning indicator */}
           {cameraStatus === 'active' && (
-            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
-              <span className={cn('h-1.5 w-1.5 rounded-full', isScanning ? 'bg-yellow-400 animate-pulse' : 'bg-emerald-400')} />
+            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-md px-2.5 py-1">
+              <span className={cn('h-1.5 w-1.5 rounded-full', isScanning ? 'bg-white/60 animate-pulse' : 'bg-white')} />
               <span className="text-white text-[10px]">{isScanning ? 'Analisando...' : 'Monitorando'}</span>
             </div>
           )}
@@ -465,29 +362,23 @@ export function CameraClient() {
           {/* Mode badge */}
           {cameraStatus === 'active' && (
             <div className="absolute top-3 left-3">
-              <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full', mode === 'ENTRY' ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white')}>
+              <span className="text-[10px] font-semibold px-2 py-1 rounded-md bg-foreground text-background">
                 {mode === 'ENTRY' ? 'ENTRADA' : 'SAÍDA'}
               </span>
             </div>
           )}
 
-          {/* Mobile: floating button to open recent panel — top-right, semi-transparent */}
+          {/* Mobile panel toggle */}
           <button
             onClick={() => setPanelOpen(true)}
-            className={cn(
-              'md:hidden absolute top-3 right-3 z-20 flex items-center gap-1.5',
-              'rounded-full bg-black/40 backdrop-blur-sm border border-white/20 px-3 py-1.5',
-              'text-white text-xs font-medium transition-opacity hover:bg-black/60'
-            )}
+            className="md:hidden absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 px-2.5 py-1.5 text-white text-[11px] font-medium"
           >
             <List className="h-3.5 w-3.5" />
-            {recentRecognitions.length > 0 && (
-              <span className="tabular-nums">{recentRecognitions.length}</span>
-            )}
+            {recentRecognitions.length > 0 && <span className="tabular-nums">{recentRecognitions.length}</span>}
           </button>
         </div>
 
-        {/* Desktop sidebar — hidden on mobile */}
+        {/* Desktop sidebar */}
         <div className="hidden md:flex w-72 flex-col border-l border-border bg-card overflow-hidden flex-shrink-0">
           <SidebarContent
             rekognitionConfigured={rekognitionConfigured}
@@ -499,17 +390,14 @@ export function CameraClient() {
         </div>
       </div>
 
-      {/* Mobile: slide-up panel */}
+      {/* Mobile panel */}
       {panelOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={() => setPanelOpen(false)} />
-          <div className="relative bg-card rounded-t-2xl max-h-[70vh] flex flex-col overflow-hidden">
+          <div className="relative bg-card rounded-t-lg max-h-[70vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
               <p className="text-sm font-semibold">Reconhecimentos Recentes</p>
-              <button
-                onClick={() => setPanelOpen(false)}
-                className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-accent"
-              >
+              <button onClick={() => setPanelOpen(false)} className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-accent">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -523,69 +411,44 @@ export function CameraClient() {
   );
 }
 
-// ── Sidebar content (shared between desktop sidebar and mobile panel) ──────────
-
 function SidebarContent({
-  rekognitionConfigured,
-  isLoading,
-  cameraStatus,
-  detectedFaces,
-  recentRecognitions,
+  rekognitionConfigured, isLoading, cameraStatus, detectedFaces, recentRecognitions,
 }: {
-  rekognitionConfigured: boolean | null;
-  isLoading: boolean;
-  cameraStatus: string;
-  detectedFaces: FaceMatch[];
-  recentRecognitions: RecentRecognition[];
+  rekognitionConfigured: boolean | null; isLoading: boolean; cameraStatus: string;
+  detectedFaces: FaceMatch[]; recentRecognitions: RecentRecognition[];
 }) {
   return (
     <>
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Status</p>
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Status</p>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">AWS Rekognition</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-[10px] px-1.5',
-                isLoading ? 'text-muted-foreground' :
-                rekognitionConfigured ? 'text-emerald-500 border-emerald-500/30' :
-                'text-destructive border-destructive/30'
-              )}
-            >
-              {isLoading ? 'Verificando' : rekognitionConfigured ? 'Configurado' : 'Não configurado'}
-            </Badge>
+            <span className="text-[11px] text-muted-foreground">AWS Rekognition</span>
+            <span className={cn('text-[10px] font-medium',
+              isLoading ? 'text-muted-foreground' : rekognitionConfigured ? 'text-foreground' : 'text-muted-foreground'
+            )}>
+              {isLoading ? 'Verificando...' : rekognitionConfigured ? 'Configurado' : 'Não configurado'}
+            </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Câmera</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-[10px] px-1.5',
-                cameraStatus === 'active' ? 'text-emerald-500 border-emerald-500/30' :
-                cameraStatus === 'error' ? 'text-destructive border-destructive/30' :
-                'text-muted-foreground'
-              )}
-            >
-              {cameraStatus === 'active' ? 'Ativa' :
-               cameraStatus === 'starting' ? 'Iniciando' :
-               cameraStatus === 'error' ? 'Erro' : 'Inativa'}
-            </Badge>
+            <span className="text-[11px] text-muted-foreground">Câmera</span>
+            <span className={cn('text-[10px] font-medium',
+              cameraStatus === 'active' ? 'text-foreground' : 'text-muted-foreground'
+            )}>
+              {cameraStatus === 'active' ? 'Ativa' : cameraStatus === 'starting' ? 'Iniciando' : cameraStatus === 'error' ? 'Erro' : 'Inativa'}
+            </span>
           </div>
           {detectedFaces.length > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Rostos detectados</span>
-              <span className="text-xs font-medium">{detectedFaces.length}</span>
+              <span className="text-[11px] text-muted-foreground">Rostos detectados</span>
+              <span className="text-[10px] font-medium tabular-nums">{detectedFaces.length}</span>
             </div>
           )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-          Reconhecimentos Recentes
-        </p>
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Reconhecimentos Recentes</p>
         <RecentList recentRecognitions={recentRecognitions} />
       </div>
     </>
@@ -596,8 +459,8 @@ function RecentList({ recentRecognitions }: { recentRecognitions: RecentRecognit
   if (recentRecognitions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 gap-2">
-        <Users className="h-8 w-8 text-muted-foreground/30" strokeWidth={1.5} />
-        <p className="text-xs text-muted-foreground text-center">
+        <Users className="h-6 w-6 text-muted-foreground/30" strokeWidth={1.5} />
+        <p className="text-[11px] text-muted-foreground text-center">
           Nenhum reconhecimento ainda.<br />Inicie a câmera para começar.
         </p>
       </div>
@@ -605,23 +468,20 @@ function RecentList({ recentRecognitions }: { recentRecognitions: RecentRecognit
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {recentRecognitions.map((rec) => (
-        <div key={rec.id} className="flex items-center gap-2.5 rounded-lg border border-border p-2.5">
+        <div key={rec.id} className="flex items-center gap-2.5 rounded-md border border-border p-2.5">
           {rec.photoUrl ? (
-            <img src={rec.photoUrl} alt="" className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
+            <img src={rec.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-              <Users className="h-4 w-4 text-muted-foreground" />
+            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+              <Users className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate">{rec.name}</p>
+            <p className="text-[11px] font-medium truncate">{rec.name}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={cn(
-                'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-                rec.type === 'ENTRY' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-orange-500/10 text-orange-600'
-              )}>
+              <span className="text-[10px] font-medium text-muted-foreground">
                 {rec.type === 'ENTRY' ? 'Entrada' : 'Saída'}
               </span>
               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
@@ -630,7 +490,7 @@ function RecentList({ recentRecognitions }: { recentRecognitions: RecentRecognit
               </span>
             </div>
           </div>
-          <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+          <CheckCircle2 className="h-3.5 w-3.5 text-foreground/40 flex-shrink-0" />
         </div>
       ))}
     </div>

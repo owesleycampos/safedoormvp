@@ -56,7 +56,7 @@ model User {
   name           String?
   image          String?
   passwordHash   String?
-  role           String    @default("PARENT") // "ADMIN" | "PARENT"
+  role           String    @default("PARENT") // "SUPERADMIN" | "ADMIN" | "PARENT"
   schoolId       String?
   school         School?   @relation(fields: [schoolId], references: [id])
   parent         Parent?
@@ -82,6 +82,7 @@ model School {
   contactEmail      String?
   contactPhone      String?
   logoUrl           String?
+  status            String               @default("ACTIVE") // "ACTIVE" | "SUSPENDED" | "TRIAL" | "CANCELLED"
   admins            User[]
   classes           Class[]
   students          Student[]
@@ -91,6 +92,11 @@ model School {
   settings          SchoolSettings?
   invites           ClassInvite[]
   subjects          Subject[]
+  subscription      Subscription?
+  invoices          Invoice[]
+  awsAccountId      String?
+  awsAccount        AwsAccount?          @relation(fields: [awsAccountId], references: [id])
+  notes             String?              @db.Text
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 }
@@ -360,4 +366,112 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([entityType, entityId])
+}
+
+// ============================================================
+// SUBSCRIPTION & BILLING (SuperAdmin)
+// ============================================================
+
+model Subscription {
+  id          String    @id @default(cuid())
+  schoolId    String    @unique
+  school      School    @relation(fields: [schoolId], references: [id])
+  plan        String    // "ESSENCIAL" | "PROFISSIONAL" | "PREMIUM"
+  billing     String    @default("MONTHLY") // "MONTHLY" | "ANNUAL"
+  status      String    @default("ACTIVE") // "ACTIVE" | "PAST_DUE" | "CANCELLED" | "TRIAL"
+  priceMonthly Int      // valor mensal em centavos (e.g. 49700 = R$497)
+  discount    Float     @default(0) // desconto percentual (e.g. 0.20 = 20%)
+  trialEndsAt DateTime?
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id])
+  amount        Int      // valor em centavos
+  status        String   @default("PENDING") // "PENDING" | "PAID" | "OVERDUE" | "CANCELLED"
+  dueDate       DateTime
+  paidAt        DateTime?
+  paymentMethod String?  // "PIX" | "BOLETO" | "CARTAO"
+  reference     String?  // referência externa (gateway ID, etc.)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([schoolId, status])
+  @@index([dueDate])
+}
+
+// ============================================================
+// AWS ACCOUNT MANAGEMENT (SuperAdmin)
+// ============================================================
+
+model AwsAccount {
+  id              String   @id @default(cuid())
+  label           String   // "Principal", "Contingência 1", etc.
+  accountId       String   @unique // AWS Account ID
+  region          String   @default("us-east-1")
+  accessKeyId     String?  // encrypted or env-referenced
+  status          String   @default("ACTIVE") // "ACTIVE" | "LIMIT_NEAR" | "LIMIT_REACHED" | "DISABLED"
+  maxCollections  Int      @default(100)
+  usedCollections Int      @default(0)
+  maxFacesPerCol  Int      @default(10000)
+  monthlyBudget   Float?   // orçamento mensal USD
+  currentSpend    Float    @default(0)
+  lastSyncAt      DateTime?
+  schools         School[]
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ============================================================
+// PLATFORM SETTINGS (SuperAdmin)
+// ============================================================
+
+model PlatformSettings {
+  id                 String   @id @default(cuid())
+  defaultPlan        String   @default("ESSENCIAL")
+  trialDays          Int      @default(7)
+  essencialPrice     Int      @default(49700)  // centavos
+  profissionalPrice  Int      @default(99700)  // centavos
+  premiumPrice       Int      @default(0)      // 0 = sob consulta
+  annualDiscount     Float    @default(0.20)   // 20%
+  maxStudentsEssencial    Int @default(200)
+  maxStudentsProfissional Int @default(500)
+  maxStudentsPremium      Int @default(0) // 0 = ilimitado
+  // Webhook configuration
+  webhookSecret      String?  // secret to validate incoming webhooks
+  paymentProvider    String   @default("MANUAL") // "MANUAL" | "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME"
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ============================================================
+// WEBHOOK EVENTS (Payment Gateway Integration)
+// ============================================================
+
+model WebhookEvent {
+  id              String   @id @default(cuid())
+  provider        String   // "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME" | "MANUAL"
+  externalId      String?  // ID do evento no gateway (evt_xxx, etc.)
+  eventType       String   // "payment.confirmed" | "payment.overdue" | "subscription.cancelled" etc.
+  status          String   @default("RECEIVED") // "RECEIVED" | "PROCESSED" | "FAILED" | "IGNORED"
+  payload         String   @db.Text // JSON completo do webhook
+  schoolId        String?  // escola associada (se identificada)
+  subscriptionId  String?  // assinatura associada (se identificada)
+  invoiceId       String?  // fatura associada (se identificada)
+  errorMessage    String?  // mensagem de erro se processamento falhou
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([provider, eventType])
+  @@index([status])
+  @@index([schoolId])
+  @@index([externalId])
 }

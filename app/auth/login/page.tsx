@@ -50,7 +50,18 @@ function LoginForm() {
       toast({ variant: 'destructive', title: 'Erro ao entrar', description: 'Verifique suas credenciais.' });
     } else {
       toast({ variant: 'success', title: 'Bem-vindo de volta!', description: 'Redirecionando...' });
-      router.push(callbackUrl);
+      // Fetch session to determine role-based redirect
+      const sessionRes = await fetch('/api/auth/session');
+      const session = await sessionRes.json();
+      const role = session?.user?.role;
+      const dest = callbackUrl !== '/'
+        ? callbackUrl
+        : role === 'SUPERADMIN'
+          ? '/odono'
+          : role === 'ADMIN'
+            ? '/admin/dashboard'
+            : '/pwa/children';
+      router.push(dest);
       router.refresh();
     }
   }

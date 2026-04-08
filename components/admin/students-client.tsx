@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
   Upload, Loader2, AlertTriangle, ChevronDown, ChevronUp,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,13 +128,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         const sep = line.includes(';') ? ';' : ',';
         return line.split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''));
       });
-      // Auto-detect header row
       const first = parsed[0].map(h => h.toLowerCase());
       const hasHeader = first.some(h => ['nome', 'name', 'aluno', 'estudante'].includes(h));
       if (hasHeader) {
         setCsvHeaders(parsed[0]);
         setCsvRows(parsed.slice(1));
-        // Auto-map columns
         const ni = first.findIndex(h => ['nome', 'name', 'aluno', 'estudante'].includes(h));
         const bi = first.findIndex(h => ['nascimento', 'birth', 'data_nascimento', 'data de nascimento', 'birthdate', 'dt_nasc'].includes(h));
         setNameCol(ni >= 0 ? ni : 0);
@@ -184,218 +184,256 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     byClass[cls].push(s);
   });
 
+  const withBiometry = students.filter((s) => s.azurePersonId || s.faceVector).length;
+
   return (
-    <div className="space-y-5">
-      {/* Toolbar */}
-      <div className="space-y-2">
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto w-full space-y-6">
+
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-start justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Alunos</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {students.length} aluno{students.length !== 1 ? 's' : ''} cadastrado{students.length !== 1 ? 's' : ''}
+            {withBiometry > 0 && <span className="text-muted-foreground"> · {withBiometry} com biometria</span>}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Buscar aluno..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Button
-            onClick={() => { setEditingStudent(null); setDialogDefaultTab('info'); setDialogOpen(true); }}
-            size="sm"
-            className="gap-1.5 flex-shrink-0"
+          <button
+            onClick={handleImportCsv}
+            disabled={importing}
+            className="hidden md:flex items-center gap-2 h-10 px-4 rounded-md border border-border bg-card text-sm font-medium hover:bg-secondary transition-all duration-200"
           >
-            <UserPlus className="h-3.5 w-3.5" />
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Importar CSV
+          </button>
+          <button
+            onClick={() => { setEditingStudent(null); setDialogDefaultTab('info'); setDialogOpen(true); }}
+            className="flex items-center gap-2 h-10 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Novo Aluno</span>
             <span className="sm:hidden">Novo</span>
-          </Button>
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Search + Filter */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+        className="flex items-center gap-2"
+      >
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            placeholder="Buscar por nome, turma ou matrícula..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input-base pl-10"
+          />
         </div>
         <select
           value={filterClass}
           onChange={(e) => setFilterClass(e.target.value)}
-          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          className="h-11 rounded-md border border-input bg-card px-3 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-ring/30"
         >
           <option value="all">Todas as turmas</option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-      </div>
+      </motion.div>
 
-      {/* Actions row: import, generate codes, stats */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-xs"
-          onClick={handleImportCsv}
-          disabled={importing}
-        >
-          {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          <span className="hidden sm:inline">Importar CSV</span>
-          <span className="sm:hidden">CSV</span>
-        </Button>
-
-        <div className="flex-1" />
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{filtered.length} alunos</span>
-          <span className="hidden sm:inline">·</span>
-          <span className="hidden sm:inline">{classes.length} turmas</span>
-          <span className="hidden sm:inline">·</span>
-          <span className="hidden sm:inline">{students.filter((s) => s.azurePersonId || s.faceVector).length} com biometria</span>
-        </div>
-      </div>
-
-      {/* Alert: students without parents */}
+      {/* Orphan alert */}
       {orphanStudents.length > 0 && (
-        <Card className="border border-yellow-500/30 bg-yellow-500/5 overflow-hidden">
-          <button
-            onClick={() => setOrphanAlertOpen(!orphanAlertOpen)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-left"
-          >
-            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-            <p className="text-xs text-yellow-700 dark:text-yellow-400 flex-1">
-              <span className="font-semibold">{orphanStudents.length} aluno{orphanStudents.length !== 1 ? 's' : ''}</span> sem responsável vinculado
-            </p>
-            {orphanAlertOpen ? <ChevronUp className="h-3.5 w-3.5 text-yellow-600" /> : <ChevronDown className="h-3.5 w-3.5 text-yellow-600" />}
-          </button>
-          {orphanAlertOpen && (
-            <div className="px-4 pb-3 space-y-1.5">
-              {orphanStudents.slice(0, 10).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => handleEdit(s, 'parents')}
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+        >
+          <Card className="overflow-hidden">
+            <button
+              onClick={() => setOrphanAlertOpen(!orphanAlertOpen)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left"
+            >
+              <AlertTriangle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <p className="text-xs flex-1">
+                <span className="font-semibold">{orphanStudents.length} aluno{orphanStudents.length !== 1 ? 's' : ''}</span>
+                <span className="text-muted-foreground"> sem responsável vinculado</span>
+              </p>
+              {orphanAlertOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            <AnimatePresence>
+              {orphanAlertOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 flex-shrink-0" />
-                  <span className="truncate">{s.name}</span>
-                  <span className="text-muted-foreground/60">· {s.class?.name}</span>
-                </button>
-              ))}
-              {orphanStudents.length > 10 && (
-                <p className="text-[10px] text-muted-foreground pl-3.5">
-                  e mais {orphanStudents.length - 10} aluno{orphanStudents.length - 10 !== 1 ? 's' : ''}...
-                </p>
+                  <div className="px-4 pb-3 space-y-1">
+                    {orphanStudents.slice(0, 8).map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleEdit(s, 'parents')}
+                        className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left py-1 rounded-md hover:bg-secondary/30 px-2 -mx-2"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground flex-shrink-0" />
+                        <span className="truncate">{s.name}</span>
+                        <span className="text-muted-foreground/40 ml-auto">{s.class?.name}</span>
+                      </button>
+                    ))}
+                    {orphanStudents.length > 8 && (
+                      <p className="text-[10px] text-muted-foreground pl-4">
+                        e mais {orphanStudents.length - 8}...
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
               )}
-            </div>
-          )}
-        </Card>
+            </AnimatePresence>
+          </Card>
+        </motion.div>
       )}
 
-      {/* List */}
+      {/* Student List */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <GraduationCap className="h-10 w-10 text-muted-foreground/20 mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center justify-center py-24 text-center"
+        >
+          <div className="h-14 w-14 rounded-lg bg-muted flex items-center justify-center mb-4">
+            <GraduationCap className="h-6 w-6 text-muted-foreground/40" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">Nenhum aluno encontrado</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Tente ajustar os filtros ou adicionar um novo aluno</p>
+        </motion.div>
       ) : (
-        <div className="space-y-5">
-          {Object.entries(byClass).sort(([a], [b]) => a.localeCompare(b)).map(([className, classStudents]) => (
-            <div key={className}>
+        <div className="space-y-6">
+          {Object.entries(byClass).sort(([a], [b]) => a.localeCompare(b)).map(([className, classStudents], groupIdx) => (
+            <motion.div
+              key={className}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 + groupIdx * 0.05 }}
+            >
               {/* Class header */}
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="flex items-center gap-2 mb-2.5 px-1">
+                <div className="flex items-center justify-center">
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {className}
                 </span>
-                <span className="text-xs text-muted-foreground">({classStudents.length})</span>
+                <span className="text-[11px] text-muted-foreground/60">{classStudents.length}</span>
               </div>
 
               <Card className="overflow-hidden">
-                <div className="divide-y divide-border">
-                  {classStudents.map((student) => (
-                    <div
+                <div className="divide-y divide-border/50">
+                  {classStudents.map((student, i) => (
+                    <motion.div
                       key={student.id}
-                      className="flex items-center gap-3 px-4 py-3 table-row-hover group"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2, delay: i * 0.02 }}
+                      className="flex items-center gap-3 px-4 md:px-5 py-3.5 hover:bg-secondary/30 transition-all duration-150 group cursor-pointer"
+                      onClick={() => router.push(`/admin/students/${student.id}/history`)}
                     >
-                      {/* Avatar with biometry dot */}
+                      {/* Avatar */}
                       <div className="relative flex-shrink-0">
-                        <Avatar className="h-9 w-9">
+                        <Avatar className="h-10 w-10">
                           <AvatarImage
                             src={student.photos?.[0]?.url || student.photoUrl || ''}
                             alt={student.name}
                           />
-                          <AvatarFallback className="text-[11px] bg-secondary">
+                          <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
                             {getInitials(student.name)}
                           </AvatarFallback>
                         </Avatar>
                         <span className={cn(
-                          'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card',
-                          (student.azurePersonId || student.faceVector) ? 'bg-success' : 'bg-muted-foreground/40'
+                          'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card',
+                          (student.azurePersonId || student.faceVector) ? 'bg-foreground' : 'bg-muted-foreground/30'
                         )} />
                       </div>
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium truncate">{student.name}</p>
+                          <p className="text-[13px] font-medium truncate">{student.name}</p>
                           {!student.isActive && (
-                            <Badge variant="outline" className="text-[10px]">Inativo</Badge>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">Inativo</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {student.photos?.length > 0 ? `${student.photos.length} foto${student.photos.length !== 1 ? 's' : ''} · ` : ''}
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {student.photos?.length > 0 && `${student.photos.length} foto${student.photos.length !== 1 ? 's' : ''} · `}
                           {student.parents?.length || 0} responsável(is)
+                          {student.recognitionEnabled === false && (student.azurePersonId || student.faceVector) && (
+                            <span className="text-muted-foreground"> · Reconhecimento off</span>
+                          )}
                         </p>
                       </div>
 
-                      {/* Badges */}
+                      {/* Status badge */}
                       <div className="hidden md:flex items-center gap-2">
-                        {(student.azurePersonId || student.faceVector) && student.recognitionEnabled === false && (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
-                            <ScanLine className="h-3 w-3" />
-                            Reconhecimento off
-                          </Badge>
-                        )}
-                        <Badge variant={(student.azurePersonId || student.faceVector) ? (student.recognitionEnabled !== false ? 'success' : 'outline') : 'warning'}>
+                        <span className={cn(
+                          'text-[11px] font-medium px-2 py-0.5 rounded-md',
+                          (student.azurePersonId || student.faceVector)
+                            ? 'bg-foreground/[0.06] text-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        )}>
                           {(student.azurePersonId || student.faceVector) ? 'Biometria OK' : 'Sem biometria'}
-                        </Badge>
+                        </span>
                       </div>
 
-                      {/* Actions — always visible on touch, hover-only on desktop */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(student, 'info')}>
-                            <Edit className="h-4 w-4" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(student, 'photos')}>
-                            <Camera className="h-4 w-4" />
-                            Foto / biometria
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push(`/admin/students/${student.id}/history`)}>
-                            <Eye className="h-4 w-4" />
-                            Ver histórico
-                          </DropdownMenuItem>
-                          {(student.azurePersonId || student.faceVector) && (
-                            <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
-                              <ScanFace className="h-4 w-4" />
-                              {student.recognitionEnabled !== false ? 'Desativar reconhecimento' : 'Ativar reconhecimento'}
+                      {/* Arrow + dropdown */}
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-secondary transition-all"
+                            >
+                              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEdit(student, 'info')}>
+                              <Edit className="h-4 w-4" /> Editar
                             </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            destructive
-                            onClick={() => handleDelete(student)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remover
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                            <DropdownMenuItem onClick={() => handleEdit(student, 'photos')}>
+                              <Camera className="h-4 w-4" /> Foto / biometria
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/admin/students/${student.id}/history`)}>
+                              <Eye className="h-4 w-4" /> Ver histórico
+                            </DropdownMenuItem>
+                            {(student.azurePersonId || student.faceVector) && (
+                              <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
+                                <ScanFace className="h-4 w-4" />
+                                {student.recognitionEnabled !== false ? 'Desativar reconhecimento' : 'Ativar reconhecimento'}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem destructive onClick={() => handleDelete(student)}>
+                              <Trash2 className="h-4 w-4" /> Remover
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/30 hidden md:block" />
+                      </div>
+                    </motion.div>
                   ))}
                 </div>
               </Card>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
@@ -444,22 +482,21 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
               </div>
             </div>
 
-            {/* Preview */}
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground">Pré-visualização (primeiros 5)</p>
+              <p className="text-xs font-semibold text-muted-foreground">Pré-visualização</p>
               <div className="rounded-md border border-border overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-secondary/30">
-                      <th className="text-left px-3 py-1.5 font-medium">Nome</th>
-                      {birthCol >= 0 && <th className="text-left px-3 py-1.5 font-medium">Data Nasc.</th>}
+                      <th className="text-left px-3 py-2 font-medium">Nome</th>
+                      {birthCol >= 0 && <th className="text-left px-3 py-2 font-medium">Data Nasc.</th>}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody className="divide-y divide-border/50">
                     {csvRows.slice(0, 5).map((row, i) => (
                       <tr key={i}>
-                        <td className="px-3 py-1.5">{row[nameCol] || <span className="text-muted-foreground italic">vazio</span>}</td>
-                        {birthCol >= 0 && <td className="px-3 py-1.5">{row[birthCol] || '—'}</td>}
+                        <td className="px-3 py-2">{row[nameCol] || <span className="text-muted-foreground italic">vazio</span>}</td>
+                        {birthCol >= 0 && <td className="px-3 py-2">{row[birthCol] || '—'}</td>}
                       </tr>
                     ))}
                   </tbody>

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId') || undefined;
   const periodParam = searchParams.get('period') || 'today'; // today | 7d | 30d | custom
+  const trendDaysParam = searchParams.get('trendDays'); // 7 | 30 (independent from period)
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
 
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Determine date range for stats
+  // KPI date range — always today when period=today
   let rangeStart = new Date(today);
   let rangeEnd = new Date(tomorrow);
 
@@ -42,8 +43,9 @@ export async function GET(req: NextRequest) {
 
   const studentWhere = { schoolId, isActive: true, ...(classId ? { classId } : {}) };
 
-  // Trend data (always relative to range)
-  const trendStart = periodParam === 'today' ? (() => { const d = new Date(today); d.setDate(d.getDate() - 6); return d; })() : new Date(rangeStart);
+  // Trend data — uses trendDays param independently from KPI period
+  const trendDays = trendDaysParam ? parseInt(trendDaysParam, 10) : 7;
+  const trendStart = (() => { const d = new Date(today); d.setDate(d.getDate() - (trendDays - 1)); return d; })();
 
   const [totalStudents, presentInRange, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),

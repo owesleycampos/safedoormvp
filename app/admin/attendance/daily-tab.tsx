@@ -65,11 +65,11 @@ function getEffectiveStatus(s: StudentRow): AttendanceStatus {
 }
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; border: string; icon: React.ElementType; iconColor: string }> = {
-  present:    { label: 'Presente',         color: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400', border: 'border-l-emerald-500',  icon: CheckCircle2,  iconColor: 'text-emerald-500' },
-  late:       { label: 'Atraso',           color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',   border: 'border-l-yellow-500',   icon: Clock,         iconColor: 'text-yellow-500' },
-  absent:     { label: 'Ausente',          color: 'bg-red-500/10 text-red-700 dark:text-red-400',            border: 'border-l-red-500',      icon: MinusCircle,   iconColor: 'text-red-500' },
-  left:       { label: 'Saiu',             color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',         border: 'border-l-blue-500',     icon: LogOut,        iconColor: 'text-blue-500' },
-  early_exit: { label: 'Saída antecipada', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',  border: 'border-l-orange-500',   icon: AlertTriangle, iconColor: 'text-orange-500' },
+  present:    { label: 'Presente',         color: 'bg-foreground/[0.06] text-foreground',         border: 'border-l-foreground',       icon: CheckCircle2,  iconColor: 'text-foreground' },
+  late:       { label: 'Atraso',           color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: Clock,         iconColor: 'text-muted-foreground' },
+  absent:     { label: 'Ausente',          color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground/50', icon: MinusCircle,   iconColor: 'text-muted-foreground' },
+  left:       { label: 'Saiu',             color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: LogOut,        iconColor: 'text-muted-foreground' },
+  early_exit: { label: 'Saída antecipada', color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
 // ─── Time Picker Dialog ──────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ function TimePicker({ open, onClose, onConfirm, title }: TimePickerProps) {
           type="time"
           value={time}
           onChange={(e) => setTime(e.target.value)}
-          className="w-full h-10 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm focus:outline-none"
           autoFocus
         />
         <div className="flex gap-2">
@@ -414,7 +414,7 @@ export default function DailyTab() {
         <select
           value={classFilter}
           onChange={e => setClassFilter(e.target.value)}
-          className="h-9 rounded-xl border border-input bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring flex-shrink-0"
+          className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none flex-shrink-0"
         >
           <option value="all">Todas as turmas</option>
           {classes.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -425,7 +425,7 @@ export default function DailyTab() {
           placeholder="Buscar aluno..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="h-9 rounded-xl border border-input bg-card px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full sm:w-[160px]"
+          className="h-8 rounded-md border border-border bg-card px-3 text-xs placeholder:text-muted-foreground focus:outline-none w-full sm:w-[160px]"
         />
       </div>
 
@@ -436,14 +436,14 @@ export default function DailyTab() {
       {!loading && data && (
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Total',     value: stats.total,   color: '' },
-            { label: 'Presentes', value: stats.present, color: 'text-emerald-600' },
-            { label: 'Ausentes',  value: stats.absent,  color: 'text-red-500' },
-            { label: 'Atrasos',   value: stats.late,    color: 'text-yellow-600' },
+            { label: 'Total',     value: stats.total },
+            { label: 'Presentes', value: stats.present },
+            { label: 'Ausentes',  value: stats.absent },
+            { label: 'Atrasos',   value: stats.late },
           ].map(s => (
-            <Card key={s.label} className="p-2.5 md:p-3 text-center">
-              <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
-              <p className={cn('text-lg md:text-xl font-bold tabular-nums', s.color)}>{s.value}</p>
+            <Card key={s.label} className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">{s.label}</p>
+              <p className="text-xl font-semibold tabular-nums mt-0.5">{s.value}</p>
             </Card>
           ))}
         </div>

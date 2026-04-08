@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
 import { determineAttendanceStatus } from '@/lib/attendance-rules';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 /**
  * POST /api/events/manual
@@ -24,13 +25,11 @@ const validEventTypes = ['ENTRY', 'EXIT'];
 const validNotes = ['ATRASO', 'SAIDA_ANTECIPADA'];
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId as string;
-  const adminName = (session.user as any)?.name || 'admin';
+  const schoolId = auth.schoolId;
+  const adminName = (auth.session.user as any)?.name || 'admin';
   const body = await req.json();
   const { studentId, eventType, notes, override, timestamp } = body;
 
@@ -116,7 +115,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
-      userId: (session.user as any)?.id,
+      userId: (auth.session.user as any)?.id,
       action: 'MANUAL_CHECKIN',
       entityType: 'AttendanceEvent',
       entityId: event.id,

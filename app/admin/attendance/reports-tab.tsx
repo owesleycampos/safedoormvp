@@ -203,38 +203,33 @@ export default function ReportsTab() {
 
       {/* Alerts banner (inline, collapsible) */}
       {alerts.length > 0 && (
-        <Card className="border-yellow-500/30 bg-yellow-500/5 overflow-hidden">
+        <Card className="overflow-hidden">
           <button
             onClick={() => setAlertsExpanded(v => !v)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+            className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-accent/30 transition-colors"
           >
-            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-            <p className="text-xs text-yellow-700 flex-1">
-              <span className="font-semibold">{alerts.length} aluno{alerts.length !== 1 ? 's' : ''}</span> com frequência abaixo de 75% nos últimos 30 dias
+            <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs text-foreground flex-1">
+              <span className="font-medium">{alerts.length} aluno{alerts.length !== 1 ? 's' : ''}</span>
+              <span className="text-muted-foreground"> com frequência abaixo de 75%</span>
             </p>
-            {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-yellow-600" /> : <ChevronDown className="h-3.5 w-3.5 text-yellow-600" />}
+            {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
           </button>
           {alertsExpanded && (
-            <div className="border-t border-yellow-500/20 divide-y divide-yellow-500/10">
+            <div className="border-t border-border divide-y divide-border">
               {alerts.map((a) => (
                 <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <div className={cn(
-                    'h-2 w-2 rounded-full flex-shrink-0',
-                    a.status === 'critical' ? 'bg-red-500' : 'bg-yellow-500'
-                  )} />
+                  <div className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-muted-foreground" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{a.name}</p>
                     <p className="text-[10px] text-muted-foreground">{a.className}</p>
                   </div>
-                  <span className={cn(
-                    'text-xs font-bold',
-                    a.status === 'critical' ? 'text-red-500' : 'text-yellow-600'
-                  )}>
+                  <span className="text-xs font-medium tabular-nums">
                     {Math.round(100 - a.absenceRate)}%
                   </span>
-                  <Badge variant={a.status === 'critical' ? 'destructive' : 'warning'} className="text-[9px]">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
                     {a.status === 'critical' ? 'Crítico' : 'Alerta'}
-                  </Badge>
+                  </span>
                 </div>
               ))}
             </div>
@@ -264,16 +259,16 @@ export default function ReportsTab() {
       <Card className="p-3 md:p-4">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Period pills */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             {(['7d', '30d', 'custom'] as Preset[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPreset(p)}
                 className={cn(
-                  'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200',
+                  'h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors',
                   preset === p
-                    ? 'bg-primary text-primary-foreground shadow-apple-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : 'Personalizado'}
@@ -375,9 +370,9 @@ export default function ReportsTab() {
                   </div>
                   <span className={cn(
                     'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-sm font-bold',
-                    freq >= 75 ? 'bg-success/10 text-success'
-                      : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
-                      : 'bg-destructive/10 text-destructive'
+                    freq >= 75 ? 'bg-foreground/[0.06] text-foreground'
+                      : freq >= 50 ? 'bg-muted text-muted-foreground'
+                      : 'bg-muted text-muted-foreground'
                   )}>
                     {freq}%
                   </span>
@@ -388,17 +383,17 @@ export default function ReportsTab() {
                     <p className="text-muted-foreground text-[10px]">Dias</p>
                     <p className="font-semibold mt-0.5">{weekdays.length}</p>
                   </div>
-                  <div className="rounded-md bg-success/10 p-2">
+                  <div className="rounded-md bg-foreground/10 p-2">
                     <p className="text-muted-foreground text-[10px]">Presente</p>
-                    <p className="font-semibold text-success mt-0.5">{presences}</p>
+                    <p className="font-semibold mt-0.5">{presences}</p>
                   </div>
-                  <div className="rounded-md bg-destructive/10 p-2">
+                  <div className="rounded-md bg-muted/50 p-2">
                     <p className="text-muted-foreground text-[10px]">Ausente</p>
-                    <p className="font-semibold text-destructive mt-0.5">{absences}</p>
+                    <p className="font-semibold mt-0.5">{absences}</p>
                   </div>
-                  <div className="rounded-md bg-yellow-500/10 p-2">
+                  <div className="rounded-md bg-muted-foreground/10 p-2">
                     <p className="text-muted-foreground text-[10px]">Atraso</p>
-                    <p className="font-semibold text-yellow-600 mt-0.5">{lateCount}</p>
+                    <p className="font-semibold text-muted-foreground mt-0.5">{lateCount}</p>
                   </div>
                 </div>
 
@@ -410,9 +405,9 @@ export default function ReportsTab() {
                         <span className={cn(
                           'inline-block h-2.5 w-full max-w-[2.5rem] rounded-sm',
                           status === 'weekend' ? 'bg-border/40'
-                            : status === 'present' ? 'bg-success'
-                            : status === 'late' ? 'bg-yellow-500'
-                            : 'bg-destructive/40'
+                            : status === 'present' ? 'bg-foreground'
+                            : status === 'late' ? 'bg-muted-foreground'
+                            : 'bg-muted-foreground/30'
                         )} />
                         <span className="text-[9px] text-muted-foreground">
                           {new Date(d + 'T12:00:00').getDate()}
@@ -494,11 +489,11 @@ export default function ReportsTab() {
                               {status === 'weekend' ? (
                                 <span className="text-muted-foreground text-[10px]">—</span>
                               ) : status === 'present' ? (
-                                <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                                <span className="inline-block h-2 w-2 rounded-full bg-foreground" />
                               ) : status === 'late' ? (
-                                <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
+                                <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" />
                               ) : (
-                                <span className="inline-block h-2 w-2 rounded-full bg-destructive/40" />
+                                <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/30" />
                               )}
                             </td>
                           );
@@ -506,16 +501,16 @@ export default function ReportsTab() {
                         <td className="text-center px-3 py-2.5">
                           <span className={cn(
                             'inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium',
-                            freq >= 75 ? 'bg-success/10 text-success'
-                              : freq >= 50 ? 'bg-yellow-500/10 text-yellow-600'
-                              : 'bg-destructive/10 text-destructive'
+                            freq >= 75 ? 'bg-foreground/[0.06] text-foreground'
+                              : freq >= 50 ? 'bg-muted-foreground/10 text-muted-foreground'
+                              : 'bg-muted text-muted-foreground'
                           )}>
                             {freq}%
                           </span>
                         </td>
                         <td className="text-center px-3 py-2.5">
                           {lateCount > 0 && (
-                            <span className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-yellow-500/10 text-yellow-600">
+                            <span className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-muted-foreground/10 text-muted-foreground">
                               {lateCount}
                             </span>
                           )}
@@ -531,13 +526,13 @@ export default function ReportsTab() {
           <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border bg-secondary/10 flex-wrap">
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-success" />Presente
+                <span className="h-2 w-2 rounded-full bg-foreground" />Presente
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-yellow-500" />Atraso
+                <span className="h-2 w-2 rounded-full bg-muted-foreground" />Atraso
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-destructive/40" />Ausente
+                <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />Ausente
               </span>
             </div>
             <span className="text-xs text-muted-foreground ml-auto">

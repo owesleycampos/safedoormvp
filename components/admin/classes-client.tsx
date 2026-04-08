@@ -1,28 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Plus, Search, GraduationCap, Edit, Trash2, Users, MoreHorizontal,
-  Send, Copy, Check, Link2, Loader2, ExternalLink,
+  Send, Copy, Check, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
@@ -55,18 +48,9 @@ interface ClassesClientProps {
 
 const GRADE_OPTIONS = [
   'Educação Infantil',
-  '1º Ano',
-  '2º Ano',
-  '3º Ano',
-  '4º Ano',
-  '5º Ano',
-  '6º Ano',
-  '7º Ano',
-  '8º Ano',
-  '9º Ano',
-  '1º Ano EM',
-  '2º Ano EM',
-  '3º Ano EM',
+  '1º Ano', '2º Ano', '3º Ano', '4º Ano', '5º Ano',
+  '6º Ano', '7º Ano', '8º Ano', '9º Ano',
+  '1º Ano EM', '2º Ano EM', '3º Ano EM',
 ];
 
 const EMPTY_FORM = { name: '', grade: '', shift: '' };
@@ -85,13 +69,9 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
 
   const filtered = classes.filter((c) => {
     const q = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.grade ?? '').toLowerCase().includes(q)
-    );
+    return c.name.toLowerCase().includes(q) || (c.grade ?? '').toLowerCase().includes(q);
   });
 
-  // Group by grade
   const byGrade: Record<string, ClassItem[]> = {};
   filtered.forEach((c) => {
     const grade = c.grade || 'Sem série';
@@ -99,23 +79,13 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
     byGrade[grade].push(c);
   });
 
-  function openCreate() {
-    setEditingClass(null);
-    setForm(EMPTY_FORM);
-    setDialogOpen(true);
-  }
-
+  function openCreate() { setEditingClass(null); setForm(EMPTY_FORM); setDialogOpen(true); }
   function openEdit(cls: ClassItem) {
     setEditingClass(cls);
     setForm({ name: cls.name, grade: cls.grade ?? '', shift: cls.shift ?? '' });
     setDialogOpen(true);
   }
-
-  function closeDialog() {
-    setDialogOpen(false);
-    setEditingClass(null);
-    setForm(EMPTY_FORM);
-  }
+  function closeDialog() { setDialogOpen(false); setEditingClass(null); setForm(EMPTY_FORM); }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -133,9 +103,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
         });
         if (!res.ok) throw new Error(await res.text());
         const updated: ClassItem = await res.json();
-        setClasses((prev) =>
-          prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
-        );
+        setClasses((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
         toast({ variant: 'success', title: 'Turma atualizada', description: updated.name });
       } else {
         const res = await fetch('/api/classes', {
@@ -151,18 +119,12 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
       closeDialog();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erro', description: err.message || 'Tente novamente.' });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function handleDelete(cls: ClassItem) {
     if (cls._count.students > 0) {
-      toast({
-        variant: 'warning',
-        title: 'Turma com alunos',
-        description: `Mova os ${cls._count.students} aluno(s) antes de excluir.`,
-      });
+      toast({ variant: 'warning', title: 'Turma com alunos', description: `Mova os ${cls._count.students} aluno(s) antes de excluir.` });
       return;
     }
     if (!confirm(`Excluir turma "${cls.name}"? Esta ação não pode ser desfeita.`)) return;
@@ -189,8 +151,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
       });
       const data = await res.json();
       if (data.success) {
-        const link = `${window.location.origin}/vincular/${data.invite.token}`;
-        setInviteLink(link);
+        setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
       } else {
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
         setInviteDialog(null);
@@ -198,9 +159,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
     } catch {
       toast({ variant: 'destructive', title: 'Erro ao gerar convite' });
       setInviteDialog(null);
-    } finally {
-      setInviteLoading(false);
-    }
+    } finally { setInviteLoading(false); }
   }
 
   function getWhatsAppMessage() {
@@ -217,8 +176,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   }
 
   function handleShareWhatsApp() {
-    const msg = encodeURIComponent(getWhatsAppMessage());
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(getWhatsAppMessage())}`, '_blank');
   }
 
   function handleCopyWhatsAppMessage() {
@@ -229,134 +187,163 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const totalStudents = classes.reduce((sum, c) => sum + c._count.students, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { icon: GraduationCap, value: classes.length,      label: 'Turmas'         },
-          { icon: Users,         value: totalStudents,        label: 'Alunos no total'},
-          { icon: GraduationCap, value: classes.length > 0 ? Math.round(totalStudents / classes.length) : 0, label: 'Média por turma' },
-        ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <div className="flex items-start justify-between mb-2">
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-              <stat.icon className="h-3.5 w-3.5 text-muted-foreground/40" strokeWidth={1.5} />
-            </div>
-            <p className="text-2xl font-semibold tabular-nums">{stat.value}</p>
-          </Card>
-        ))}
-      </div>
+    <>
+      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <Input
-          placeholder="Buscar turma ou série..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          leftIcon={<Search className="h-4 w-4" />}
-          className="max-w-xs"
-        />
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Nova Turma
-        </Button>
-      </div>
-
-      {/* Classes grouped by grade */}
-      {Object.keys(byGrade).length === 0 ? (
-        <Card className="p-12 flex flex-col items-center justify-center text-center gap-3">
-          <div className="h-14 w-14 rounded-lg bg-secondary flex items-center justify-center">
-            <GraduationCap className="h-6 w-6 text-muted-foreground" />
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="flex items-start justify-between gap-4"
+        >
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Turmas</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {classes.length} turma{classes.length !== 1 ? 's' : ''} · {totalStudents} aluno{totalStudents !== 1 ? 's' : ''}
+            </p>
           </div>
-          <p className="font-semibold">Nenhuma turma encontrada</p>
-          <p className="text-sm text-muted-foreground">
-            {search ? 'Tente outros termos de busca.' : 'Crie sua primeira turma para começar.'}
-          </p>
-          {!search && (
-            <Button onClick={openCreate} className="mt-2">
-              <Plus className="h-4 w-4" />
-              Nova Turma
-            </Button>
-          )}
-        </Card>
-      ) : (
-        Object.entries(byGrade)
-          .sort(([a], [b]) => {
-            const iA = GRADE_OPTIONS.indexOf(a);
-            const iB = GRADE_OPTIONS.indexOf(b);
-            if (iA === -1 && iB === -1) return a.localeCompare(b);
-            if (iA === -1) return 1;
-            if (iB === -1) return -1;
-            return iA - iB;
-          })
-          .map(([grade, gradeClasses]) => (
-            <div key={grade} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  {grade}
-                </h2>
-                <div className="flex-1 h-px bg-border/50" />
-                <span className="text-xs text-muted-foreground">
-                  {gradeClasses.length} turma{gradeClasses.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {gradeClasses.map((cls) => (
-                  <Card
-                    key={cls.id}
-                    className="group relative overflow-hidden hover:border-border transition-all duration-200"
-                  >
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/0 group-hover:bg-primary/60 transition-all duration-200" />
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="h-9 w-9 rounded-md border border-border flex items-center justify-center">
-                          <GraduationCap className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nova Turma
+          </button>
+        </motion.div>
+
+        {/* KPIs */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: 0.05 }}
+          className="grid grid-cols-3 gap-3"
+        >
+          {[
+            { value: classes.length, label: 'Turmas' },
+            { value: totalStudents, label: 'Alunos no total' },
+            { value: classes.length > 0 ? Math.round(totalStudents / classes.length) : 0, label: 'Média por turma' },
+          ].map((stat) => (
+            <Card key={stat.label} className="p-4">
+              <span className="text-[11px] text-muted-foreground">{stat.label}</span>
+              <p className="text-2xl font-semibold tracking-tight mt-1 tabular-nums">{stat.value}</p>
+            </Card>
+          ))}
+        </motion.div>
+
+        {/* Search */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: 0.1 }}
+        >
+          <Input
+            placeholder="Buscar turma ou série..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            leftIcon={<Search className="h-4 w-4" />}
+            className="max-w-xs"
+          />
+        </motion.div>
+
+        {/* Classes grouped by grade */}
+        {Object.keys(byGrade).length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.15 }}
+          >
+            <Card className="p-12 flex flex-col items-center justify-center text-center gap-3">
+              <GraduationCap className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
+              <p className="text-sm font-semibold">Nenhuma turma encontrada</p>
+              <p className="text-xs text-muted-foreground">
+                {search ? 'Tente outros termos de busca.' : 'Crie sua primeira turma para começar.'}
+              </p>
+              {!search && (
+                <button
+                  onClick={openCreate}
+                  className="mt-2 flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Nova Turma
+                </button>
+              )}
+            </Card>
+          </motion.div>
+        ) : (
+          Object.entries(byGrade)
+            .sort(([a], [b]) => {
+              const iA = GRADE_OPTIONS.indexOf(a);
+              const iB = GRADE_OPTIONS.indexOf(b);
+              if (iA === -1 && iB === -1) return a.localeCompare(b);
+              if (iA === -1) return 1;
+              if (iB === -1) return -1;
+              return iA - iB;
+            })
+            .map(([grade, gradeClasses], gi) => (
+              <motion.div
+                key={grade}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: 0.15 + gi * 0.04 }}
+                className="space-y-3"
+              >
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {grade}
+                  </h2>
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {gradeClasses.length} turma{gradeClasses.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {gradeClasses.map((cls) => (
+                    <Card
+                      key={cls.id}
+                      className="group relative p-4 hover:bg-accent/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="h-8 w-8 rounded-md border border-border flex items-center justify-center">
+                          <GraduationCap className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent transition-all">
                               <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(cls)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Editar
+                              <Edit className="h-4 w-4 mr-2" /> Editar
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleGenerateInvite(cls.id, cls.name)}>
-                              <Send className="h-4 w-4 mr-2" />
-                              Enviar Convite
+                              <Send className="h-4 w-4 mr-2" /> Enviar Convite
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(cls)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Excluir
+                            <DropdownMenuItem onClick={() => handleDelete(cls)} className="text-destructive focus:text-destructive">
+                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <CardTitle className="text-base mb-1">{cls.name}</CardTitle>
-                      <p className="text-xs text-muted-foreground mb-3">
+                      <p className="text-sm font-semibold">{cls.name}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
                         {[cls.grade, shiftLabel(cls.shift)].filter(Boolean).join(' · ') || 'Sem série'}
                       </p>
-                      <div className="flex items-center justify-between">
-                        <Badge variant="default" className="text-xs">
-                          <Users className="h-3 w-3 mr-1" />
+                      <div className="flex items-center gap-1.5 mt-3">
+                        <Users className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
                           {cls._count.students} aluno{cls._count.students !== 1 ? 's' : ''}
-                        </Badge>
+                        </span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))
-      )}
+                    </Card>
+                  ))}
+                </div>
+              </motion.div>
+            ))
+        )}
+      </div>
 
       {/* Invite Dialog */}
       <Dialog open={!!inviteDialog} onOpenChange={(open) => { if (!open) setInviteDialog(null); }}>
@@ -364,8 +351,8 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
           <DialogHeader>
             <DialogTitle>Convite para Pais</DialogTitle>
             <DialogDescription>
-              Compartilhe o link abaixo com os responsáveis da turma{' '}
-              <strong>{inviteDialog?.className}</strong>. Cada pai seleciona seu filho e confirma com a data de nascimento.
+              Compartilhe o link com os responsáveis da turma{' '}
+              <strong>{inviteDialog?.className}</strong>.
             </DialogDescription>
           </DialogHeader>
 
@@ -375,26 +362,33 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
             </div>
           ) : inviteLink ? (
             <div className="space-y-4 mt-2">
-              {/* Link display */}
               <div className="flex items-center gap-2">
-                <div className="flex-1 rounded-md border border-input bg-secondary/50 px-3 py-2 text-xs text-muted-foreground truncate font-mono">
+                <div className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground truncate font-mono">
                   {inviteLink}
                 </div>
-                <Button variant="outline" size="icon" onClick={handleCopyLink}>
-                  {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
+                <button
+                  onClick={handleCopyLink}
+                  className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-accent transition-colors"
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </button>
               </div>
 
-              {/* Actions */}
               <div className="grid grid-cols-1 gap-2">
-                <Button onClick={handleShareWhatsApp} className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700">
-                  <Send className="h-4 w-4" />
+                <button
+                  onClick={handleShareWhatsApp}
+                  className="flex items-center justify-center gap-2 h-9 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  <Send className="h-3.5 w-3.5" />
                   Enviar via WhatsApp
-                </Button>
-                <Button variant="outline" onClick={handleCopyWhatsAppMessage} className="w-full gap-2">
-                  <Copy className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleCopyWhatsAppMessage}
+                  className="flex items-center justify-center gap-2 h-9 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors"
+                >
+                  <Copy className="h-3.5 w-3.5" />
                   Copiar mensagem completa
-                </Button>
+                </button>
               </div>
 
               <p className="text-[11px] text-muted-foreground text-center">
@@ -411,58 +405,41 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
           <DialogHeader>
             <DialogTitle>{editingClass ? 'Editar Turma' : 'Nova Turma'}</DialogTitle>
             <DialogDescription>
-              {editingClass
-                ? 'Atualize o nome ou série da turma.'
-                : 'Preencha as informações da nova turma.'}
+              {editingClass ? 'Atualize as informações da turma.' : 'Preencha as informações da nova turma.'}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2">
               <Label htmlFor="class-name">Nome da Turma *</Label>
-              <Input
-                id="class-name"
-                placeholder="Ex: 3º Ano A"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                autoFocus
-              />
+              <Input id="class-name" placeholder="Ex: 3º Ano A" value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="class-grade">Série</Label>
-              <select
-                id="class-grade"
-                value={form.grade}
+              <select id="class-grade" value={form.grade}
                 onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value }))}
-                className="w-full h-11 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 text-foreground"
+                className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm focus:outline-none text-foreground"
               >
                 <option value="">Selecionar série...</option>
-                {GRADE_OPTIONS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
+                {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="class-shift">Turno</Label>
-              <select
-                id="class-shift"
-                value={form.shift}
+              <select id="class-shift" value={form.shift}
                 onChange={(e) => setForm((f) => ({ ...f, shift: e.target.value }))}
-                className="w-full h-11 rounded-xl border border-input bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 text-foreground"
+                className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm focus:outline-none text-foreground"
               >
                 <option value="">Selecionar turno...</option>
-                {SHIFT_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
+                {SHIFT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
 
             <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={closeDialog} disabled={loading}>
-                Cancelar
-              </Button>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={loading}>Cancelar</Button>
               <Button type="submit" loading={loading}>
                 {editingClass ? 'Salvar alterações' : 'Criar turma'}
               </Button>
@@ -470,6 +447,6 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

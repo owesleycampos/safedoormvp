@@ -1,7 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { AdminHeader } from '@/components/admin/header';
 import { StudentsClient } from '@/components/admin/students-client';
 
 export const metadata = { title: 'Alunos' };
@@ -37,14 +36,8 @@ export default async function StudentsPage() {
   const { students, classes } = await getStudentsData(schoolId);
 
   return (
-    <div className="flex flex-col flex-1 page-enter">
-      <AdminHeader
-        title="Alunos"
-        subtitle={`${students.length} aluno${students.length !== 1 ? 's' : ''} cadastrado${students.length !== 1 ? 's' : ''}`}
-      />
-      <div className="flex-1 p-4 md:p-6">
-        <StudentsClient students={students} classes={classes} />
-      </div>
+    <div className="flex flex-col flex-1">
+      <StudentsClient students={students} classes={classes} />
     </div>
   );
 }

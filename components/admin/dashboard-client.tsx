@@ -58,7 +58,7 @@ function LineChart({ data }: { data: TrendPoint[] }) {
   if (workdays.length < 2) return null;
 
   const rates = workdays.map(t => t.total > 0 ? (t.present / t.total) * 100 : 0);
-  const w = 600, h = 160, px = 40, py = 20;
+  const w = 700, h = 220, px = 40, py = 20;
   const cW = w - px * 2, cH = h - py * 2;
 
   const pts = rates.map((r, i) => ({
@@ -79,7 +79,7 @@ function LineChart({ data }: { data: TrendPoint[] }) {
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
   return (
-    <div className="relative" style={{ height: 180 }}>
+    <div className="relative" style={{ height: 240 }}>
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
         {[0, 25, 50, 75, 100].map(v => {
           const y = py + cH - (v / 100) * cH;
@@ -218,7 +218,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
+      <div className="flex-1 p-5 md:p-8 space-y-6 w-full">
 
         {/* Header */}
         <motion.div
@@ -291,31 +291,32 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hoje</h2>
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            <Card className="p-4">
-              <span className="text-[11px] text-muted-foreground">Presentes</span>
-              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.presentCount} /></p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">de {data.totalStudents}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-5">
+              <span className="text-xs text-muted-foreground">Presentes</span>
+              <p className="text-3xl font-semibold tracking-tight mt-2"><AnimatedNumber value={data.presentCount} /></p>
+              <p className="text-xs text-muted-foreground mt-1">de {data.totalStudents}</p>
             </Card>
-            <Card className="p-4">
-              <span className="text-[11px] text-muted-foreground">Ausentes</span>
-              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.absentCount} /></p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{data.totalStudents > 0 ? Math.round((data.absentCount / data.totalStudents) * 100) : 0}%</p>
+            <Card className="p-5">
+              <span className="text-xs text-muted-foreground">Ausentes</span>
+              <p className="text-3xl font-semibold tracking-tight mt-2"><AnimatedNumber value={data.absentCount} /></p>
+              <p className="text-xs text-muted-foreground mt-1">{data.totalStudents > 0 ? Math.round((data.absentCount / data.totalStudents) * 100) : 0}%</p>
             </Card>
-            <Card className="p-4">
-              <span className="text-[11px] text-muted-foreground">Atrasos</span>
-              <p className="text-2xl font-semibold tracking-tight mt-1"><AnimatedNumber value={data.lateCount ?? 0} /></p>
+            <Card className="p-5">
+              <span className="text-xs text-muted-foreground">Atrasos</span>
+              <p className="text-3xl font-semibold tracking-tight mt-2"><AnimatedNumber value={data.lateCount ?? 0} /></p>
+              <p className="text-xs text-muted-foreground mt-1">&nbsp;</p>
             </Card>
-            <Card className="p-4">
-              <span className="text-[11px] text-muted-foreground">Presença</span>
-              <p className="text-2xl font-semibold tracking-tight mt-1">{presenceRate}%</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">taxa geral</p>
+            <Card className="p-5">
+              <span className="text-xs text-muted-foreground">Presença</span>
+              <p className="text-3xl font-semibold tracking-tight mt-2">{presenceRate}%</p>
+              <p className="text-xs text-muted-foreground mt-1">taxa geral</p>
             </Card>
           </div>
         </motion.div>
 
         {/* Chart + Feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
           {/* Trend Chart — THIS has period selector */}
           <motion.div
@@ -378,7 +379,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto max-h-[360px]">
+              <div className="flex-1 overflow-y-auto max-h-[420px]">
                 {data.recentEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-4">
                     <p className="text-xs text-muted-foreground">Nenhum evento hoje</p>

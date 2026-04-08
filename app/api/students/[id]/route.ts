@@ -85,6 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: {
       ...(typeof body.recognitionEnabled === 'boolean' && { recognitionEnabled: body.recognitionEnabled }),
+      ...(typeof body.notes === 'string' && { notes: body.notes }),
     },
   });
 

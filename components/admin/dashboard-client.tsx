@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import {
   LogIn, LogOut, Clock, ClipboardEdit, TrendingUp, TrendingDown,
   Video, AlertTriangle, WifiOff,
@@ -27,26 +27,30 @@ interface StatsData {
 
 const POLL_INTERVAL_MS = 15_000;
 
-/* ── Animated Counter ─────────────────────────────────────────── */
+/* ── Animated Counter (spring) ────────────────────────────────── */
 function AnimatedNumber({ value }: { value: number }) {
+  const motionValue = useMotionValue(0);
+  const rounded = useTransform(motionValue, (v) => Math.round(v));
   const [display, setDisplay] = useState(0);
-  const prev = useRef(0);
+
   useEffect(() => {
-    const from = prev.current;
-    const start = performance.now();
-    function tick(now: number) {
-      const p = Math.min((now - start) / 500, 1);
-      setDisplay(Math.round(from + (value - from) * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-    prev.current = value;
+    const controls = animate(motionValue, value, {
+      type: 'spring',
+      stiffness: 80,
+      damping: 20,
+      mass: 0.8,
+    });
+    const unsubscribe = rounded.on('change', (v) => setDisplay(v));
+    return () => { controls.stop(); unsubscribe(); };
   }, [value]);
+
   return <>{display}</>;
 }
 
 /* ── Line Chart ───────────────────────────────────────────────── */
 function LineChart({ data }: { data: TrendPoint[] }) {
+  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+
   const workdays = data.filter(t => {
     const d = new Date(t.date + 'T12:00:00').getDay();
     return d !== 0 && d !== 6;
@@ -71,44 +75,92 @@ function LineChart({ data }: { data: TrendPoint[] }) {
 
   const area = `${line} L ${pts[pts.length - 1].x} ${py + cH} L ${pts[0].x} ${py + cH} Z`;
 
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 180 }}>
-      {[0, 25, 50, 75, 100].map(v => {
-        const y = py + cH - (v / 100) * cH;
-        return (
-          <g key={v}>
-            <line x1={px} y1={y} x2={w - px} y2={y} stroke="currentColor" className="text-border" strokeWidth="1" />
-            <text x={px - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize="10">{v}%</text>
-          </g>
-        );
-      })}
-      <defs>
-        <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity="0.06" />
-          <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#aGrad)" />
-      <path d={line} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1.5" strokeLinecap="round" />
-      {pts.map((p, i) => {
+    <div className="relative" style={{ height: 180 }}>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
+        {[0, 25, 50, 75, 100].map(v => {
+          const y = py + cH - (v / 100) * cH;
+          return (
+            <g key={v}>
+              <line x1={px} y1={y} x2={w - px} y2={y} stroke="currentColor" className="text-border" strokeWidth="1" />
+              <text x={px - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize="10">{v}%</text>
+            </g>
+          );
+        })}
+        <defs>
+          <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#aGrad)" />
+        <path d={line} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1.5" strokeLinecap="round" />
+        {pts.map((p, i) => {
+          const dt = new Date(workdays[i].date + 'T12:00:00');
+          const day = dayNames[dt.getDay()];
+          const isHovered = hoveredPoint === i;
+          return (
+            <g key={i}>
+              {/* Vertical dashed line on hover */}
+              {isHovered && (
+                <line
+                  x1={p.x} y1={p.y} x2={p.x} y2={py + cH}
+                  stroke="hsl(var(--foreground))" strokeWidth="1" strokeDasharray="3 3" opacity="0.3"
+                />
+              )}
+              <circle cx={p.x} cy={p.y} r={isHovered ? 4.5 : 3} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5" style={{ transition: 'r 0.15s' }} />
+              <text x={p.x} y={h - 2} textAnchor="middle" className="fill-muted-foreground" fontSize="10">{day}</text>
+              {/* Transparent hit area */}
+              <circle
+                cx={p.x} cy={p.y} r={12} fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredPoint(i)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      {/* Tooltip */}
+      {hoveredPoint !== null && (() => {
+        const i = hoveredPoint;
+        const p = pts[i];
         const dt = new Date(workdays[i].date + 'T12:00:00');
-        const day = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dt.getDay()];
+        const day = dayNames[dt.getDay()];
+        const tooltipLabel = `${day}, ${dt.getDate()} ${monthNames[dt.getMonth()]}`;
+        const pctText = `${Math.round(rates[i])}% (${workdays[i].present}/${workdays[i].total})`;
+        // Position tooltip relative to the SVG container
+        const xPct = (p.x / w) * 100;
+        const yPct = (p.y / h) * 100;
         return (
-          <g key={i}>
-            <circle cx={p.x} cy={p.y} r="3" fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
-            <text x={p.x} y={h - 2} textAnchor="middle" className="fill-muted-foreground" fontSize="10">{day}</text>
-            <text x={p.x} y={p.y - 8} textAnchor="middle" className="fill-foreground" fontSize="10" fontWeight="500">{Math.round(rates[i])}%</text>
-          </g>
+          <div
+            className="absolute pointer-events-none z-10"
+            style={{
+              left: `${xPct}%`,
+              top: `${yPct}%`,
+              transform: 'translate(-50%, -110%)',
+            }}
+          >
+            <div className="bg-card border border-border rounded-md shadow-lg px-2.5 py-1.5 text-center whitespace-nowrap">
+              <p className="text-[10px] text-muted-foreground">{tooltipLabel}</p>
+              <p className="text-xs font-semibold">{pctText}</p>
+            </div>
+          </div>
         );
-      })}
-    </svg>
+      })()}
+    </div>
   );
 }
 
 /* ── Main ─────────────────────────────────────────────────────── */
 export function DashboardClient({ data: initialData }: { data: StatsData }) {
   const [manualOpen, setManualOpen] = useState(false);
-  const [classFilter, setClassFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('dashboard_class_filter') || 'all' : 'all'
+  );
   const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
   const [data, setData] = useState<StatsData>(initialData);
 
@@ -130,6 +182,13 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
   }, [classFilter, fetchStats]);
 
   useEffect(() => { fetchStats(classFilter); }, [classFilter, chartPeriod, fetchStats]);
+
+  // Persist class filter selection
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard_class_filter', classFilter);
+    }
+  }, [classFilter]);
 
   const presenceRate = data.totalStudents > 0
     ? Math.round((data.presentCount / data.totalStudents) * 100) : 0;

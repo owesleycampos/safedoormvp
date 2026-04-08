@@ -39,7 +39,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [filterClass, setFilterClass] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
-  const [dialogDefaultTab, setDialogDefaultTab] = useState<'info' | 'photos' | 'parents'>('info');
+  const [dialogDefaultTab, setDialogDefaultTab] = useState<'info' | 'photos' | 'parents' | 'history'>('info');
   const [importing, setImporting] = useState(false);
   const [importDialog, setImportDialog] = useState(false);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
@@ -59,7 +59,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     return matchSearch && matchClass;
   });
 
-  function handleEdit(student: any, tab: 'info' | 'photos' | 'parents' = 'info') {
+  function handleEdit(student: any, tab: 'info' | 'photos' | 'parents' | 'history' = 'info') {
     setEditingStudent(student);
     setDialogDefaultTab(tab);
     setDialogOpen(true);

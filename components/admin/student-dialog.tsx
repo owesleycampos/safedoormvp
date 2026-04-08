@@ -44,7 +44,7 @@ interface StudentDialogProps {
   student?: any;
   classes: any[];
   onSaved: (student: any) => void;
-  defaultTab?: 'info' | 'photos' | 'parents';
+  defaultTab?: 'info' | 'photos' | 'parents' | 'history';
 }
 
 export function StudentDialog({ open, onOpenChange, student, classes, onSaved, defaultTab }: StudentDialogProps) {
@@ -53,11 +53,13 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(defaultTab || 'info');
+  const [history, setHistory] = useState<Array<{ id: string; eventType: string; timestamp: string }>>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollStatus, setEnrollStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [enrollMessage, setEnrollMessage] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: '', classId: '', birthDate: '' });
+  const [form, setForm] = useState({ name: '', classId: '', birthDate: '', notes: '' });
 
   // Quick parent link on create
   const [quickParentSearch, setQuickParentSearch] = useState('');
@@ -85,6 +87,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
         birthDate: student?.birthDate
           ? new Date(student.birthDate).toISOString().split('T')[0]
           : '',
+        notes: student?.notes || '',
       });
       setErrors({});
       setActiveTab(defaultTab || 'info');
@@ -116,6 +119,23 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const res = await fetch(`/api/students/${id}/parents`);
     const data = await res.json();
     setParentLinks(data.parents || []);
+  }
+
+  async function loadHistory(id: string) {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/students/${id}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.events || []);
+      } else {
+        setHistory([]);
+      }
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   // Debounced parent search
@@ -304,6 +324,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
       formData.append('name', form.name);
       formData.append('classId', form.classId);
       if (form.birthDate) formData.append('birthDate', form.birthDate);
+      if (form.notes) formData.append('notes', form.notes);
 
       const url = isEdit ? `/api/students/${student.id}` : '/api/students';
       const method = isEdit ? 'PUT' : 'POST';
@@ -364,6 +385,9 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
               </TabsTrigger>
               <TabsTrigger value="parents">
                 Responsáveis {parentLinks.length > 0 && <Badge variant="outline" className="ml-1 text-[10px] px-1">{parentLinks.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="history" onClick={() => { if (history.length === 0 && !historyLoading && student?.id) loadHistory(student.id); }}>
+                Histórico
               </TabsTrigger>
             </TabsList>
 
@@ -435,8 +459,20 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="student-notes">Observações</Label>
+                  <textarea
+                    id="student-notes"
+                    placeholder="Anotações sobre o aluno (atestados, observações, etc.)"
+                    value={form.notes}
+                    onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
+                    className="w-full min-h-[80px] rounded-md border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none resize-none"
+                    rows={3}
+                  />
+                </div>
+
                 <div className="rounded-md bg-secondary/40 p-3 text-xs text-muted-foreground">
-                  🔒 As fotos são processadas para gerar vetores faciais biométricos, armazenados com criptografia AES-256 (LGPD).
+                  As fotos são processadas para gerar vetores faciais biométricos, armazenados com criptografia AES-256 (LGPD).
                 </div>
 
                 <div className="flex gap-2 pt-1">
@@ -738,6 +774,54 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                     </p>
                   )}
                 </div>
+              </div>
+            </TabsContent>
+
+            {/* ── History Tab ── */}
+            <TabsContent value="history" className="flex-1 overflow-y-auto mt-0 pt-4">
+              <div className="space-y-3 pb-4">
+                <p className="text-sm font-medium">Últimos registros de entrada e saída</p>
+                {historyLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-muted/30 animate-pulse">
+                        <div className="h-2 w-2 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-1.5">
+                          <div className="h-3 w-24 bg-muted rounded" />
+                          <div className="h-2.5 w-16 bg-muted rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-xs text-muted-foreground">Nenhum registro encontrado</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border overflow-hidden divide-y divide-border">
+                    {history.slice(0, 30).map((event) => {
+                      const dt = new Date(event.timestamp);
+                      const dateStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                      const timeStr = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                      const isEntry = event.eventType === 'ENTRY';
+                      return (
+                        <div key={event.id} className="flex items-center gap-3 px-3 py-2.5">
+                          <span className={cn(
+                            'h-2 w-2 rounded-full flex-shrink-0',
+                            isEntry ? 'bg-foreground' : 'bg-muted-foreground/40'
+                          )} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium">
+                              {isEntry ? 'Entrada' : 'Saída'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">{dateStr}</p>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground tabular-nums">{timeStr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

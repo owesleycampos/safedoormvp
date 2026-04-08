@@ -210,6 +210,7 @@ model Student {
   azurePersonId     String?           // AWS Rekognition enrollment marker (stores studentId)
   isActive          Boolean           @default(true)
   recognitionEnabled Boolean          @default(true)
+  notes             String?           @db.Text
   accessCode        String?           @unique // 6-char code for parent self-linking (e.g. "A3X9K2")
   classId           String
   schoolId          String

@@ -107,6 +107,7 @@ type ToastData = {
   description?: string;
   variant?: 'default' | 'success' | 'destructive' | 'warning';
   duration?: number;
+  onUndo?: () => void;
 };
 
 let toastCount = 0;
@@ -117,15 +118,34 @@ function emitToasts() {
   toastListeners.forEach((l) => l([...toastList]));
 }
 
+const toastTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+function dismissToast(id: string) {
+  const timer = toastTimers.get(id);
+  if (timer) clearTimeout(timer);
+  toastTimers.delete(id);
+  toastList = toastList.filter((t) => t.id !== id);
+  emitToasts();
+}
+
+function pauseToast(id: string) {
+  const timer = toastTimers.get(id);
+  if (timer) clearTimeout(timer);
+  toastTimers.delete(id);
+}
+
+function resumeToast(id: string, remaining: number) {
+  const timer = setTimeout(() => dismissToast(id), remaining);
+  toastTimers.set(id, timer);
+}
+
 export function toast(data: Omit<ToastData, 'id'>) {
   const id = String(++toastCount);
   const newToast: ToastData = { id, duration: 4000, ...data };
   toastList = [...toastList, newToast];
   emitToasts();
-  setTimeout(() => {
-    toastList = toastList.filter((t) => t.id !== id);
-    emitToasts();
-  }, newToast.duration);
+  const timer = setTimeout(() => dismissToast(id), newToast.duration!);
+  toastTimers.set(id, timer);
 }
 
 export function Toaster() {
@@ -149,12 +169,28 @@ export function Toaster() {
   return (
     <ToastProvider>
       {toasts.map((t) => (
-        <Toast key={t.id} variant={t.variant}>
+        <Toast
+          key={t.id}
+          variant={t.variant}
+          onMouseEnter={() => pauseToast(t.id)}
+          onMouseLeave={() => resumeToast(t.id, t.duration || 4000)}
+        >
           {icons[t.variant || 'default']}
           <div className="flex-1">
             {t.title && <ToastTitle>{t.title}</ToastTitle>}
             {t.description && <ToastDescription>{t.description}</ToastDescription>}
           </div>
+          {t.onUndo && (
+            <button
+              onClick={() => {
+                t.onUndo?.();
+                dismissToast(t.id);
+              }}
+              className="shrink-0 text-xs underline text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Desfazer
+            </button>
+          )}
           <ToastClose />
         </Toast>
       ))}

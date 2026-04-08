@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Baby, LogIn, LogOut, Clock, Bell, Plus, Loader2 } from 'lucide-react';
+import { Baby, LogIn, LogOut, Clock, Bell, Plus, Loader2, Award } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { toast } from '@/components/ui/toaster';
 import { cn, getInitials, formatTime, formatRelativeTime } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 interface ChildrenClientProps {
   children: any[];
@@ -176,8 +177,8 @@ export function ChildrenClient({ children }: ChildrenClientProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {children.map((child) => (
-              <ChildCard key={child.id} child={child} />
+            {children.map((child, index) => (
+              <ChildCard key={child.id} child={child} index={index} />
             ))}
 
             {/* Add another child button */}
@@ -203,57 +204,136 @@ export function ChildrenClient({ children }: ChildrenClientProps) {
   );
 }
 
-function ChildCard({ child }: { child: any }) {
+function ChildCard({ child, index }: { child: any; index: number }) {
   const lastEvent = child.lastEvent;
   const isPresent = lastEvent?.eventType === 'ENTRY';
   const hasLeft  = lastEvent?.eventType === 'EXIT';
+  const weeklyAttendance = child.weeklyAttendance as { label: string; present: boolean | null }[] | undefined;
+  const weeklyPercentage = child.weeklyPercentage as number | undefined;
+  const perfectMonth = child.perfectMonth as boolean | undefined;
 
   return (
-    <Link href={`/pwa/timeline?studentId=${child.id}`}>
-      <div className="group rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors overflow-hidden active:scale-[0.99]">
-        {/* Status stripe */}
-        <div className={cn(
-          'h-0.5',
-          isPresent ? 'bg-success' : hasLeft ? 'bg-muted-foreground/40' : 'bg-transparent'
-        )} />
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.08 }}
+    >
+      <Link href={`/pwa/timeline?studentId=${child.id}`}>
+        <div className="group rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors overflow-hidden active:scale-[0.99]">
+          {/* Status stripe */}
+          <div className={cn(
+            'h-0.5',
+            isPresent ? 'bg-success' : hasLeft ? 'bg-muted-foreground/40' : 'bg-transparent'
+          )} />
 
-        <div className="p-4 flex items-center gap-3">
-          {/* Avatar */}
-          <div className="relative flex-shrink-0">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={child.photoUrl || ''} alt={child.name} className="object-cover" />
-              <AvatarFallback className="text-base font-semibold bg-secondary">
-                {getInitials(child.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className={cn(
-              'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card',
-              isPresent ? 'bg-success' : hasLeft ? 'bg-muted-foreground/50' : 'bg-muted-foreground/20'
-            )} />
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold truncate">{child.name}</p>
-              <Badge variant={isPresent ? 'entry' : hasLeft ? 'exit' : 'secondary'} className="flex-shrink-0">
-                {isPresent ? 'Na escola' : hasLeft ? 'Saiu' : 'Sem registro'}
-              </Badge>
+          <div className="p-4 flex items-center gap-3">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={child.photoUrl || ''} alt={child.name} className="object-cover" />
+                <AvatarFallback className="text-base font-semibold bg-secondary">
+                  {getInitials(child.name)}
+                </AvatarFallback>
+              </Avatar>
+              <span className={cn(
+                'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card',
+                isPresent ? 'bg-success' : hasLeft ? 'bg-muted-foreground/50' : 'bg-muted-foreground/20'
+              )} />
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{child.class?.name}</p>
 
-            {lastEvent ? (
-              <p className="text-xs text-muted-foreground mt-1.5">
-                {isPresent ? 'Entrou' : 'Saiu'} às{' '}
-                <span className="font-medium text-foreground">{formatTime(lastEvent.timestamp)}</span>
-                {' · '}{formatRelativeTime(lastEvent.timestamp)}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground mt-1.5">Nenhum registro hoje</p>
-            )}
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm font-semibold truncate">{child.name}</p>
+                  {perfectMonth && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15, delay: 0.4 + index * 0.08 }}
+                      title="Presenca Exemplar este mes"
+                    >
+                      <Award className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                    </motion.span>
+                  )}
+                </div>
+                <Badge variant={isPresent ? 'entry' : hasLeft ? 'exit' : 'secondary'} className="flex-shrink-0">
+                  {isPresent ? 'Na escola' : hasLeft ? 'Saiu' : 'Sem registro'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{child.class?.name}</p>
+
+              {lastEvent ? (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {isPresent ? 'Entrou' : 'Saiu'} às{' '}
+                  <span className="font-medium text-foreground">{formatTime(lastEvent.timestamp)}</span>
+                  {' · '}{formatRelativeTime(lastEvent.timestamp)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1.5">Nenhum registro hoje</p>
+              )}
+            </div>
           </div>
+
+          {/* Weekly attendance summary */}
+          {weeklyAttendance && weeklyAttendance.length > 0 && (
+            <div className="px-4 pb-3.5 pt-0">
+              <div className="rounded-md bg-secondary/40 px-3 py-2.5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Esta semana
+                  </span>
+                  <span className="text-[10px] font-semibold text-muted-foreground">
+                    {weeklyPercentage}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {weeklyAttendance.map((day, i) => (
+                    <div key={day.label} className="flex flex-col items-center gap-1 flex-1">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.2 + i * 0.06, type: 'spring', stiffness: 500, damping: 25 }}
+                        className={cn(
+                          'h-2 w-2 rounded-full',
+                          day.present === null
+                            ? 'bg-muted-foreground/10'
+                            : day.present
+                            ? 'bg-foreground'
+                            : 'bg-muted-foreground/25'
+                        )}
+                      />
+                      <span className={cn(
+                        'text-[9px]',
+                        day.present === null
+                          ? 'text-muted-foreground/30'
+                          : day.present
+                          ? 'text-foreground font-medium'
+                          : 'text-muted-foreground/50'
+                      )}>
+                        {day.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {perfectMonth && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    transition={{ delay: 0.5 }}
+                    className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border/50"
+                  >
+                    <Award className="h-3 w-3 text-foreground" />
+                    <span className="text-[10px] font-medium text-foreground">
+                      Presenca Exemplar
+                    </span>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </Link>
+      </Link>
+    </motion.div>
   );
 }

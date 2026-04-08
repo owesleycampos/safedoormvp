@@ -70,6 +70,7 @@ export async function GET(
       isManual: true,
       confidence: true,
       photoUrl: true,
+      device: { select: { name: true } },
     },
   });
 

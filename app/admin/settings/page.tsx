@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   School, Phone, Mail, MapPin, Clock, Bell, Sliders, Save,
-  Loader2, CheckCircle2, Shield, Globe, AlertTriangle,
+  Loader2, CheckCircle2, Shield, Globe, AlertTriangle, Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -154,6 +154,8 @@ export default function SettingsPage() {
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('school');
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -173,6 +175,7 @@ export default function SettingsPage() {
             contactEmail: data.contactEmail ?? '',
             contactPhone: data.contactPhone ?? '',
           });
+          if (data.logoUrl) setSchoolLogoUrl(data.logoUrl);
         }
         if (settingsRes.ok) {
           const data = await settingsRes.json();
@@ -230,6 +233,20 @@ export default function SettingsPage() {
     } finally {
       setLoadingSettings(false);
     }
+  }
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ variant: 'warning', title: 'Arquivo muito grande', description: 'O logo deve ter no máximo 2MB.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   }
 
   const navItems = [
@@ -319,6 +336,25 @@ export default function SettingsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-5">
+                    {/* Logo upload */}
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="h-16 w-16 rounded-lg border border-border flex items-center justify-center bg-muted overflow-hidden">
+                        {logoPreview || schoolLogoUrl ? (
+                          <img src={logoPreview || schoolLogoUrl || ''} alt="Logo" className="h-full w-full object-contain" />
+                        ) : (
+                          <Building2 className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium">Logo da escola</p>
+                        <p className="text-[11px] text-muted-foreground mb-1.5">Aparece nos relatórios e no app</p>
+                        <label className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                          Alterar logo
+                          <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                        </label>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="school-name">Nome da escola *</Label>
                       <Input

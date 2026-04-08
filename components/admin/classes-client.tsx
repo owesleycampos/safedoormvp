@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus, Search, GraduationCap, Edit, Trash2, Users, MoreHorizontal,
@@ -66,6 +66,36 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [attendance, setAttendance] = useState<Record<string, { present: number; total: number }>>({});
+
+  // Fetch today's attendance per class
+  useEffect(() => {
+    async function fetchAttendance() {
+      try {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`/api/reports/attendance?from=${todayStr}&to=${todayStr}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const rows = data.rows ?? [];
+        // Group by className -> map to classId using our classes list
+        const byClassName: Record<string, { present: number; total: number }> = {};
+        rows.forEach((r: any) => {
+          const status = r.attendance?.[todayStr];
+          if (!status || status === 'weekend') return;
+          if (!byClassName[r.className]) byClassName[r.className] = { present: 0, total: 0 };
+          byClassName[r.className].total++;
+          if (status === 'present' || status === 'late') byClassName[r.className].present++;
+        });
+        // Map className to classId
+        const byId: Record<string, { present: number; total: number }> = {};
+        initialClasses.forEach(c => {
+          if (byClassName[c.name]) byId[c.id] = byClassName[c.name];
+        });
+        setAttendance(byId);
+      } catch { /* silent */ }
+    }
+    fetchAttendance();
+  }, []);
 
   const filtered = classes.filter((c) => {
     const q = search.toLowerCase();
@@ -337,6 +367,14 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                           {cls._count.students} aluno{cls._count.students !== 1 ? 's' : ''}
                         </span>
                       </div>
+                      {attendance[cls.id] && attendance[cls.id].total > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-foreground/60" />
+                          <span className="text-[10px] text-muted-foreground">
+                            {attendance[cls.id].present}/{attendance[cls.id].total} presentes hoje
+                          </span>
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </div>

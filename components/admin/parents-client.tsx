@@ -225,12 +225,13 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, delay: 0.05 }}
-          className="grid grid-cols-3 gap-3"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3"
         >
           {[
             { value: parents.length, label: 'Responsáveis' },
             { value: totalLinks, label: 'Vínculos ativos' },
             { value: parents.filter(p => p.students.some(sp => sp.isPrimary)).length, label: 'Primários' },
+            { value: parents.filter(p => p.students.length === 0).length, label: 'Sem vínculo' },
           ].map((stat) => (
             <Card key={stat.label} className="p-4">
               <span className="text-[11px] text-muted-foreground">{stat.label}</span>
@@ -292,6 +293,11 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{parent.name}</p>
+                        {parent.students.length === 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
+                            Sem vínculo
+                          </span>
+                        )}
                         {parent.students.some(sp => sp.isPrimary) && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
                             Primário

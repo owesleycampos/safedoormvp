@@ -47,24 +47,92 @@ const DAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 // ─── PDF export (print) ──────────────────────────────────────────────────────
 function exportPdf(rows: StudentRow[], dates: string[], classFilter: string) {
   const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  // Compute summary stats
+  const totalStudents = rows.length;
+  let totalWeekdays = 0;
+  let totalPresent = 0;
+  let totalAbsent = 0;
+  let totalLate = 0;
+  const freqs: number[] = [];
+
+  rows.forEach(r => {
+    const wd = dates.filter(d => r.attendance[d] !== 'weekend');
+    const pr = wd.filter(d => r.attendance[d] === 'present' || r.attendance[d] === 'late').length;
+    const late = wd.filter(d => r.attendance[d] === 'late').length;
+    const absent = wd.length - pr;
+    const freq = wd.length > 0 ? Math.round((pr / wd.length) * 100) : 0;
+    totalWeekdays += wd.length;
+    totalPresent += pr;
+    totalAbsent += absent;
+    totalLate += late;
+    freqs.push(freq);
+  });
+
+  const avgFreq = freqs.length > 0 ? Math.round(freqs.reduce((a, b) => a + b, 0) / freqs.length) : 0;
+
   const html = `<!DOCTYPE html>
 <html><head><title>Relatório de Frequência</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; margin: 20px; }
-  h1 { font-size: 16px; margin-bottom: 4px; }
-  .meta { color: #666; margin-bottom: 16px; font-size: 10px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: center; }
-  th { background: #f5f5f5; font-size: 9px; }
-  td.name { text-align: left; font-weight: 500; white-space: nowrap; }
-  .p { color: #16a34a; } .l { color: #ca8a04; } .f { color: #dc2626; }
-  .freq { font-weight: 600; }
-  @media print { body { margin: 10px; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 10px; color: #111; margin: 0; padding: 24px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #111; }
+  .logo-placeholder { width: 48px; height: 48px; border: 1.5px solid #999; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .header-text h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-text p { font-size: 10px; color: #666; margin-top: 2px; }
+
+  /* Meta info */
+  .meta-row { display: flex; gap: 24px; margin-bottom: 16px; font-size: 10px; color: #444; }
+  .meta-row strong { color: #111; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  th { background: #f5f5f5; font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; padding: 5px 4px; border: 1px solid #ddd; text-align: center; color: #333; }
+  td { border: 1px solid #e5e5e5; padding: 4px 5px; text-align: center; font-size: 10px; }
+  td.name { text-align: left; font-weight: 500; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:hover { background: #f0f0f0; }
+  .freq-bold { font-weight: 700; }
+  .freq-normal { font-weight: 400; color: #666; }
+
+  /* Summary */
+  .summary { margin-top: 8px; padding: 12px 16px; border: 1.5px solid #ddd; border-radius: 6px; background: #fafafa; }
+  .summary h3 { font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-grid { display: flex; gap: 32px; }
+  .summary-item { text-align: center; }
+  .summary-item .value { font-size: 18px; font-weight: 700; }
+  .summary-item .label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+
+  /* Footer */
+  .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 9px; color: #999; }
+
+  @media print {
+    body { margin: 10px; padding: 10px; }
+    .summary { break-inside: avoid; }
+  }
 </style></head><body>
-<h1>Relatório de Frequência</h1>
-<p class="meta">${classFilter !== 'all' ? `Turma: ${rows[0]?.className || classFilter}` : 'Todas as turmas'} · ${dates[0]} a ${dates[dates.length - 1]} · ${rows.length} alunos</p>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo-placeholder">Logo</div>
+  <div class="header-text">
+    <h1>Relatório de Frequência</h1>
+    <p>${classFilter !== 'all' ? `Turma: ${rows[0]?.className || classFilter}` : 'Todas as turmas'} · ${dates[0]} a ${dates[dates.length - 1]}</p>
+  </div>
+</div>
+
+<!-- Meta -->
+<div class="meta-row">
+  <span><strong>${totalStudents}</strong> alunos</span>
+  <span><strong>${dates.length}</strong> dias no período</span>
+  <span>Frequência média: <strong>${avgFreq}%</strong></span>
+</div>
+
+<!-- Table -->
 <table>
-<thead><tr><th style="text-align:left">Aluno</th><th>Turma</th>
+<thead><tr><th style="text-align:left; min-width: 100px;">Aluno</th><th>Turma</th>
 ${dates.map(d => {
     const dt = new Date(d + 'T12:00:00');
     return `<th>${weekdayNames[dt.getDay()]}<br>${dt.getDate()}/${dt.getMonth() + 1}</th>`;
@@ -79,12 +147,41 @@ ${rows.map(r => {
     return `<tr><td class="name">${r.name}</td><td>${r.className}</td>
 ${dates.map(d => {
       const s = r.attendance[d];
-      return `<td class="${s === 'present' ? 'p' : s === 'late' ? 'l' : s === 'absent' ? 'f' : ''}">${s === 'present' ? 'P' : s === 'late' ? 'A' : s === 'absent' ? 'F' : '—'}</td>`;
+      return `<td>${s === 'present' ? 'P' : s === 'late' ? 'A' : s === 'absent' ? 'F' : '—'}</td>`;
     }).join('')}
-<td class="freq ${freq >= 75 ? 'p' : freq >= 50 ? 'l' : 'f'}">${freq}%</td><td>${late || ''}</td></tr>`;
+<td class="${freq >= 75 ? 'freq-bold' : 'freq-normal'}">${freq}%</td><td>${late || ''}</td></tr>`;
   }).join('')}
 </tbody></table>
-<p class="meta" style="margin-top:12px">P = Presente · A = Atraso · F = Falta · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+
+<!-- Summary -->
+<div class="summary">
+  <h3>Resumo do Período</h3>
+  <div class="summary-grid">
+    <div class="summary-item">
+      <div class="value">${totalStudents}</div>
+      <div class="label">Total de Alunos</div>
+    </div>
+    <div class="summary-item">
+      <div class="value">${avgFreq}%</div>
+      <div class="label">Frequência Média</div>
+    </div>
+    <div class="summary-item">
+      <div class="value">${totalAbsent}</div>
+      <div class="label">Total de Ausências</div>
+    </div>
+    <div class="summary-item">
+      <div class="value">${totalLate}</div>
+      <div class="label">Total de Atrasos</div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span>P = Presente · A = Atraso · F = Falta</span>
+  <span>Gerado em ${new Date().toLocaleString('pt-BR')} · Safe Door Brasil</span>
+</div>
+
 </body></html>`;
 
   const w = window.open('', '_blank');

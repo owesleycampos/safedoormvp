@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     const name = formData.get('name') as string;
     const classId = formData.get('classId') as string;
     const birthDate = formData.get('birthDate') as string;
+    const notes = formData.get('notes') as string | null;
 
     if (!name || !classId) {
       return NextResponse.json({ error: 'Nome e turma são obrigatórios.' }, { status: 400 });
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
         classId,
         schoolId,
         birthDate: birthDate ? new Date(birthDate) : null,
+        ...(notes !== null && notes !== undefined ? { notes } : {}),
       },
       include: {
         class: { select: { id: true, name: true, grade: true } },

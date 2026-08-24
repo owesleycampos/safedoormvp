@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Validate webhook secret
+  // Validate webhook secret. When a secret is configured, EVERY request
+  // must authenticate — an unauthenticated request can otherwise fake a
+  // "payment confirmed" and reactivate a suspended school.
   const settings = await prisma.platformSettings.findFirst();
   const webhookSecret = settings?.webhookSecret;
 
@@ -40,12 +42,18 @@ export async function POST(req: NextRequest) {
       }
     } else if (signatureHeader) {
       const hmac = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
-      if (!crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(hmac))) {
+      const sigBuf = Buffer.from(signatureHeader);
+      const hmacBuf = Buffer.from(hmac);
+      // timingSafeEqual throws on length mismatch — a mismatched length IS an invalid signature
+      const valid = sigBuf.length === hmacBuf.length && crypto.timingSafeEqual(sigBuf, hmacBuf);
+      if (!valid) {
         await logWebhook('UNKNOWN', null, 'auth.failed', 'FAILED', rawBody, null, null, null, 'Invalid HMAC signature');
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
+    } else {
+      await logWebhook('UNKNOWN', null, 'auth.failed', 'FAILED', rawBody, null, null, null, 'Missing webhook authentication');
+      return NextResponse.json({ error: 'Missing authentication' }, { status: 401 });
     }
-    // If no secret header at all, still allow but mark as unverified
   }
 
   // Detect provider
@@ -54,6 +62,23 @@ export async function POST(req: NextRequest) {
 
   // Normalize event
   const normalized = normalizeEvent(provider, payload);
+
+  // Idempotency: a replayed webhook (gateway retry, manual replay) must not
+  // process twice — e.g. marking two invoices as paid for one payment.
+  if (normalized.externalId) {
+    const duplicate = await prisma.webhookEvent.findFirst({
+      where: {
+        provider,
+        externalId: normalized.externalId,
+        eventType: normalized.eventType,
+        status: 'PROCESSED',
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return NextResponse.json({ received: true, duplicate: true, eventId: duplicate.id });
+    }
+  }
 
   // Log the raw webhook
   const event = await logWebhook(
@@ -273,11 +298,16 @@ async function processWebhookEvent(
   let invoiceId: string | null = null;
 
   if (isPaymentConfirmed && schoolId) {
-    // Mark/create invoice as paid
-    const existingInvoice = await prisma.invoice.findFirst({
+    // Mark/create invoice as paid.
+    // Prefer an open invoice whose amount matches the payment; only fall
+    // back to the oldest open invoice when no amount matches.
+    const openInvoices = await prisma.invoice.findMany({
       where: { schoolId, status: { in: ['PENDING', 'OVERDUE'] } },
       orderBy: { dueDate: 'asc' },
     });
+    const existingInvoice =
+      (amount != null ? openInvoices.find((inv) => inv.amount === amount) : undefined) ??
+      openInvoices[0] ?? null;
 
     if (existingInvoice) {
       await prisma.invoice.update({

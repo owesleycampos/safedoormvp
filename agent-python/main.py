@@ -39,22 +39,36 @@ from api_client import ApiClient
 from sync_manager import SyncManager
 
 
-def get_event_type() -> str:
-    """Determine ENTRY or EXIT based on current time or forced mode."""
+def get_event_type(schedule: Optional[dict] = None) -> str:
+    """
+    Determine ENTRY or EXIT based on current time or forced mode.
+
+    Windows come from the SCHOOL settings synced from the server (source of
+    truth); the local .env values are only a fallback for first boot while
+    offline.
+
+    Outside both windows, the pivot is the START OF THE EXIT WINDOW, not a
+    hardcoded noon: anything before the exit window is a (late) ENTRY.
+    A student arriving at 12:30 with an 11:00–18:00 exit window is still an
+    exit-window case, but a 12:30 arrival with a 17:00 exit start correctly
+    registers as a late ENTRY instead of a bogus EXIT.
+    """
     if config.forced_mode:
         return config.forced_mode.upper()
 
-    now = datetime.now()
-    current_time = now.strftime('%H:%M')
+    entry_start = (schedule or {}).get('entryStart') or config.entry_start
+    entry_end = (schedule or {}).get('entryEnd') or config.entry_end
+    exit_start = (schedule or {}).get('exitStart') or config.exit_start
+    exit_end = (schedule or {}).get('exitEnd') or config.exit_end
 
-    if config.entry_start <= current_time <= config.entry_end:
+    current_time = datetime.now().strftime('%H:%M')
+
+    if entry_start <= current_time <= entry_end:
         return 'ENTRY'
-    elif config.exit_start <= current_time <= config.exit_end:
+    if exit_start <= current_time <= exit_end:
         return 'EXIT'
 
-    # Outside configured windows — default to ENTRY in morning, EXIT otherwise
-    hour = now.hour
-    return 'ENTRY' if hour < 12 else 'EXIT'
+    return 'ENTRY' if current_time < exit_start else 'EXIT'
 
 
 def save_frame_photo(frame: np.ndarray, student_id: Optional[str] = None) -> Optional[str]:
@@ -139,7 +153,7 @@ class SafeDoorAgent:
             logger.warning("Liveness check failed", student_id=student.id)
             return
 
-        event_type = get_event_type()
+        event_type = get_event_type(self.sync.school_schedule)
         timestamp = datetime.now()
 
         # Check daily deduplication (1 entry + 1 exit per day)
@@ -148,10 +162,11 @@ class SafeDoorAgent:
             self._last_recognition[student.id] = timestamp
             return
 
-        # Save photo
-        photo_path = None
+        # Save photo locally (audit/debug). NOT sent to the server: a
+        # tablet-local file path is not a URL the web app can render.
+        # TODO: upload to S3/Blob and send the resulting URL.
         if result.frame is not None:
-            photo_path = save_frame_photo(result.frame, student.id)
+            save_frame_photo(result.frame, student.id)
 
         # Queue/send event
         await self.sync.queue_attendance_event(
@@ -159,7 +174,7 @@ class SafeDoorAgent:
             event_type=event_type,
             confidence=result.confidence,
             timestamp=timestamp,
-            photo_url=photo_path,
+            photo_url=None,
         )
 
         self._last_recognition[student.id] = timestamp
@@ -190,16 +205,14 @@ class SafeDoorAgent:
 
         # Only log if there's some confidence (actual face detected, not random)
         if result.confidence > 0.3:  # Some resemblance but below threshold
-            photo_path = None
+            # Save locally for review on the device. The server requires an
+            # accessible URL for review photos, so we don't push a local
+            # file path — it would render as a broken image in the admin UI.
+            # TODO: upload to S3/Blob, then queue_unrecognized_log(url).
             if result.frame is not None:
                 photo_path = save_frame_photo(result.frame, None)
-
-            if photo_path:
-                await self.sync.queue_unrecognized_log(
-                    photo_url=photo_path,
-                    confidence=result.confidence,
-                    timestamp=datetime.now(),
-                )
+                if photo_path:
+                    logger.info("Unrecognized face saved locally", path=photo_path)
 
     async def run_camera_loop(self):
         """Main camera capture and processing loop."""

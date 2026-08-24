@@ -44,11 +44,28 @@ export async function ensureCollection(collectionId: string): Promise<void> {
 /**
  * Delete all indexed faces for a student (identified by ExternalImageId = studentId).
  * Used before re-enrolling so stale faces don't accumulate.
+ *
+ * Fast path: when the caller has the student's stored FaceIds
+ * (Student.rekognitionFaceIds), delete them directly — one API call.
+ * Fallback: paginate the whole collection filtering by ExternalImageId
+ * (needed for students enrolled before FaceIds were stored).
  */
 export async function deleteFacesForStudent(
   collectionId: string,
-  studentId: string
+  studentId: string,
+  knownFaceIds?: string[]
 ): Promise<number> {
+  if (knownFaceIds && knownFaceIds.length > 0) {
+    try {
+      await getClient().send(
+        new DeleteFacesCommand({ CollectionId: collectionId, FaceIds: knownFaceIds })
+      );
+      return knownFaceIds.length;
+    } catch {
+      // Stale ids (collection recreated etc.) — fall through to the full scan
+    }
+  }
+
   const faceIds: string[] = [];
   let nextToken: string | undefined;
 
@@ -123,7 +140,8 @@ export interface FaceSearchResult {
  */
 export async function searchFacesByImage(
   collectionId: string,
-  imageBuffer: Buffer
+  imageBuffer: Buffer,
+  faceMatchThreshold: number = 70
 ): Promise<FaceSearchResult> {
   try {
     const res = await getClient().send(
@@ -131,7 +149,7 @@ export async function searchFacesByImage(
         CollectionId: collectionId,
         Image: { Bytes: imageBuffer },
         MaxFaces: 5,
-        FaceMatchThreshold: 70,
+        FaceMatchThreshold: faceMatchThreshold,
       })
     );
 

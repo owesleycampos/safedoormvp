@@ -28,16 +28,18 @@ class SyncManager:
         self._sync_task: Optional[asyncio.Task] = None
         self._device_id: Optional[str] = None
         self._school_id: Optional[str] = None
+        # School schedule synced from the server (source of truth for
+        # ENTRY/EXIT classification). None until the first successful sync.
+        self.school_schedule: Optional[dict] = None
 
     def set_device_info(self, device_id: str, school_id: str):
         self._device_id = device_id
         self._school_id = school_id
 
     async def check_connectivity(self) -> bool:
-        """Ping the server to check if we're online."""
+        """Lightweight ping — does NOT download the face-vector payload."""
         try:
-            data = await self.api.sync_face_vectors()
-            self._is_online = data is not None
+            self._is_online = await self.api.ping()
         except Exception:
             self._is_online = False
         return self._is_online
@@ -62,6 +64,8 @@ class SyncManager:
             self._device_id = data['deviceId']
         if data.get('schoolId'):
             self._school_id = data['schoolId']
+        if data.get('settings'):
+            self.school_schedule = data['settings']
 
         students = data.get('students', [])
 
@@ -169,12 +173,18 @@ class SyncManager:
                 self.db.increment_event_attempts(event['id'], "Failed to sync")
                 failed += 1
 
-        # Flush unrecognized logs
+        # Flush unrecognized logs. The server only accepts accessible URLs;
+        # legacy queue entries holding tablet-local file paths are dropped
+        # (marked synced) instead of retrying a guaranteed 400 forever.
         for log in self.db.get_pending_unrecognized():
+            photo_url = log['photo_url'] or ''
+            if not photo_url.startswith(('http://', 'https://')):
+                self.db.mark_unrecognized_synced(log['id'])
+                continue
             success = await self.api.send_unrecognized_log(
                 school_id=log['school_id'],
                 device_id=log['device_id'],
-                photo_url=log['photo_url'],
+                photo_url=photo_url,
                 confidence_score=log['confidence'],
                 timestamp=datetime.fromisoformat(log['timestamp']),
             )

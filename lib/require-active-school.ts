@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 /**
- * Validates that the current session belongs to an ADMIN of an ACTIVE school.
+ * Validates that the current session belongs to an ADMIN of an operational
+ * school: not SUSPENDED, not CANCELLED, and not a TRIAL past trialEndsAt.
  * Returns { session, schoolId } on success, or a NextResponse error.
  */
 export async function requireActiveSchool() {
@@ -20,11 +21,22 @@ export async function requireActiveSchool() {
 
   const school = await prisma.school.findUnique({
     where: { id: schoolId },
-    select: { status: true },
+    select: {
+      status: true,
+      subscription: { select: { trialEndsAt: true } },
+    },
   });
 
   if (!school || school.status === 'SUSPENDED' || school.status === 'CANCELLED') {
     return { error: NextResponse.json({ error: 'Escola suspensa ou cancelada' }, { status: 403 }) };
+  }
+
+  if (
+    school.status === 'TRIAL' &&
+    school.subscription?.trialEndsAt != null &&
+    school.subscription.trialEndsAt < new Date()
+  ) {
+    return { error: NextResponse.json({ error: 'Período de teste expirado' }, { status: 403 }) };
   }
 
   return { session, schoolId };

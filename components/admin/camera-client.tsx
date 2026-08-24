@@ -49,6 +49,7 @@ export function CameraClient() {
   const [isScanning, setIsScanning] = useState(false);
   const [rekognitionConfigured, setRekognitionConfigured] = useState<boolean | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [suggestedMode, setSuggestedMode] = useState<'ENTRY' | 'EXIT' | null>(null);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -56,6 +57,22 @@ export function CameraClient() {
     fetch('/api/camera/recognize')
       .then((r) => setRekognitionConfigured(r.ok || r.status !== 503))
       .catch(() => setRekognitionConfigured(false));
+  }, []);
+
+  // Suggest the mode from the school's configured windows, so an operator
+  // who forgot to flip ENTRADA→SAÍDA in the afternoon gets a visible nudge.
+  useEffect(() => {
+    fetch('/api/school/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (!s) return;
+        const now = new Date().toTimeString().slice(0, 5); // device local HH:MM
+        const suggested: 'ENTRY' | 'EXIT' =
+          now >= (s.exitStartTime ?? '11:00') ? 'EXIT' : 'ENTRY';
+        setSuggestedMode(suggested);
+        setMode(suggested);
+      })
+      .catch(() => {});
   }, []);
 
   const registerAttendance = useCallback((match: FaceMatch) => {
@@ -182,20 +199,32 @@ export function CameraClient() {
         <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs sm:max-w-sm">
           <button
             onClick={() => { setMode('ENTRY'); setModeChosen(true); }}
-            className="flex-1 flex flex-col items-center gap-3 rounded-lg border border-border hover:bg-accent active:scale-[0.98] transition-all p-6"
+            className={cn(
+              'flex-1 flex flex-col items-center gap-3 rounded-lg border hover:bg-accent active:scale-[0.98] transition-all p-6',
+              suggestedMode === 'ENTRY' ? 'border-foreground' : 'border-border'
+            )}
           >
             <LogIn className="h-8 w-8 text-foreground" strokeWidth={1.5} />
             <span className="text-sm font-semibold">ENTRADA</span>
             <span className="text-[11px] text-muted-foreground text-center">Registrar chegada dos alunos</span>
+            {suggestedMode === 'ENTRY' && (
+              <span className="text-[10px] font-medium uppercase tracking-wide">Sugerido para este horário</span>
+            )}
           </button>
 
           <button
             onClick={() => { setMode('EXIT'); setModeChosen(true); }}
-            className="flex-1 flex flex-col items-center gap-3 rounded-lg border border-border hover:bg-accent active:scale-[0.98] transition-all p-6"
+            className={cn(
+              'flex-1 flex flex-col items-center gap-3 rounded-lg border hover:bg-accent active:scale-[0.98] transition-all p-6',
+              suggestedMode === 'EXIT' ? 'border-foreground' : 'border-border'
+            )}
           >
             <LogOut className="h-8 w-8 text-foreground" strokeWidth={1.5} />
             <span className="text-sm font-semibold">SAÍDA</span>
             <span className="text-[11px] text-muted-foreground text-center">Registrar saída dos alunos</span>
+            {suggestedMode === 'EXIT' && (
+              <span className="text-[10px] font-medium uppercase tracking-wide">Sugerido para este horário</span>
+            )}
           </button>
         </div>
 

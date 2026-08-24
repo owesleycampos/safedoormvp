@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
+import { getSchoolTimezone } from '@/lib/school-tz';
+import {
+  addDaysStr, dayRangeForDateStr, isWeekendDateStr, localDateStr,
+} from '@/lib/timezone';
 
 /**
  * GET /api/dashboard/stats?classId=xxx
  * Returns live dashboard data for client-side polling.
+ * All day boundaries are in the SCHOOL's timezone.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId as string;
+  const schoolId = auth.schoolId;
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId') || undefined;
   const periodParam = searchParams.get('period') || 'today'; // today | 7d | 30d | custom
@@ -21,33 +23,38 @@ export async function GET(req: NextRequest) {
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tz = await getSchoolTimezone(schoolId);
+  const todayStr = localDateStr(new Date(), tz);
+  const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
   // KPI date range — always today when period=today
-  let rangeStart = new Date(today);
-  let rangeEnd = new Date(tomorrow);
+  let rangeStartStr = todayStr;
+  let rangeEndStr = todayStr; // inclusive
 
   if (periodParam === '7d') {
-    rangeStart.setDate(rangeStart.getDate() - 6);
+    rangeStartStr = addDaysStr(todayStr, -6);
   } else if (periodParam === '30d') {
-    rangeStart.setDate(rangeStart.getDate() - 29);
-  } else if (periodParam === 'custom' && fromParam && toParam) {
-    rangeStart = new Date(fromParam + 'T00:00:00');
-    rangeEnd = new Date(toParam + 'T00:00:00');
-    rangeEnd.setDate(rangeEnd.getDate() + 1);
+    rangeStartStr = addDaysStr(todayStr, -29);
+  } else if (periodParam === 'custom' && isDate(fromParam) && isDate(toParam)) {
+    rangeStartStr = fromParam;
+    rangeEndStr = toParam;
+    if (rangeStartStr > rangeEndStr) [rangeStartStr, rangeEndStr] = [rangeEndStr, rangeStartStr];
   }
-  // for 'today', rangeStart = today, rangeEnd = tomorrow (default)
+
+  const rangeStart = dayRangeForDateStr(rangeStartStr, tz).start;
+  const rangeEnd = dayRangeForDateStr(rangeEndStr, tz).end;
 
   const studentWhere = { schoolId, isActive: true, ...(classId ? { classId } : {}) };
 
-  // Trend data — uses trendDays param independently from KPI period
+  // Trend window — independent from the KPI period, ends at the KPI end
   const trendDays = trendDaysParam ? parseInt(trendDaysParam, 10) : 7;
-  const trendStart = (() => { const d = new Date(today); d.setDate(d.getDate() - (trendDays - 1)); return d; })();
+  const trendStartStr = addDaysStr(rangeEndStr, -(trendDays - 1));
+  const trendStart = dayRangeForDateStr(trendStartStr, tz).start;
+  // Entry-event fetch must cover BOTH the trend window and the KPI range so
+  // avg-stay pairing never misses entries outside the trend window.
+  const entryFetchStart = trendStart < rangeStart ? trendStart : rangeStart;
 
-  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, classes, trendEvents, lateEvents] = await Promise.all([
+  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, classes, entryEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
       where: {
@@ -81,11 +88,11 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    // Trend: entries per day for range
+    // Entries covering trend window + KPI range (for trend AND avg-stay)
     prisma.attendanceEvent.findMany({
       where: {
         student: studentWhere,
-        timestamp: { gte: trendStart, lt: rangeEnd },
+        timestamp: { gte: entryFetchStart, lt: rangeEnd },
         eventType: 'ENTRY',
       },
       select: { studentId: true, timestamp: true },
@@ -103,29 +110,23 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  // Build trend (day by day from trendStart to rangeEnd-1)
+  // Build trend (day by day, school-local days)
   const trend: { date: string; present: number; total: number }[] = [];
-  const trendEndDate = new Date(rangeEnd);
-  trendEndDate.setDate(trendEndDate.getDate() - 1);
-  const numDays = Math.round((trendEndDate.getTime() - trendStart.getTime()) / 86400000) + 1;
-  for (let i = 0; i < numDays; i++) {
-    const d = new Date(trendStart);
-    d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
-    const dayOfWeek = d.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      trend.push({ date: dateStr, present: 0, total: 0 });
+  const entriesByDay = new Map<string, Set<string>>();
+  for (const e of entryEvents) {
+    const day = localDateStr(e.timestamp, tz);
+    if (!entriesByDay.has(day)) entriesByDay.set(day, new Set());
+    entriesByDay.get(day)!.add(e.studentId);
+  }
+  for (let d = trendStartStr; d <= rangeEndStr; d = addDaysStr(d, 1)) {
+    if (isWeekendDateStr(d)) {
+      trend.push({ date: d, present: 0, total: 0 });
       continue;
     }
-    const uniqueStudents = new Set(
-      trendEvents
-        .filter(e => e.timestamp.toISOString().slice(0, 10) === dateStr)
-        .map(e => e.studentId)
-    );
-    trend.push({ date: dateStr, present: uniqueStudents.size, total: totalStudents });
+    trend.push({ date: d, present: entriesByDay.get(d)?.size ?? 0, total: totalStudents });
   }
 
-  // Average stay time in range (students who have both entry and exit)
+  // Average stay time in range (students who have both entry and exit that day)
   const rangeExits = await prisma.attendanceEvent.findMany({
     where: {
       student: studentWhere,
@@ -135,16 +136,19 @@ export async function GET(req: NextRequest) {
     select: { studentId: true, timestamp: true },
   });
 
-  const entryMap = new Map(
-    trendEvents
-      .filter(e => e.timestamp >= rangeStart && e.timestamp < rangeEnd)
-      .map(e => [e.studentId + '_' + e.timestamp.toISOString().slice(0, 10), e.timestamp])
-  );
+  const entryMap = new Map<string, Date>();
+  for (const e of entryEvents) {
+    if (e.timestamp >= rangeStart && e.timestamp < rangeEnd) {
+      const key = e.studentId + '_' + localDateStr(e.timestamp, tz);
+      const existing = entryMap.get(key);
+      if (!existing || e.timestamp < existing) entryMap.set(key, e.timestamp); // first entry of the day
+    }
+  }
 
   let totalMinutes = 0;
   let stayCount = 0;
   for (const exit of rangeExits) {
-    const key = exit.studentId + '_' + exit.timestamp.toISOString().slice(0, 10);
+    const key = exit.studentId + '_' + localDateStr(exit.timestamp, tz);
     const entry = entryMap.get(key);
     if (entry) {
       const diff = (exit.timestamp.getTime() - entry.getTime()) / 60000;

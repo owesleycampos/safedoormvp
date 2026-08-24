@@ -1,48 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
+import { getSchoolTimezone } from '@/lib/school-tz';
+import {
+  addDaysStr, dayRangeForDateStr, isWeekendDateStr, localDateStr,
+} from '@/lib/timezone';
 
 /**
  * GET /api/reports/alerts?classId=xxx&days=30
  *
- * Frequency alerts report (Alerta de Infrequencia - LDB Art. 12).
+ * Frequency alerts report (Alerta de Infrequência — LDB Art. 12).
  * Returns students whose absence rate >= 25% over the given period.
- * Brazilian law (LDB) requires schools to report students who miss 25%+ of classes.
+ *
+ * Rationality of the denominator:
+ *  - Days are calendar days in the SCHOOL's timezone.
+ *  - Today is excluded — a day still in progress can't count as a full
+ *    absence for students who simply haven't arrived yet.
+ *  - A weekday only counts as a SCHOOL day if at least one student of the
+ *    school registered an ENTRY that day. Holidays, vacations and strike
+ *    days therefore don't inflate anyone's absence rate.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId as string;
+  const schoolId = auth.schoolId;
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId');
-  const days = Math.max(1, parseInt(searchParams.get('days') || '30', 10));
+  const days = Math.min(365, Math.max(1, parseInt(searchParams.get('days') || '30', 10)));
 
-  // Calculate date range
-  const endDate = new Date();
-  endDate.setHours(23, 59, 59, 999);
+  const tz = await getSchoolTimezone(schoolId);
+  const todayStr = localDateStr(new Date(), tz);
+  const endStr = addDaysStr(todayStr, -1); // exclude the day in progress
+  const startStr = addDaysStr(endStr, -(days - 1));
 
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
-
-  // Count weekdays in the period (Mon-Fri)
-  let totalWeekdays = 0;
-  const cursor = new Date(startDate);
-  while (cursor <= endDate) {
-    const dow = cursor.getDay();
-    if (dow >= 1 && dow <= 5) {
-      totalWeekdays++;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  if (totalWeekdays === 0) {
-    return NextResponse.json({ days, totalWeekdays: 0, alerts: [] });
-  }
+  const rangeStart = dayRangeForDateStr(startStr, tz).start;
+  const rangeEnd = dayRangeForDateStr(endStr, tz).end;
 
   // Get active students (optionally filtered by class)
   const students = await prisma.student.findMany({
@@ -59,13 +52,13 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Get all ENTRY events in the period for these students
-  // A student is considered present on a day if they have at least one ENTRY event
+  // ALL entry events of the school in the period (not class-filtered):
+  // they define which days were actual school days.
   const entryEvents = await prisma.attendanceEvent.findMany({
     where: {
-      student: { schoolId, isActive: true, ...(classId ? { classId } : {}) },
+      student: { schoolId, isActive: true },
       eventType: 'ENTRY',
-      timestamp: { gte: startDate, lte: endDate },
+      timestamp: { gte: rangeStart, lt: rangeEnd },
     },
     select: {
       studentId: true,
@@ -73,18 +66,31 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Build set of present days per student (using date string as key)
+  // School days = weekdays with at least one entry; presence per student per day
+  const schoolDays = new Set<string>();
   const presentDaysMap = new Map<string, Set<string>>();
   for (const ev of entryEvents) {
-    const dateKey = ev.timestamp.toISOString().slice(0, 10);
-    // Only count weekdays
-    const dow = ev.timestamp.getDay();
-    if (dow < 1 || dow > 5) continue;
+    const dateKey = localDateStr(ev.timestamp, tz);
+    if (isWeekendDateStr(dateKey)) continue;
 
+    schoolDays.add(dateKey);
     if (!presentDaysMap.has(ev.studentId)) {
       presentDaysMap.set(ev.studentId, new Set());
     }
     presentDaysMap.get(ev.studentId)!.add(dateKey);
+  }
+
+  const totalSchoolDays = schoolDays.size;
+  if (totalSchoolDays === 0) {
+    return NextResponse.json({
+      days,
+      totalWeekdays: 0,
+      startDate: startStr,
+      endDate: endStr,
+      totalStudents: students.length,
+      alertCount: 0,
+      alerts: [],
+    });
   }
 
   // Calculate absence rate for each student
@@ -101,8 +107,8 @@ export async function GET(req: NextRequest) {
 
   for (const student of students) {
     const presentDays = presentDaysMap.get(student.id)?.size ?? 0;
-    const absentDays = totalWeekdays - presentDays;
-    const absenceRate = Math.round((absentDays / totalWeekdays) * 10000) / 100; // e.g. 33.33
+    const absentDays = totalSchoolDays - presentDays;
+    const absenceRate = Math.round((absentDays / totalSchoolDays) * 10000) / 100; // e.g. 33.33
 
     if (absenceRate >= 25) {
       alerts.push({
@@ -110,7 +116,7 @@ export async function GET(req: NextRequest) {
         name: student.name,
         className: student.class?.name ?? '',
         photoUrl: student.photoUrl,
-        totalDays: totalWeekdays,
+        totalDays: totalSchoolDays,
         absentDays,
         absenceRate,
         status: absenceRate >= 50 ? 'critical' : 'warning',
@@ -123,9 +129,9 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     days,
-    totalWeekdays,
-    startDate: startDate.toISOString().slice(0, 10),
-    endDate: endDate.toISOString().slice(0, 10),
+    totalWeekdays: totalSchoolDays,
+    startDate: startStr,
+    endDate: endStr,
     totalStudents: students.length,
     alertCount: alerts.length,
     alerts,

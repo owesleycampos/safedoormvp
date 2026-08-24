@@ -1,31 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
+import { getSchoolTimezone } from '@/lib/school-tz';
+import { dayRangeForDateStr, localDateStr } from '@/lib/timezone';
 
 /**
  * GET /api/reports/daily?date=YYYY-MM-DD&classId=xxx
  *
  * Daily attendance report for teachers.
- * Returns all students in a class with entry/exit times, or absent status.
+ * "Day" means the calendar day in the SCHOOL's timezone.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId as string;
+  const schoolId = auth.schoolId;
   const { searchParams } = new URL(req.url);
   const dateStr = searchParams.get('date');
   const classId = searchParams.get('classId');
 
-  // Default to today
-  const date = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
-  date.setHours(0, 0, 0, 0);
-
-  const dayEnd = new Date(date);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  const tz = await getSchoolTimezone(schoolId);
+  const targetDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? dateStr
+    : localDateStr(new Date(), tz);
+  const day = dayRangeForDateStr(targetDate, tz);
 
   // Get students (optionally filtered by class)
   const students = await prisma.student.findMany({
@@ -43,11 +41,11 @@ export async function GET(req: NextRequest) {
     orderBy: [{ class: { name: 'asc' } }, { name: 'asc' }],
   });
 
-  // Get all events for the day
+  // Get all events for the (school-local) day
   const events = await prisma.attendanceEvent.findMany({
     where: {
       student: { schoolId, ...(classId ? { classId } : {}) },
-      timestamp: { gte: date, lt: dayEnd },
+      timestamp: { gte: day.start, lt: day.end },
     },
     select: {
       id: true,
@@ -101,13 +99,17 @@ export async function GET(req: NextRequest) {
 
   const rows = students.map((s) => {
     const ev = eventMap.get(s.id);
-    let status: 'present' | 'absent' | 'left' | 'entry_only';
-    if (!ev || !ev.entry) {
+    // exit_only = an EXIT exists with no ENTRY — an inconsistency worth
+    // surfacing (wrong camera mode, entry never captured), NOT an absence.
+    let status: 'present' | 'absent' | 'left' | 'entry_only' | 'exit_only';
+    if (!ev || (!ev.entry && !ev.exit)) {
       status = 'absent';
     } else if (ev.entry && ev.exit) {
       status = 'left';
-    } else {
+    } else if (ev.entry) {
       status = 'entry_only';
+    } else {
+      status = 'exit_only';
     }
 
     return {
@@ -134,10 +136,11 @@ export async function GET(req: NextRequest) {
   const absent = rows.filter((r) => r.status === 'absent').length;
   const left = rows.filter((r) => r.status === 'left').length;
   const entryOnly = rows.filter((r) => r.status === 'entry_only').length;
+  const exitOnly = rows.filter((r) => r.status === 'exit_only').length;
 
   return NextResponse.json({
-    date: date.toISOString().slice(0, 10),
-    summary: { total: rows.length, present, absent, left, entryOnly },
+    date: targetDate,
+    summary: { total: rows.length, present, absent, left, entryOnly, exitOnly },
     students: rows,
   });
 }

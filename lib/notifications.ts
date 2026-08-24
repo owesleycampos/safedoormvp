@@ -24,12 +24,14 @@ export interface NotificationPayload {
 }
 
 /**
- * Send push notification to all parents of a student
+ * Send push notification to all parents of a student.
+ * Returns the number of pushes actually accepted by the push service,
+ * so callers can record whether anyone was really notified.
  */
 export async function notifyParentsOfStudent(
   studentId: string,
   payload: NotificationPayload
-): Promise<void> {
+): Promise<number> {
   const studentParents = await prisma.studentParent.findMany({
     where: { studentId },
     include: {
@@ -41,7 +43,7 @@ export async function notifyParentsOfStudent(
     },
   });
 
-  const sendPromises: Promise<void>[] = [];
+  const sendPromises: Promise<boolean>[] = [];
 
   for (const sp of studentParents) {
     for (const sub of sp.parent.pushSubscriptions) {
@@ -58,17 +60,18 @@ export async function notifyParentsOfStudent(
     }
   }
 
-  await Promise.allSettled(sendPromises);
+  const results = await Promise.allSettled(sendPromises);
+  return results.filter((r) => r.status === 'fulfilled' && r.value).length;
 }
 
 /**
- * Send a single push notification
+ * Send a single push notification. Returns true if accepted.
  */
 async function sendPushNotification(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: NotificationPayload,
   subscriptionId: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     await webpush.sendNotification(
       subscription,
@@ -82,6 +85,7 @@ async function sendPushNotification(
         requireInteraction: payload.requireInteraction || false,
       })
     );
+    return true;
   } catch (error: any) {
     // Remove invalid subscriptions (410 Gone, 404 Not Found)
     if (error.statusCode === 410 || error.statusCode === 404) {
@@ -90,6 +94,7 @@ async function sendPushNotification(
       }).catch(() => {});
     }
     console.error(`Push notification failed for ${subscriptionId}:`, error.message);
+    return false;
   }
 }
 

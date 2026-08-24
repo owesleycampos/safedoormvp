@@ -7,6 +7,12 @@ KEY_A="test-device-key-escola-a"
 TODAY="2026-08-24"
 
 sql0() { docker exec safedoor-test-db psql -U postgres -d safedoor_test -tAc "$1"; }
+
+# Limpa os dados transacionais para a suíte ser repetível. Sem isto, uma
+# segunda execução vê os eventos da primeira e o dedup responde 200 (updated)
+# onde o teste espera 201 (created) — falha do teste, não do sistema.
+sql0 'TRUNCATE "AttendanceEvent", "Invoice", "WebhookEvent", "AuditLog" CASCADE;' >/dev/null
+sql0 "UPDATE \"Subscription\" SET status='ACTIVE';" >/dev/null 2>&1
 JOAO=$(sql0 "SELECT id FROM \"Student\" WHERE name LIKE 'João%'")
 MARIA=$(sql0 "SELECT id FROM \"Student\" WHERE name LIKE 'Maria%'")
 PEDRO=$(sql0 "SELECT id FROM \"Student\" WHERE name LIKE 'Pedro%'")

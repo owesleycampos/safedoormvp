@@ -59,11 +59,18 @@ export async function POST(
     await rekognition.ensureCollection(collectionId);
 
     // ── 2. Remove previous faces for this student (clean re-enroll) ───────
-    await rekognition.deleteFacesForStudent(collectionId, studentId);
+    // Stored FaceIds make this a single DeleteFaces call instead of a
+    // full-collection scan; the scan remains as fallback for legacy enrolls.
+    let knownFaceIds: string[] = [];
+    try {
+      knownFaceIds = student.rekognitionFaceIds ? JSON.parse(student.rekognitionFaceIds) : [];
+    } catch { /* corrupt JSON — fall back to scan */ }
+    await rekognition.deleteFacesForStudent(collectionId, studentId, knownFaceIds);
 
     // ── 3. Index each photo ────────────────────────────────────────────────
     let facesAdded = 0;
     let skippedPhotos = 0;
+    const newFaceIds: string[] = [];
 
     for (const photo of student.photos) {
       // Fetch the image bytes from the URL (Vercel Blob or any HTTPS URL)
@@ -80,6 +87,7 @@ export async function POST(
       const faceIds = await rekognition.indexFace(collectionId, imageBuffer, studentId);
       if (faceIds.length > 0) {
         facesAdded++;
+        newFaceIds.push(...faceIds);
       } else {
         skippedPhotos++;
       }
@@ -102,6 +110,7 @@ export async function POST(
       where: { id: studentId },
       data: {
         azurePersonId: studentId,        // marks as enrolled; ExternalImageId = studentId in Rekognition
+        rekognitionFaceIds: JSON.stringify(newFaceIds),
         faceVector: null,                // legacy field no longer needed
         faceVectorVersion: { increment: 1 },
         recognitionEnabled: true,

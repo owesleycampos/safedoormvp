@@ -19,17 +19,30 @@ export async function GET(req: NextRequest) {
     data: { lastSeen: new Date(), status: 'ONLINE' },
   }).catch(() => {});
 
-  const students = await prisma.student.findMany({
-    where: { schoolId: device.schoolId, isActive: true },
-    select: {
-      id: true,
-      name: true,
-      photoUrl: true,
-      faceVector: true,
-      faceVectorVersion: true,
-      class: { select: { name: true } },
-    },
-  });
+  const [students, settings] = await Promise.all([
+    prisma.student.findMany({
+      where: { schoolId: device.schoolId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        photoUrl: true,
+        faceVector: true,
+        faceVectorVersion: true,
+        class: { select: { name: true } },
+      },
+    }),
+    prisma.schoolSettings.findUnique({
+      where: { schoolId: device.schoolId },
+      select: {
+        entryStartTime: true,
+        entryEndTime: true,
+        exitStartTime: true,
+        exitEndTime: true,
+        timezone: true,
+        minConfidence: true,
+      },
+    }),
+  ]);
 
   // Send faceVector as base64 for the Python agent to decode
   const data = students.map((s) => ({
@@ -45,6 +58,18 @@ export async function GET(req: NextRequest) {
     deviceId: device.id,
     schoolId: device.schoolId,
     students: data,
+    // School schedule so the agent classifies ENTRY/EXIT with the SCHOOL's
+    // configuration instead of stale values baked into its local .env.
+    settings: settings
+      ? {
+          entryStart: settings.entryStartTime,
+          entryEnd: settings.entryEndTime,
+          exitStart: settings.exitStartTime,
+          exitEnd: settings.exitEndTime,
+          timezone: settings.timezone,
+          minConfidence: settings.minConfidence,
+        }
+      : null,
     syncedAt: new Date().toISOString(),
   });
 }

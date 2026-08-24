@@ -208,6 +208,7 @@ model Student {
   faceVector        Bytes?            // Legacy: browser face-api.js embedding (128 × float32)
   faceVectorVersion Int               @default(1)
   azurePersonId     String?           // AWS Rekognition enrollment marker (stores studentId)
+  rekognitionFaceIds String?          @db.Text // JSON array of Rekognition FaceIds for O(1) re-enroll cleanup
   isActive          Boolean           @default(true)
   recognitionEnabled Boolean          @default(true)
   notes             String?           @db.Text
@@ -278,6 +279,9 @@ model AttendanceEvent {
   period     Int?
   timestamp  DateTime @default(now())
   eventType  String   // "ENTRY" | "EXIT"
+  // Calendar day ("YYYY-MM-DD") in the school's timezone. Backfilled lazily:
+  // legacy rows have null (Postgres allows multiple nulls in a unique index).
+  dayKey     String?
   photoUrl   String?
   confidence Float?
   isManual   Boolean  @default(false)
@@ -286,6 +290,7 @@ model AttendanceEvent {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@unique([studentId, eventType, dayKey])
   @@index([studentId, timestamp])
   @@index([deviceId, timestamp])
   @@index([subjectId])

@@ -27,6 +27,12 @@ interface SchoolForm {
   contactPhone: string;
 }
 
+interface ShiftScheduleForm {
+  entry: string;
+  entryLimit: string;
+  exit: string;
+}
+
 interface SettingsForm {
   entryStartTime: string;
   entryEndTime: string;
@@ -36,7 +42,22 @@ interface SettingsForm {
   notifyOnEntry: boolean;
   notifyOnExit: boolean;
   timezone: string;
+  shiftSchedules: Record<string, ShiftScheduleForm>;
 }
+
+const SHIFT_LABELS: Record<string, string> = {
+  MANHA: 'Manhã',
+  TARDE: 'Tarde',
+  NOITE: 'Noite',
+  INTEGRAL: 'Integral',
+};
+
+const DEFAULT_SHIFT_SCHEDULES: Record<string, ShiftScheduleForm> = {
+  MANHA:    { entry: '07:00', entryLimit: '07:30', exit: '12:00' },
+  TARDE:    { entry: '13:00', entryLimit: '13:30', exit: '17:30' },
+  NOITE:    { entry: '18:30', entryLimit: '19:00', exit: '22:00' },
+  INTEGRAL: { entry: '07:00', entryLimit: '07:30', exit: '17:30' },
+};
 
 const INITIAL_SCHOOL: SchoolForm = {
   name: '',
@@ -57,6 +78,7 @@ const INITIAL_SETTINGS: SettingsForm = {
   notifyOnEntry: true,
   notifyOnExit: true,
   timezone: 'America/Sao_Paulo',
+  shiftSchedules: { ...DEFAULT_SHIFT_SCHEDULES },
 };
 
 const TIMEZONES = [
@@ -179,6 +201,12 @@ export default function SettingsPage() {
         }
         if (settingsRes.ok) {
           const data = await settingsRes.json();
+          let shiftSchedules = { ...DEFAULT_SHIFT_SCHEDULES };
+          if (data.shiftSchedules) {
+            try {
+              shiftSchedules = { ...shiftSchedules, ...JSON.parse(data.shiftSchedules) };
+            } catch { /* keep defaults */ }
+          }
           setSettings({
             entryStartTime: data.entryStartTime ?? '06:00',
             entryEndTime: data.entryEndTime ?? '09:00',
@@ -188,6 +216,7 @@ export default function SettingsPage() {
             notifyOnEntry: data.notifyOnEntry ?? true,
             notifyOnExit: data.notifyOnExit ?? true,
             timezone: data.timezone ?? 'America/Sao_Paulo',
+            shiftSchedules,
           });
         }
       } catch {
@@ -520,6 +549,73 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-foreground" />
+                        Horários por Turno
+                      </CardTitle>
+                      <CardDescription>
+                        Turmas com turno definido usam estes horários para marcar atraso e saída
+                        antecipada. Turmas sem turno usam as janelas gerais acima.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      {Object.keys(SHIFT_LABELS).map((shift) => (
+                        <div key={shift}>
+                          <p className="text-sm font-semibold mb-2">{SHIFT_LABELS[shift]}</p>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor={`shift-${shift}-entry`} className="text-xs">Entrada</Label>
+                              <Input
+                                id={`shift-${shift}-entry`}
+                                type="time"
+                                value={settings.shiftSchedules[shift]?.entry ?? ''}
+                                onChange={(e) => setSettings((s) => ({
+                                  ...s,
+                                  shiftSchedules: {
+                                    ...s.shiftSchedules,
+                                    [shift]: { ...s.shiftSchedules[shift], entry: e.target.value },
+                                  },
+                                }))}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor={`shift-${shift}-limit`} className="text-xs">Tolerância (atraso após)</Label>
+                              <Input
+                                id={`shift-${shift}-limit`}
+                                type="time"
+                                value={settings.shiftSchedules[shift]?.entryLimit ?? ''}
+                                onChange={(e) => setSettings((s) => ({
+                                  ...s,
+                                  shiftSchedules: {
+                                    ...s.shiftSchedules,
+                                    [shift]: { ...s.shiftSchedules[shift], entryLimit: e.target.value },
+                                  },
+                                }))}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor={`shift-${shift}-exit`} className="text-xs">Saída (antecipada antes de)</Label>
+                              <Input
+                                id={`shift-${shift}-exit`}
+                                type="time"
+                                value={settings.shiftSchedules[shift]?.exit ?? ''}
+                                onChange={(e) => setSettings((s) => ({
+                                  ...s,
+                                  shiftSchedules: {
+                                    ...s.shiftSchedules,
+                                    [shift]: { ...s.shiftSchedules[shift], exit: e.target.value },
+                                  },
+                                }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </CardContent>
                   </Card>
 

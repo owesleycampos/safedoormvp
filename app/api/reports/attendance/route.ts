@@ -1,40 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
+import { getSchoolTimezone } from '@/lib/school-tz';
+import {
+  addDaysStr, dayRangeForDateStr, isWeekendDateStr, localDateStr,
+} from '@/lib/timezone';
 
 /**
  * GET /api/reports/attendance?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Returns students with their attendance status for each day in the range.
- * Max range: 60 days.
+ * Days are calendar days in the SCHOOL's timezone. Max range: 60 days.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const schoolId = (session.user as any)?.schoolId as string;
+  const schoolId = auth.schoolId;
   const { searchParams } = new URL(req.url);
 
-  const fromStr = searchParams.get('from');
-  const toStr   = searchParams.get('to');
+  const tz = await getSchoolTimezone(schoolId);
+  const todayStr = localDateStr(new Date(), tz);
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
 
-  const fromDate = fromStr ? new Date(fromStr + 'T00:00:00') : new Date(Date.now() - 6 * 86400000);
-  fromDate.setHours(0, 0, 0, 0);
+  let toStr = isDate(toParam) ? toParam : todayStr;
+  let fromStr = isDate(fromParam) ? fromParam : addDaysStr(toStr, -6);
 
-  const toDate = toStr ? new Date(toStr + 'T23:59:59') : today;
-  toDate.setHours(23, 59, 59, 999);
+  if (fromStr > toStr) [fromStr, toStr] = [toStr, fromStr];
 
   // Clamp range to 60 days
-  const maxMs = 60 * 86400000;
-  const clampedFrom = toDate.getTime() - fromDate.getTime() > maxMs
-    ? new Date(toDate.getTime() - maxMs)
-    : fromDate;
+  const dates: string[] = [];
+  for (let d = fromStr; d <= toStr && dates.length < 60; d = addDaysStr(d, 1)) {
+    dates.push(d);
+  }
+  fromStr = dates[0];
+  toStr = dates[dates.length - 1];
+
+  const rangeStart = dayRangeForDateStr(fromStr, tz).start;
+  const rangeEnd = dayRangeForDateStr(toStr, tz).end;
 
   const [students, events] = await Promise.all([
     prisma.student.findMany({
@@ -53,7 +59,7 @@ export async function GET(req: NextRequest) {
       where: {
         student: { schoolId },
         eventType: 'ENTRY',
-        timestamp: { gte: clampedFrom, lte: toDate },
+        timestamp: { gte: rangeStart, lt: rangeEnd },
       },
       select: {
         studentId: true,
@@ -63,23 +69,15 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  // Build a Set of "studentId:YYYY-MM-DD" for O(1) lookup
+  // Build a Set of "studentId:YYYY-MM-DD" (school-local day) for O(1) lookup
   const presentSet = new Set<string>();
   const lateSet = new Set<string>();
   for (const ev of events) {
-    const day = ev.timestamp.toISOString().slice(0, 10);
+    const day = localDateStr(ev.timestamp, tz);
     presentSet.add(`${ev.studentId}:${day}`);
     if (ev.notes?.includes('ATRASO') || ev.notes?.includes('Atraso')) {
       lateSet.add(`${ev.studentId}:${day}`);
     }
-  }
-
-  // Generate date array
-  const dates: string[] = [];
-  const cur = new Date(clampedFrom);
-  while (cur <= toDate && dates.length < 60) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
   }
 
   const rows = students.map((s) => ({
@@ -88,10 +86,17 @@ export async function GET(req: NextRequest) {
     className: s.class?.name ?? 'Sem turma',
     attendance: Object.fromEntries(
       dates.map((d) => {
-        const dayOfWeek = new Date(d + 'T12:00:00').getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const key = `${s.id}:${d}`;
-        return [d, isWeekend ? 'weekend' : !presentSet.has(key) ? 'absent' : lateSet.has(key) ? 'late' : 'present'];
+        return [
+          d,
+          isWeekendDateStr(d)
+            ? 'weekend'
+            : !presentSet.has(key)
+            ? 'absent'
+            : lateSet.has(key)
+            ? 'late'
+            : 'present',
+        ];
       })
     ),
   }));

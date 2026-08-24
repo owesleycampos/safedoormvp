@@ -15,7 +15,7 @@ import { cn, getInitials } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'early_exit' | 'left';
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'early_exit' | 'left' | 'exit_only';
 
 interface StudentRow {
   id: string;
@@ -23,7 +23,7 @@ interface StudentRow {
   photoUrl: string | null;
   className: string;
   classId: string;
-  status: 'present' | 'absent' | 'left' | 'entry_only';
+  status: 'present' | 'absent' | 'left' | 'entry_only' | 'exit_only';
   entryTime: string | null;
   entryManual: boolean;
   entryNotes: string | null;
@@ -36,7 +36,7 @@ interface StudentRow {
 
 interface DailyData {
   date: string;
-  summary: { total: number; present: number; absent: number; left: number; entryOnly: number };
+  summary: { total: number; present: number; absent: number; left: number; entryOnly: number; exitOnly?: number };
   students: StudentRow[];
 }
 
@@ -57,6 +57,9 @@ function isLate(notes: string | null) { return notes?.includes('ATRASO') || note
 function isEarlyExit(notes: string | null) { return notes?.includes('SAIDA_ANTECIPADA') || notes?.includes('antecipada'); }
 
 function getEffectiveStatus(s: StudentRow): AttendanceStatus {
+  // Exit without entry = data inconsistency (wrong camera mode, missed
+  // entry) — surface it instead of masking it as an absence.
+  if (!s.entryTime && s.exitTime) return 'exit_only';
   if (!s.entryTime) return 'absent';
   if (isLate(s.entryNotes)) return 'late';
   if (s.exitTime && isEarlyExit(s.exitNotes)) return 'early_exit';
@@ -70,6 +73,7 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; bo
   absent:     { label: 'Ausente',          color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground/50', icon: MinusCircle,   iconColor: 'text-muted-foreground' },
   left:       { label: 'Saiu',             color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: LogOut,        iconColor: 'text-muted-foreground' },
   early_exit: { label: 'Saída antecipada', color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
+  exit_only:  { label: 'Saída sem entrada', color: 'bg-muted text-muted-foreground',              border: 'border-l-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
 // ─── Time Picker Dialog ──────────────────────────────────────────────────────
@@ -138,12 +142,12 @@ function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMen
   }, []);
 
   const actions = [
-    { key: 'ENTRY',           label: 'Marcar Presente',        show: status === 'absent' },
-    { key: 'LATE',            label: 'Marcar Atraso',          show: status === 'absent' || status === 'present' },
+    { key: 'ENTRY',           label: 'Marcar Presente',        show: status === 'absent' || status === 'exit_only' },
+    { key: 'LATE',            label: 'Marcar Atraso',          show: status === 'absent' || status === 'present' || status === 'exit_only' },
     { key: 'EXIT',            label: 'Registrar Saída',        show: status === 'present' || status === 'late' },
     { key: 'EARLY_EXIT',      label: 'Saída Antecipada',       show: status === 'present' || status === 'late' },
-    { key: 'DELETE_ENTRY',    label: 'Anular Entrada',         show: status !== 'absent' },
-    { key: 'DELETE_EXIT',     label: 'Anular Saída',           show: status === 'left' || status === 'early_exit' },
+    { key: 'DELETE_ENTRY',    label: 'Anular Entrada',         show: status !== 'absent' && status !== 'exit_only' },
+    { key: 'DELETE_EXIT',     label: 'Anular Saída',           show: status === 'left' || status === 'early_exit' || status === 'exit_only' },
   ].filter(a => a.show);
 
   const timeActions = ['ENTRY', 'LATE', 'EXIT', 'EARLY_EXIT'];

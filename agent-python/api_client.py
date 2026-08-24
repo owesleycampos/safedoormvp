@@ -23,11 +23,23 @@ class ApiClient:
             'x-device-api-key': config.device_api_key,
             'Content-Type': 'application/json',
         }
+        # Events authenticate with the per-device key (tenant-scoped on the
+        # server). The legacy global secret is included only for backwards
+        # compatibility with older server builds.
         self.agent_headers = {
+            'x-device-api-key': config.device_api_key,
             'x-agent-secret': config.agent_api_secret,
             'Content-Type': 'application/json',
         }
         self._client = httpx.AsyncClient(timeout=15.0)
+
+    async def ping(self) -> bool:
+        """Lightweight connectivity check (no payload download)."""
+        try:
+            resp = await self._client.get(f"{self.base_url}/api/health", timeout=5.0)
+            return resp.status_code == 200
+        except httpx.RequestError:
+            return False
 
     async def sync_face_vectors(self) -> Optional[dict]:
         """

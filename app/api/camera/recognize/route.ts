@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import * as rekognition from '@/lib/rekognition';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 /**
  * GET /api/camera/recognize
@@ -43,10 +42,8 @@ export async function GET() {
  * Camera can send frames every 1–2 seconds safely.
  */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
   if (!rekognition.isConfigured()) {
     return NextResponse.json(
@@ -55,7 +52,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const schoolId = (session.user as any)?.schoolId as string;
+  const schoolId = auth.schoolId;
+
+  // School-configured minimum confidence drives the AWS match threshold
+  const settings = await prisma.schoolSettings.findUnique({
+    where: { schoolId },
+    select: { minConfidence: true },
+  });
+  const minConfidence = settings?.minConfidence ?? 0.9;
+  const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(minConfidence * 100)));
 
   // ── Parse image from FormData ──────────────────────────────────────────────
   let imageBytes: Buffer;
@@ -74,7 +79,9 @@ export async function POST(req: NextRequest) {
 
   try {
     // ── Search for matching faces ──────────────────────────────────────────
-    const { matches: faceMatches, box } = await rekognition.searchFacesByImage(collectionId, imageBytes);
+    const { matches: faceMatches, box } = await rekognition.searchFacesByImage(
+      collectionId, imageBytes, faceMatchThreshold
+    );
 
     if (faceMatches.length === 0) {
       return NextResponse.json({ matches: [], faceCount: 0 });

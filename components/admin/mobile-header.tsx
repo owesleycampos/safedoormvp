@@ -19,7 +19,7 @@ export function AdminMobileHeader() {
   const user = session?.user as any;
 
   const isActive = (href: string) => isNavActive(pathname, href);
-  const currentPage = ADMIN_NAV_ALL.find((n) => isActive(n.href))?.label ?? 'Safe Door';
+  const currentPage = ADMIN_NAV_ALL.find((n) => isActive(n.href))?.label ?? 'Porta Segura';
 
   function NavLinks({ items }: { items: typeof ADMIN_NAV }) {
     return (

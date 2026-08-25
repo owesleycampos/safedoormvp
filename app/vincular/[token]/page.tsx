@@ -494,7 +494,7 @@ export default function VincularPage() {
             <p className="text-xs text-muted-foreground">
               {autoSignedIn
                 ? 'Você já está conectado. Abra o app para acompanhar a frequência escolar.'
-                : 'Agora você pode acessar o app Safe Door para acompanhar a frequência escolar.'}
+                : 'Agora você pode acessar o app Porta Segura para acompanhar a frequência escolar.'}
             </p>
             <Button
               variant="default"

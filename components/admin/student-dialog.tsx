@@ -391,7 +391,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   }
 
   function inviteMessage() {
-    const school = 'Safe Door';
+    const school = 'Porta Segura';
     return `Olá! A escola disponibilizou o link abaixo para você acompanhar a entrada e saída de ${student?.name ?? 'seu filho(a)'} em tempo real.\n\n${inviteLink}\n\nAbra o link, escolha o aluno e confirme a data de nascimento. — ${school}`;
   }
 

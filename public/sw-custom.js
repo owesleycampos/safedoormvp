@@ -1,5 +1,5 @@
 /**
- * Safe Door Brasil — Custom Service Worker Extension
+ * Porta Segura — Custom Service Worker Extension
  * Handles push notifications with iOS-style formatting.
  * next-pwa generates the main SW; this is imported as a custom worker.
  */
@@ -13,7 +13,7 @@ self.addEventListener('push', (event) => {
     payload = event.data.json();
   } catch {
     payload = {
-      title: 'Safe Door',
+      title: 'Porta Segura',
       body: event.data.text(),
     };
   }

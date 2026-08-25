@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* ── SafeDoor 2.0 — Light Mode ── */
+    /* ── PortaSegura 2.0 — Light Mode ── */
     --background:   0 0% 98%;         /* #FAFAFA */
     --foreground:   0 0% 7%;          /* #121212 */
 
@@ -52,7 +52,7 @@
   }
 
   .dark {
-    /* ── SafeDoor 2.0 — Dark Mode ── */
+    /* ── PortaSegura 2.0 — Dark Mode ── */
     --background:   0 0% 4%;          /* #0A0A0A */
     --foreground:   0 0% 95%;         /* #F2F2F2 */
 

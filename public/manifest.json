@@ -1,6 +1,6 @@
 {
-  "name": "Safe Door Brasil",
-  "short_name": "Safe Door",
+  "name": "Porta Segura",
+  "short_name": "Porta Segura",
   "description": "Acompanhe a entrada e saída dos seus filhos na escola em tempo real.",
   "start_url": "/pwa/children",
   "scope": "/",

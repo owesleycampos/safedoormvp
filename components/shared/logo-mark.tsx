@@ -1,5 +1,5 @@
 /**
- * Marca do Safe Door: porta entreaberta com capelo de formatura como telhado
+ * Marca do Porta Segura: porta entreaberta com capelo de formatura como telhado
  * e borla pendendo à esquerda. Vetor recriado a partir da referência enviada
  * (bitmap preto e branco), para escalar sem serrilhado em qualquer tamanho.
  *

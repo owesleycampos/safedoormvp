@@ -179,7 +179,7 @@ ${dates.map(d => {
 <!-- Footer -->
 <div class="footer">
   <span>P = Presente · A = Atraso · F = Falta</span>
-  <span>Gerado em ${new Date().toLocaleString('pt-BR')} · Safe Door Brasil</span>
+  <span>Gerado em ${new Date().toLocaleString('pt-BR')} · Porta Segura</span>
 </div>
 
 </body></html>`;

@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — Face Enrollment HTTP Server
+Porta Segura — Face Enrollment HTTP Server
 Exposes /enroll endpoint for extracting and encrypting face embeddings from photos.
 
 Run alongside main agent:
@@ -30,7 +30,7 @@ from crypto_utils import encrypt_face_vector
 logger = structlog.get_logger()
 
 app = FastAPI(
-    title="Safe Door Enrollment API",
+    title="Porta Segura Enrollment API",
     version="1.0.0",
     description="Internal API for enrolling student face biometrics.",
 )
@@ -149,5 +149,5 @@ async def enroll_face(
 
 if __name__ == "__main__":
     port = int(os.environ.get("ENROLLMENT_PORT", 8001))
-    logger.info("🛡️  Safe Door Enrollment Server", port=port, api_url=config.api_base_url)
+    logger.info("🛡️  Porta Segura Enrollment Server", port=port, api_url=config.api_base_url)
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

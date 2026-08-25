@@ -1,8 +1,8 @@
 import { Logo } from '@/components/shared/logo';
 
 export const metadata = {
-  title: 'Vincular Aluno | Safe Door',
-  description: 'Vincule seu filho(a) à sua conta Safe Door.',
+  title: 'Vincular Aluno | Porta Segura',
+  description: 'Vincule seu filho(a) à sua conta Porta Segura.',
 };
 
 export default function VincularLayout({ children }: { children: React.ReactNode }) {

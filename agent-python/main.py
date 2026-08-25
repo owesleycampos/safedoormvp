@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — Main Agent Entry Point
+Porta Segura — Main Agent Entry Point
 Runs the face recognition pipeline on the tablet camera.
 
 Usage:
@@ -8,7 +8,7 @@ Usage:
 Requirements:
     - .env file with configuration (copy from .env.example)
     - Camera connected to device
-    - Network access to Safe Door API (or works offline with local cache)
+    - Network access to Porta Segura API (or works offline with local cache)
 """
 import asyncio
 import os
@@ -89,7 +89,7 @@ def save_frame_photo(frame: np.ndarray, student_id: Optional[str] = None) -> Opt
         return None
 
 
-class SafeDoorAgent:
+class PortaSeguraAgent:
     def __init__(self):
         self.db = LocalDatabase(config.local_db_path)
         self.api = ApiClient()
@@ -106,7 +106,7 @@ class SafeDoorAgent:
 
     async def initialize(self):
         """Initialize the agent: sync face vectors, setup camera."""
-        logger.info("🛡️  Safe Door Brasil Agent starting...")
+        logger.info("🛡️  Porta Segura Agent starting...")
 
         # Check connectivity and sync
         is_online = await self.sync.check_connectivity()
@@ -281,7 +281,7 @@ class SafeDoorAgent:
 
 
 async def main():
-    agent = SafeDoorAgent()
+    agent = PortaSeguraAgent()
 
     def handle_shutdown(sig, frame):
         logger.info(f"Signal {sig} received, shutting down...")

@@ -196,7 +196,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
 
   function getWhatsAppMessage() {
     if (!inviteLink || !inviteDialog) return '';
-    return `Olá! A escola disponibilizou o link abaixo para você vincular seu filho(a) da turma *${inviteDialog.className}* ao sistema Safe Door.\n\nAcesse o link e siga as instruções:\n${inviteLink}\n\nCom o Safe Door você acompanha a entrada e saída do seu filho em tempo real.`;
+    return `Olá! A escola disponibilizou o link abaixo para você vincular seu filho(a) da turma *${inviteDialog.className}* ao sistema Porta Segura.\n\nAcesse o link e siga as instruções:\n${inviteLink}\n\nCom o Porta Segura você acompanha a entrada e saída do seu filho em tempo real.`;
   }
 
   function handleCopyLink() {

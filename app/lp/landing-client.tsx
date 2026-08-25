@@ -220,7 +220,7 @@ const FAQ_DATA = [
   },
   {
     q: 'Preciso instalar algum hardware especial?',
-    a: 'Nao. O Safe Door funciona com cameras IP comuns ou ate webcams. Voce pode comecar com o equipamento que ja tem na escola. Nos fornecemos orientacao completa sobre posicionamento e configuracao.',
+    a: 'Nao. O Porta Segura funciona com cameras IP comuns ou ate webcams. Voce pode comecar com o equipamento que ja tem na escola. Nos fornecemos orientacao completa sobre posicionamento e configuracao.',
   },
   {
     q: 'Os dados dos alunos estao seguros?',
@@ -232,7 +232,7 @@ const FAQ_DATA = [
   },
   {
     q: 'Funciona com qualquer tamanho de escola?',
-    a: 'Sim. O Safe Door foi projetado para escalar de pequenas creches com 30 alunos ate redes escolares com milhares de estudantes. Os planos sao flexiveis e crescem junto com a sua instituicao.',
+    a: 'Sim. O Porta Segura foi projetado para escalar de pequenas creches com 30 alunos ate redes escolares com milhares de estudantes. Os planos sao flexiveis e crescem junto com a sua instituicao.',
   },
   {
     q: 'Os pais precisam instalar algum aplicativo?',
@@ -243,7 +243,7 @@ const FAQ_DATA = [
 // ─── Testimonials ─────────────────────────────────────────────
 const TESTIMONIALS = [
   {
-    quote: 'O Safe Door transformou a forma como gerenciamos a presenca. Os pais adoram receber notificacao em tempo real quando o filho chega na escola.',
+    quote: 'O Porta Segura transformou a forma como gerenciamos a presenca. Os pais adoram receber notificacao em tempo real quando o filho chega na escola.',
     name: 'Maria Silva',
     role: 'Diretora',
     school: 'Colegio Novo Horizonte',
@@ -384,7 +384,7 @@ export function LandingPageClient() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <LogoMark className="h-[26px] w-[26px] text-white" />
-            <span className="font-semibold text-base tracking-tight text-white leading-none">Safe Door</span>
+            <span className="font-semibold text-base tracking-tight text-white leading-none">Porta Segura</span>
           </div>
 
           <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
@@ -655,7 +655,7 @@ export function LandingPageClient() {
           <ScrollSection>
             <SectionTitle
               eyebrow="Transformacao"
-              title="Antes vs Depois do Safe Door"
+              title="Antes vs Depois do Porta Segura"
               subtitle="Veja como a sua rotina escolar muda completamente."
             />
           </ScrollSection>
@@ -863,7 +863,7 @@ export function LandingPageClient() {
             <SectionTitle
               eyebrow="FAQ"
               title="Perguntas frequentes"
-              subtitle="Tire suas duvidas sobre o Safe Door."
+              subtitle="Tire suas duvidas sobre o Porta Segura."
             />
           </ScrollSection>
 
@@ -941,7 +941,7 @@ export function LandingPageClient() {
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 mb-4">
                 <LogoMark className="h-[26px] w-[26px] text-white" />
-                <span className="font-semibold text-base tracking-tight text-white">Safe Door</span>
+                <span className="font-semibold text-base tracking-tight text-white">Porta Segura</span>
               </div>
               <p className="text-sm text-neutral-500 max-w-sm leading-relaxed">
                 Reconhecimento facial para escolas. Seguranca, presenca automatica e comunicacao com os pais em uma unica plataforma.
@@ -970,7 +970,7 @@ export function LandingPageClient() {
 
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-xs text-neutral-600">
-              &copy; {new Date().getFullYear()} Safe Door Brasil. Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} Porta Segura. Todos os direitos reservados.
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-neutral-600 hover:text-white transition-colors" aria-label="Instagram">

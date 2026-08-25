@@ -34,7 +34,7 @@ export function Logo({ size = 'sm', className, showText = true, collapsed = fals
       </span>
       {showText && !collapsed && (
         <span className={cn('font-semibold tracking-tight text-foreground leading-none', s.text)}>
-          Safe Door
+          Porta Segura
         </span>
       )}
     </div>

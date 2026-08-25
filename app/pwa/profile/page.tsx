@@ -361,7 +361,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Versão do App</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Safe Door Brasil v1.0.0 MVP</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Porta Segura v1.0.0 MVP</p>
               </div>
             </div>
           </div>

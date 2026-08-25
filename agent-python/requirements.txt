@@ -1,4 +1,4 @@
-# Safe Door Brasil — Python AI Agent
+# Porta Segura — Python AI Agent
 # Face Recognition & Access Control for School Tablets
 
 # Core face recognition

@@ -58,7 +58,7 @@ function formatDate(iso: string) {
 }
 
 const invoiceStatusColors: Record<string, string> = {
-  PAID: 'text-emerald-400 bg-emerald-400/10',
+  PAID: 'text-success bg-success/10',
   PENDING: 'text-amber-400 bg-amber-400/10',
   OVERDUE: 'text-red-400 bg-red-400/10',
   CANCELLED: 'text-zinc-400 bg-zinc-400/10',
@@ -72,7 +72,7 @@ const invoiceStatusLabels: Record<string, string> = {
 };
 
 const subStatusColors: Record<string, string> = {
-  ACTIVE: 'text-emerald-400 bg-emerald-400/10',
+  ACTIVE: 'text-success bg-success/10',
   TRIAL: 'text-blue-400 bg-blue-400/10',
   PAST_DUE: 'text-amber-400 bg-amber-400/10',
   CANCELLED: 'text-zinc-400 bg-zinc-400/10',
@@ -150,7 +150,7 @@ export function BillingClient({ data }: { data: BillingData }) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <DollarSign className="h-3.5 w-3.5" /> MRR
           </div>
-          <p className="text-xl font-bold text-emerald-400">{formatCurrency(data.mrr)}</p>
+          <p className="text-xl font-bold text-success">{formatCurrency(data.mrr)}</p>
           <p className="text-[11px] text-muted-foreground mt-1">ARR: {formatCurrency(data.arr)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
@@ -179,7 +179,7 @@ export function BillingClient({ data }: { data: BillingData }) {
         <button
           onClick={() => setTab('subscriptions')}
           className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'subscriptions' ? 'border-emerald-400 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+            tab === 'subscriptions' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           <CreditCard className="h-4 w-4 inline mr-1.5" />
@@ -188,7 +188,7 @@ export function BillingClient({ data }: { data: BillingData }) {
         <button
           onClick={() => setTab('invoices')}
           className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'invoices' ? 'border-emerald-400 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+            tab === 'invoices' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           <Receipt className="h-4 w-4 inline mr-1.5" />
@@ -205,13 +205,13 @@ export function BillingClient({ data }: { data: BillingData }) {
             placeholder="Buscar escola..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
           />
         </div>
         {tab === 'invoices' && (
           <button
             onClick={() => setShowAddInvoice(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors"
           >
             <Plus className="h-4 w-4" />
             Nova Fatura
@@ -248,7 +248,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                       <td className="px-4 py-3 text-center hidden md:table-cell text-muted-foreground">
                         {sub.billing === 'ANNUAL' ? 'Anual' : 'Mensal'}
                         {sub.discount > 0 && (
-                          <span className="ml-1 text-emerald-400 text-[10px]">-{Math.round(sub.discount * 100)}%</span>
+                          <span className="ml-1 text-success text-[10px]">-{Math.round(sub.discount * 100)}%</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">{formatCurrency(effective)}</td>
@@ -313,10 +313,10 @@ export function BillingClient({ data }: { data: BillingData }) {
                       {(inv.status === 'PENDING' || inv.status === 'OVERDUE') && (
                         <button
                           onClick={() => markInvoicePaid(inv.id)}
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-emerald-500/10 transition-colors"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-success/10 transition-colors"
                           title="Marcar como pago"
                         >
-                          <CheckCircle className="h-4 w-4 text-emerald-400" />
+                          <CheckCircle className="h-4 w-4 text-success" />
                         </button>
                       )}
                     </td>
@@ -348,7 +348,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                 <select
                   value={invoiceForm.schoolId}
                   onChange={(e) => setInvoiceForm({ ...invoiceForm, schoolId: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
                 >
                   <option value="">Selecionar escola...</option>
                   {data.subscriptions.map((s) => (
@@ -363,7 +363,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                   step="0.01"
                   value={invoiceForm.amount}
                   onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
                   placeholder="497.00"
                 />
               </div>
@@ -373,7 +373,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                   type="date"
                   value={invoiceForm.dueDate}
                   onChange={(e) => setInvoiceForm({ ...invoiceForm, dueDate: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
                 />
               </div>
               <div>
@@ -382,7 +382,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                   type="text"
                   value={invoiceForm.description}
                   onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
                   placeholder="Mensalidade Abril/2026"
                 />
               </div>
@@ -390,7 +390,7 @@ export function BillingClient({ data }: { data: BillingData }) {
                 <button
                   onClick={createInvoice}
                   disabled={saving}
-                  className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors disabled:opacity-50"
                 >
                   {saving ? 'Salvando...' : 'Criar Fatura'}
                 </button>

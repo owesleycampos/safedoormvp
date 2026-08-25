@@ -3,7 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { TimelineClient } from '@/components/pwa/timeline-client';
 
-export const metadata = { title: 'Timeline' };
+export const metadata = { title: 'Histórico' };
 
 async function getTimeline(userId: string, studentId?: string) {
   const parent = await prisma.parent.findUnique({

@@ -35,8 +35,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
-  const [notifyEntry, setNotifyEntry] = useState(true);
-  const [notifyExit, setNotifyExit] = useState(true);
   const [pushSupported, setPushSupported] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '' });
 
@@ -106,7 +104,7 @@ export default function ProfilePage() {
         } catch {
           toast({
             variant: 'warning',
-            title: 'Service worker não disponível',
+            title: 'Notificações indisponíveis neste aparelho',
             description: 'Notificações push só funcionam em produção ou com HTTPS.',
           });
           return;
@@ -117,8 +115,8 @@ export default function ProfilePage() {
         if (!vapidKey) {
           toast({
             variant: 'warning',
-            title: 'Chave VAPID não configurada',
-            description: 'Configure NEXT_PUBLIC_VAPID_PUBLIC_KEY no servidor.',
+            title: 'Notificações indisponíveis no momento',
+            description: 'Tente novamente mais tarde.',
           });
           return;
         }
@@ -274,35 +272,6 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Entry alerts */}
-            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40">
-              <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
-                <LogOut className="h-4 w-4 text-muted-foreground rotate-180" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Alerta de Entrada</p>
-              </div>
-              <Switch
-                checked={notifyEntry}
-                disabled={!pushEnabled}
-                onCheckedChange={setNotifyEntry}
-              />
-            </div>
-
-            {/* Exit alerts */}
-            <div className="flex items-center gap-3 px-4 py-3.5">
-              <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
-                <LogOut className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Alerta de Saída</p>
-              </div>
-              <Switch
-                checked={notifyExit}
-                disabled={!pushEnabled}
-                onCheckedChange={setNotifyExit}
-              />
-            </div>
           </div>
 
           {pushSupported && !pushEnabled && (
@@ -318,7 +287,7 @@ export default function ProfilePage() {
             Privacidade & Segurança
           </h3>
           <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40">
+            <a href="/privacy" className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40 hover:bg-accent/40 transition-colors">
               <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
                 <Shield className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -326,8 +295,8 @@ export default function ProfilePage() {
                 <p className="text-sm font-medium">Política de Privacidade</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40">
+            </a>
+            <a href="/terms" className="flex items-center gap-3 px-4 py-3.5 hover:bg-accent/40 transition-colors">
               <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
                 <Info className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -335,17 +304,7 @@ export default function ProfilePage() {
                 <p className="text-sm font-medium">Termos de Uso</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex items-center gap-3 px-4 py-3.5">
-              <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Dados LGPD</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Solicitação de exclusão de dados</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
+            </a>
           </div>
         </div>
 
@@ -361,7 +320,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Versão do App</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Porta Segura v1.0.0 MVP</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Porta Segura v1.0</p>
               </div>
             </div>
           </div>

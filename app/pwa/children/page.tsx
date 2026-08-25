@@ -1,24 +1,20 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import {
+  DEFAULT_TIMEZONE, addDaysStr, dayRangeForDateStr, isWeekendDateStr,
+  localDateStr, weekdayOfDateStr,
+} from '@/lib/timezone';
 import { ChildrenClient } from '@/components/pwa/children-client';
 
 export const metadata = { title: 'Meus Filhos' };
 
 async function getChildren(userId: string) {
   const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  // Calculate the start of the current week (Monday)
-  const weekStart = new Date(now);
-  const dayOfWeek = weekStart.getDay(); // 0=Sun, 1=Mon...
-  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  weekStart.setDate(weekStart.getDate() - diffToMonday);
-  weekStart.setHours(0, 0, 0, 0);
-
-  // Start of current month
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Janela de busca larga; os recortes reais são feitos por dia LOCAL da
+  // escola. Antes o cálculo usava o fuso do servidor (UTC na Vercel) e a
+  // semana virava na hora errada.
+  const fetchStart = new Date(now.getTime() - 40 * 86400000);
 
   const parent = await prisma.parent.findUnique({
     where: { userId },
@@ -28,10 +24,10 @@ async function getChildren(userId: string) {
           student: {
             include: {
               class: { select: { name: true } },
-              school: { select: { name: true } },
+              school: { select: { name: true, settings: { select: { timezone: true } } } },
               attendance: {
                 where: {
-                  timestamp: { gte: monthStart },
+                  timestamp: { gte: fetchStart },
                 },
                 orderBy: { timestamp: 'desc' },
               },
@@ -43,59 +39,58 @@ async function getChildren(userId: string) {
   });
 
   return parent?.students.map((sp) => {
+    const tz = sp.student.school?.settings?.timezone || DEFAULT_TIMEZONE;
+    const todayStr = localDateStr(now, tz);
+    const today = dayRangeForDateStr(todayStr, tz);
+
     const allEvents = sp.student.attendance;
     const todayEvents = allEvents.filter(
-      (e) => new Date(e.timestamp) >= todayStart
+      (e) => e.timestamp >= today.start && e.timestamp < today.end
     );
 
-    // Build weekly attendance: for each weekday (Mon-Fri), check if there was an ENTRY event
+    // Dias com ENTRADA, por dia local da escola
+    const attendedDays = new Set(
+      allEvents
+        .filter((e) => e.eventType === 'ENTRY')
+        .map((e) => localDateStr(e.timestamp, tz))
+    );
+
+    // Segunda-feira da semana local corrente
+    const dow = weekdayOfDateStr(todayStr); // 0=Dom
+    const mondayStr = addDaysStr(todayStr, -(dow === 0 ? 6 : dow - 1));
+
     const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'];
     const weeklyAttendance = weekDays.map((label, i) => {
-      const dayDate = new Date(weekStart);
-      dayDate.setDate(dayDate.getDate() + i);
-      const dayEnd = new Date(dayDate);
-      dayEnd.setDate(dayEnd.getDate() + 1);
-
-      // Only count days up to today
-      if (dayDate > now) return { label, present: null }; // future day
-
-      const hasEntry = allEvents.some(
-        (e) =>
-          e.eventType === 'ENTRY' &&
-          new Date(e.timestamp) >= dayDate &&
-          new Date(e.timestamp) < dayEnd
-      );
-      return { label, present: hasEntry };
+      const dateStr = addDaysStr(mondayStr, i);
+      if (dateStr > todayStr) return { label, present: null }; // dia futuro
+      return { label, present: attendedDays.has(dateStr) };
     });
 
-    // Weekly percentage (only counting past/current days)
-    const countableDays = weeklyAttendance.filter((d) => d.present !== null);
+    // Percentual da semana. O dia de HOJE só entra na conta depois que a
+    // criança chegou — antes, uma mãe abrindo o app às 7h de segunda via
+    // "0%" porque o dia em curso já contava como falta.
+    const countableDays = weeklyAttendance.filter((d, i) => {
+      if (d.present === null) return false;
+      const dateStr = addDaysStr(mondayStr, i);
+      return !(dateStr === todayStr && d.present === false);
+    });
     const presentDays = countableDays.filter((d) => d.present === true).length;
     const weeklyPercentage = countableDays.length > 0
       ? Math.round((presentDays / countableDays.length) * 100)
-      : 0;
+      : 100;
 
-    // Monthly perfect attendance check
-    const monthEvents = allEvents.filter(
-      (e) => e.eventType === 'ENTRY' && new Date(e.timestamp) >= monthStart
-    );
-    // Count unique school days this month (Mon-Fri, up to today)
-    const schoolDaysThisMonth: Set<string> = new Set();
-    const cursor = new Date(monthStart);
-    while (cursor <= now) {
-      const dow = cursor.getDay();
-      if (dow >= 1 && dow <= 5) {
-        schoolDaysThisMonth.add(cursor.toISOString().slice(0, 10));
-      }
-      cursor.setDate(cursor.getDate() + 1);
+    // Mês perfeito: todos os dias úteis do mês local, exceto o de hoje
+    // antes da chegada
+    const monthPrefix = todayStr.slice(0, 7);
+    const schoolDaysThisMonth: string[] = [];
+    for (let d = `${monthPrefix}-01`; d <= todayStr; d = addDaysStr(d, 1)) {
+      if (isWeekendDateStr(d)) continue;
+      if (d === todayStr && !attendedDays.has(d)) continue;
+      schoolDaysThisMonth.push(d);
     }
-    // Count unique days with ENTRY events
-    const attendedDays = new Set(
-      monthEvents.map((e) => new Date(e.timestamp).toISOString().slice(0, 10))
-    );
     const perfectMonth =
-      schoolDaysThisMonth.size > 0 &&
-      Array.from(schoolDaysThisMonth).every((d) => attendedDays.has(d));
+      schoolDaysThisMonth.length > 0 &&
+      schoolDaysThisMonth.every((d) => attendedDays.has(d));
 
     return {
       ...sp.student,

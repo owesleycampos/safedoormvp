@@ -102,12 +102,12 @@ function LoginForm() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Senha</Label>
-            <Link
-              href="/auth/forgot-password"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Esqueceu a senha?
-            </Link>
+            {/* Não há fluxo de redefinição por e-mail ainda; o link antigo
+                apontava para uma página inexistente (404). A redefinição é
+                feita pela secretaria (admin) ou pelo superadmin. */}
+            <span className="text-xs text-muted-foreground" title="Peça à secretaria da escola para redefinir sua senha.">
+              Esqueceu? Fale com a escola
+            </span>
           </div>
           <div className="relative">
             <Input

@@ -42,7 +42,7 @@ interface WebhooksData {
 
 const statusConfig: Record<string, { color: string; icon: typeof CheckCircle; label: string }> = {
   RECEIVED: { color: 'text-blue-400 bg-blue-400/10', icon: Clock, label: 'Recebido' },
-  PROCESSED: { color: 'text-emerald-400 bg-emerald-400/10', icon: CheckCircle, label: 'Processado' },
+  PROCESSED: { color: 'text-success bg-success/10', icon: CheckCircle, label: 'Processado' },
   FAILED: { color: 'text-red-400 bg-red-400/10', icon: XCircle, label: 'Falhou' },
   IGNORED: { color: 'text-zinc-400 bg-zinc-400/10', icon: Ban, label: 'Ignorado' },
 };
@@ -51,7 +51,7 @@ const providerColors: Record<string, string> = {
   STRIPE: 'text-violet-400 bg-violet-400/10',
   ASAAS: 'text-blue-400 bg-blue-400/10',
   MERCADOPAGO: 'text-cyan-400 bg-cyan-400/10',
-  PAGARME: 'text-emerald-400 bg-emerald-400/10',
+  PAGARME: 'text-success bg-success/10',
   MANUAL: 'text-zinc-400 bg-zinc-400/10',
   UNKNOWN: 'text-zinc-400 bg-zinc-400/10',
 };
@@ -196,9 +196,9 @@ export function WebhooksClient({ data }: { data: WebhooksData }) {
 
       {/* Config Modal */}
       {showConfig && (
-        <div className="rounded-lg border border-emerald-500/30 bg-card p-4 space-y-4">
+        <div className="rounded-lg border border-success/30 bg-card p-4 space-y-4">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Shield className="h-4 w-4 text-emerald-400" />
+            <Shield className="h-4 w-4 text-success" />
             Configuração de Webhooks
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -222,7 +222,7 @@ export function WebhooksClient({ data }: { data: WebhooksData }) {
                 type="text"
                 value={newSecret}
                 onChange={(e) => setNewSecret(e.target.value)}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
                 placeholder="Deixe vazio para manter o atual"
               />
             </div>
@@ -231,7 +231,7 @@ export function WebhooksClient({ data }: { data: WebhooksData }) {
             <button
               onClick={saveConfig}
               disabled={savingConfig}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors disabled:opacity-50"
             >
               {savingConfig ? 'Salvando...' : 'Salvar'}
             </button>
@@ -273,7 +273,7 @@ export function WebhooksClient({ data }: { data: WebhooksData }) {
             placeholder="Buscar por tipo, provider, ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
           />
         </div>
         <select
@@ -463,7 +463,7 @@ function StatCard({
 }) {
   const colorMap: Record<string, string> = {
     blue: 'text-blue-400 bg-blue-400/10',
-    emerald: 'text-emerald-400 bg-emerald-400/10',
+    emerald: 'text-success bg-success/10',
     red: 'text-red-400 bg-red-400/10',
     zinc: 'text-zinc-400 bg-zinc-400/10',
   };

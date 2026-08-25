@@ -72,7 +72,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
       {/* Pricing */}
       <div className="rounded-lg border border-border bg-card">
         <div className="p-4 border-b border-border flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-emerald-400" />
+          <DollarSign className="h-4 w-4 text-success" />
           <h2 className="text-sm font-semibold">Preços dos Planos</h2>
         </div>
         <div className="p-4 space-y-4">
@@ -84,7 +84,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 step="0.01"
                 value={form.essencialPrice}
                 onChange={(e) => setForm({ ...form, essencialPrice: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
             </div>
             <div>
@@ -94,7 +94,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 step="0.01"
                 value={form.profissionalPrice}
                 onChange={(e) => setForm({ ...form, profissionalPrice: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
             </div>
             <div>
@@ -104,7 +104,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 step="0.01"
                 value={form.premiumPrice}
                 onChange={(e) => setForm({ ...form, premiumPrice: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
               <p className="text-[10px] text-muted-foreground mt-1">0 = sob consulta</p>
             </div>
@@ -115,7 +115,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
               type="number"
               value={form.annualDiscount}
               onChange={(e) => setForm({ ...form, annualDiscount: e.target.value })}
-              className="mt-1 w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="mt-1 w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
             />
           </div>
         </div>
@@ -135,7 +135,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 type="number"
                 value={form.maxStudentsEssencial}
                 onChange={(e) => setForm({ ...form, maxStudentsEssencial: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
             </div>
             <div>
@@ -144,7 +144,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 type="number"
                 value={form.maxStudentsProfissional}
                 onChange={(e) => setForm({ ...form, maxStudentsProfissional: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
             </div>
             <div>
@@ -153,7 +153,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
                 type="number"
                 value={form.maxStudentsPremium}
                 onChange={(e) => setForm({ ...form, maxStudentsPremium: e.target.value })}
-                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
               />
               <p className="text-[10px] text-muted-foreground mt-1">0 = ilimitado</p>
             </div>
@@ -173,7 +173,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
             type="number"
             value={form.trialDays}
             onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
-            className="mt-1 w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="mt-1 w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25"
           />
         </div>
       </div>
@@ -182,7 +182,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
       <button
         onClick={save}
         disabled={saving}
-        className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors disabled:opacity-50"
       >
         <Save className="h-4 w-4" />
         {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar Configurações'}

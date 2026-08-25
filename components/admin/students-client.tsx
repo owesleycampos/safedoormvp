@@ -25,6 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { StudentDialog } from '@/components/admin/student-dialog';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn, getInitials } from '@/lib/utils';
 
 interface StudentsClientProps {
@@ -66,7 +67,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   }
 
   async function handleDelete(student: any) {
-    if (!confirm(`Remover ${student.name}? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirmDialog({
+      title: `Remover ${student.name}?`,
+      description: 'Fotos, biometria e histórico de presença serão perdidos. Esta ação não pode ser desfeita.',
+      confirmLabel: 'Remover aluno', destructive: true,
+    }))) return;
     const res = await fetch(`/api/students/${student.id}`, { method: 'DELETE' });
     if (res.ok) {
       setStudents((prev) => prev.filter((s) => s.id !== student.id));

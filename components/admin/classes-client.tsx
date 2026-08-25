@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 interface ClassItem {
@@ -158,7 +159,11 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
       toast({ variant: 'warning', title: 'Turma com alunos', description: `Mova os ${cls._count.students} aluno(s) antes de excluir.` });
       return;
     }
-    if (!confirm(`Excluir turma "${cls.name}"? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirmDialog({
+      title: `Excluir turma "${cls.name}"?`,
+      description: 'Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir', destructive: true,
+    }))) return;
     try {
       const res = await fetch(`/api/classes/${cls.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await res.text());
@@ -220,7 +225,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
+      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
 
         {/* Header */}
         <motion.div

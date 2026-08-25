@@ -49,7 +49,7 @@ export function TimelineClient({ children, events, selectedStudentId }: Timeline
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-base font-semibold">Timeline</h1>
+          <h1 className="text-base font-semibold">Histórico</h1>
         </div>
 
         {/* Child Selector */}
@@ -165,7 +165,7 @@ function EventCard({ event }: { event: any }) {
               {isEntry ? 'Entrada' : 'Saída'}
             </Badge>
             {event.isManual && (
-              <Badge variant="secondary" className="text-[10px]">Manual</Badge>
+              <Badge variant="secondary" className="text-[10px]">Registrado pela escola</Badge>
             )}
           </div>
 
@@ -173,16 +173,8 @@ function EventCard({ event }: { event: any }) {
             {formatTime(event.timestamp)}
           </p>
 
-          <div className="mt-1 space-y-0.5">
-            {event.device && (
-              <p className="text-xs text-muted-foreground">{event.device.name}</p>
-            )}
-            {event.confidence && (
-              <p className="text-xs text-muted-foreground/50">
-                Confiança: {(event.confidence * 100).toFixed(1)}%
-              </p>
-            )}
-          </div>
+          {/* Nome interno da câmera e score de confiança são jargão do
+              sistema — para a mãe só geram dúvida ("87%? era meu filho?"). */}
         </div>
 
         {/* Event Photo */}

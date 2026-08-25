@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 const tabs = [
   { href: '/pwa/children', icon: Baby,  label: 'Filhos'    },
-  { href: '/pwa/timeline', icon: Clock, label: 'Timeline'  },
+  { href: '/pwa/timeline', icon: Clock, label: 'Histórico'  },
   { href: '/pwa/profile',  icon: User,  label: 'Perfil'    },
 ];
 

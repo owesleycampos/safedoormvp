@@ -32,7 +32,7 @@ interface SchoolData {
 }
 
 const statusColors: Record<string, string> = {
-  ACTIVE: 'text-emerald-400 bg-emerald-400/10',
+  ACTIVE: 'text-success bg-success/10',
   TRIAL: 'text-blue-400 bg-blue-400/10',
   SUSPENDED: 'text-red-400 bg-red-400/10',
   CANCELLED: 'text-zinc-400 bg-zinc-400/10',
@@ -152,7 +152,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
         </div>
         <button
           onClick={() => { setCreateOpen(true); setCreateError(null); }}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           Nova Escola
@@ -168,7 +168,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
             placeholder="Buscar por nome, CNPJ ou cidade..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
           />
         </div>
         <div className="flex gap-2">
@@ -178,7 +178,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
               onClick={() => setStatusFilter(s)}
               className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
                 statusFilter === s
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                  ? 'border-foreground bg-foreground/10 text-foreground'
                   : 'border-border text-muted-foreground hover:bg-accent'
               }`}
             >
@@ -356,7 +356,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   <button
                     onClick={() => toggleSchoolStatus(selectedSchool.id, 'ACTIVE')}
                     disabled={actionLoading}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-success/10 text-success hover:bg-success/20 transition-colors disabled:opacity-50"
                   >
                     <CheckCircle className="h-4 w-4" />
                     Reativar
@@ -434,7 +434,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   placeholder="Nome da escola *"
                   value={createForm.name}
                   onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   autoFocus
                 />
                 <div className="grid grid-cols-2 gap-3">
@@ -442,26 +442,26 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                     placeholder="CNPJ"
                     value={createForm.cnpj}
                     onChange={(e) => setCreateForm((f) => ({ ...f, cnpj: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                   <input
                     placeholder="Telefone"
                     value={createForm.contactPhone}
                     onChange={(e) => setCreateForm((f) => ({ ...f, contactPhone: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                   <input
                     placeholder="Cidade"
                     value={createForm.city}
                     onChange={(e) => setCreateForm((f) => ({ ...f, city: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                   <input
                     placeholder="UF"
                     maxLength={2}
                     value={createForm.state}
                     onChange={(e) => setCreateForm((f) => ({ ...f, state: e.target.value.toUpperCase() }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                 </div>
                 <input
@@ -469,7 +469,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   placeholder="E-mail de contato da escola"
                   value={createForm.contactEmail}
                   onChange={(e) => setCreateForm((f) => ({ ...f, contactEmail: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                 />
               </div>
 
@@ -479,7 +479,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   <select
                     value={createForm.plan}
                     onChange={(e) => setCreateForm((f) => ({ ...f, plan: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   >
                     <option value="ESSENCIAL">Essencial</option>
                     <option value="PROFISSIONAL">Profissional</option>
@@ -488,7 +488,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   <select
                     value={createForm.billing}
                     onChange={(e) => setCreateForm((f) => ({ ...f, billing: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   >
                     <option value="MONTHLY">Mensal</option>
                     <option value="ANNUAL">Anual (com desconto)</option>
@@ -502,7 +502,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                   placeholder="Nome do administrador"
                   value={createForm.adminName}
                   onChange={(e) => setCreateForm((f) => ({ ...f, adminName: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <input
@@ -510,14 +510,14 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                     placeholder="E-mail de acesso *"
                     value={createForm.adminEmail}
                     onChange={(e) => setCreateForm((f) => ({ ...f, adminEmail: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                   <input
                     type="password"
                     placeholder="Senha inicial (mín. 8) *"
                     value={createForm.adminPassword}
                     onChange={(e) => setCreateForm((f) => ({ ...f, adminPassword: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
                   />
                 </div>
               </div>
@@ -541,7 +541,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
               <button
                 type="submit"
                 disabled={createLoading}
-                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {createLoading ? 'Criando...' : 'Criar escola'}
               </button>

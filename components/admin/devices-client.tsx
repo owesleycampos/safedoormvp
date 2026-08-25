@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime, generateApiKey } from '@/lib/utils';
 
 type DeviceStatus = 'ONLINE' | 'OFFLINE' | 'ERROR';
@@ -228,7 +229,11 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
   }
 
   async function handleDelete(device: DeviceItem) {
-    if (!confirm(`Remover dispositivo "${device.name}"? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirmDialog({
+      title: `Remover dispositivo "${device.name}"?`,
+      description: 'A chave de API dele deixa de funcionar imediatamente.',
+      confirmLabel: 'Remover', destructive: true,
+    }))) return;
     try {
       const res = await fetch(`/api/devices/${device.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Tente novamente.');

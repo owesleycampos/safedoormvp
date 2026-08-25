@@ -12,6 +12,7 @@ import {
   DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn, formatDateTime, formatRelativeTime, formatConfidence } from '@/lib/utils';
 
 interface LogDevice { id: string; name: string; type: string; }
@@ -69,7 +70,11 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
   async function markAllReviewed() {
     const pending = logs.filter(l => !l.reviewed);
     if (pending.length === 0) return;
-    if (!confirm(`Marcar todos os ${pending.length} registros pendentes como revisados?`)) return;
+    if (!(await confirmDialog({
+      title: `Marcar ${pending.length} registros como revisados?`,
+      description: 'Eles saem da fila de pendências.',
+      confirmLabel: 'Marcar todos',
+    }))) return;
     setMarkingAll(true);
     try {
       const res = await fetch('/api/unrecognized/review-all', {
@@ -88,7 +93,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
+      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
 
         {/* Header */}
         <motion.div

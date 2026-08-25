@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
@@ -401,7 +402,11 @@ function SubjectsTab() {
   const availablePresets = currentPresets.filter(p => !existingNames.has(p.toLowerCase()));
 
   async function handleDelete(s: Subject) {
-    if (!confirm(`Excluir matéria "${s.name}"?`)) return;
+    if (!(await confirmDialog({
+      title: `Excluir matéria "${s.name}"?`,
+      description: 'As aulas dela na grade horária também serão removidas.',
+      confirmLabel: 'Excluir', destructive: true,
+    }))) return;
     try {
       const res = await fetch(`/api/subjects/${s.id}`, { method: 'DELETE' });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }

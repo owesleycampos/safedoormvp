@@ -64,7 +64,7 @@ function formatDate(iso: string) {
 }
 
 const statusColors: Record<string, string> = {
-  ACTIVE: 'text-emerald-400 bg-emerald-400/10',
+  ACTIVE: 'text-success bg-success/10',
   TRIAL: 'text-blue-400 bg-blue-400/10',
   SUSPENDED: 'text-red-400 bg-red-400/10',
   CANCELLED: 'text-zinc-400 bg-zinc-400/10',
@@ -228,7 +228,7 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
                   <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-amber-400' : 'bg-emerald-400'
+                        pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-amber-400' : 'bg-success'
                       }`}
                       style={{ width: `${Math.min(pct, 100)}%` }}
                     />
@@ -297,7 +297,7 @@ function KPICard({
   trend?: number;
 }) {
   const colorMap: Record<string, string> = {
-    emerald: 'text-emerald-400 bg-emerald-400/10',
+    emerald: 'text-success bg-success/10',
     blue: 'text-blue-400 bg-blue-400/10',
     violet: 'text-violet-400 bg-violet-400/10',
     amber: 'text-amber-400 bg-amber-400/10',
@@ -317,7 +317,7 @@ function KPICard({
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       {trend !== undefined && (
         <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${
-          trend >= 0 ? 'text-emerald-400' : 'text-red-400'
+          trend >= 0 ? 'text-success' : 'text-red-400'
         }`}>
           {trend >= 0 ? (
             <ArrowUpRight className="h-3 w-3" />

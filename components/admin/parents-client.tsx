@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn, getInitials, formatDate } from '@/lib/utils';
 
 interface ParentStudent {
@@ -139,7 +140,11 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
       toast({ variant: 'warning', title: 'Responsável vinculado', description: `Desvincule os ${parent.students.length} aluno(s) antes de excluir.` });
       return;
     }
-    if (!confirm(`Excluir responsável "${parent.name}"?`)) return;
+    if (!(await confirmDialog({
+      title: `Excluir responsável "${parent.name}"?`,
+      description: 'A conta de acesso dele também será removida.',
+      confirmLabel: 'Excluir', destructive: true,
+    }))) return;
     try {
       const res = await fetch(`/api/parents/${parent.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readError(res, 'Não foi possível excluir o responsável.'));
@@ -204,7 +209,11 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
   }
 
   async function handleUnlinkStudent(parentId: string, studentId: string, studentName: string) {
-    if (!confirm(`Desvincular "${studentName}" deste responsável?`)) return;
+    if (!(await confirmDialog({
+      title: `Desvincular ${studentName}?`,
+      description: 'O responsável deixa de acompanhar este aluno e de receber os avisos.',
+      confirmLabel: 'Desvincular', destructive: true,
+    }))) return;
     try {
       const res = await fetch(`/api/students/${studentId}/parents`, {
         method: 'DELETE',
@@ -229,7 +238,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px]">
+      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
 
         {/* Header */}
         <motion.div

@@ -49,7 +49,7 @@ export function SuperAdminMobileHeader() {
         </button>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">{currentPage}</span>
-          <span className="flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-400/10 px-1 py-0.5 rounded">
+          <span className="flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-success bg-success/10 px-1 py-0.5 rounded">
             <Shield className="h-2.5 w-2.5" />
             Super
           </span>
@@ -72,7 +72,7 @@ export function SuperAdminMobileHeader() {
                     <item.icon
                       className={cn(
                         'h-4 w-4 flex-shrink-0',
-                        active ? 'text-emerald-400' : 'text-muted-foreground'
+                        active ? 'text-success' : 'text-muted-foreground'
                       )}
                       strokeWidth={active ? 2 : 1.5}
                     />
@@ -86,7 +86,7 @@ export function SuperAdminMobileHeader() {
           <div className="border-t border-border px-2 py-3 flex-shrink-0">
             <div className="flex items-center gap-2.5 px-2 py-2">
               <Avatar className="h-7 w-7 flex-shrink-0">
-                <AvatarFallback className="text-[10px] bg-emerald-500/20 text-emerald-400">
+                <AvatarFallback className="text-[10px] bg-success/20 text-success">
                   {getInitials(user?.name || user?.email || 'SA')}
                 </AvatarFallback>
               </Avatar>

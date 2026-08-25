@@ -83,14 +83,22 @@ class SyncManager:
         event_type: str,
         confidence: float,
         timestamp: datetime,
-        photo_url: Optional[str] = None,
+        photo_path: Optional[str] = None,
     ):
         """
         Try to send event immediately; if offline, queue locally.
+
+        `photo_path` is the LOCAL file saved by the camera loop. When online
+        it is uploaded first and the resulting URL travels with the event;
+        offline, the local path stays in the queue and the flush uploads it
+        later. A failed upload never blocks the attendance record.
         """
         event_id = str(uuid.uuid4())
 
         if self._is_online:
+            photo_url = None
+            if photo_path:
+                photo_url = await self.api.upload_photo(photo_path)
             success = await self.api.send_checkin_event(
                 student_id=student_id,
                 event_type=event_type,
@@ -100,11 +108,12 @@ class SyncManager:
                 photo_url=photo_url,
             )
             if success:
-                logger.info("Event sent immediately", student_id=student_id, event_type=event_type)
+                logger.info("Event sent immediately", student_id=student_id, event_type=event_type, with_photo=bool(photo_url))
                 self.db.record_daily_event(student_id, event_type, timestamp)
                 return
 
-        # Queue for later sync
+        # Queue for later sync (photo_url column holds the LOCAL path here;
+        # flush_pending_events uploads it before sending)
         self.db.queue_event(
             event_id=event_id,
             student_id=student_id,
@@ -112,39 +121,46 @@ class SyncManager:
             timestamp=timestamp,
             device_id=self._device_id,
             confidence=confidence,
-            photo_url=photo_url,
+            photo_url=photo_path,
         )
         self.db.record_daily_event(student_id, event_type, timestamp)
         logger.warning("Event queued offline", student_id=student_id, event_id=event_id)
 
     async def queue_unrecognized_log(
         self,
-        photo_url: str,
+        photo_path: str,
         confidence: Optional[float],
         timestamp: datetime,
     ):
-        """Queue an unrecognized face log."""
+        """
+        Queue an unrecognized face log. The review screen is pointless
+        without the picture, so the local frame is uploaded first and the
+        log carries the public URL; offline, the local path waits in the
+        queue and the flush uploads it.
+        """
         if not self._school_id or not self._device_id:
             return
 
         log_id = str(uuid.uuid4())
 
         if self._is_online:
-            success = await self.api.send_unrecognized_log(
-                school_id=self._school_id,
-                device_id=self._device_id,
-                photo_url=photo_url,
-                confidence_score=confidence,
-                timestamp=timestamp,
-            )
-            if success:
-                return
+            photo_url = await self.api.upload_photo(photo_path)
+            if photo_url:
+                success = await self.api.send_unrecognized_log(
+                    school_id=self._school_id,
+                    device_id=self._device_id,
+                    photo_url=photo_url,
+                    confidence_score=confidence,
+                    timestamp=timestamp,
+                )
+                if success:
+                    return
 
         self.db.queue_unrecognized(
             log_id=log_id,
             school_id=self._school_id,
             device_id=self._device_id,
-            photo_url=photo_url,
+            photo_url=photo_path,
             confidence=confidence,
             timestamp=timestamp,
         )
@@ -158,13 +174,20 @@ class SyncManager:
         synced = failed = 0
 
         for event in pending:
+            # Queued events hold the LOCAL photo path; upload it now that we
+            # are online. If the upload fails the event still goes — presence
+            # matters more than the picture.
+            photo_url = event['photo_url']
+            if photo_url and not photo_url.startswith(('http://', 'https://')):
+                photo_url = await self.api.upload_photo(photo_url)
+
             success = await self.api.send_checkin_event(
                 student_id=event['student_id'],
                 event_type=event['event_type'],
                 device_id=event['device_id'] or self._device_id or 'unknown',
                 confidence=event['confidence'] or 0.95,
                 timestamp=datetime.fromisoformat(event['timestamp']),
-                photo_url=event['photo_url'],
+                photo_url=photo_url,
             )
             if success:
                 self.db.mark_event_synced(event['id'])
@@ -173,14 +196,17 @@ class SyncManager:
                 self.db.increment_event_attempts(event['id'], "Failed to sync")
                 failed += 1
 
-        # Flush unrecognized logs. The server only accepts accessible URLs;
-        # legacy queue entries holding tablet-local file paths are dropped
-        # (marked synced) instead of retrying a guaranteed 400 forever.
+        # Flush unrecognized logs. Queued entries hold the LOCAL photo path;
+        # upload it now. If the file is gone or the upload keeps failing the
+        # entry is dropped — a review log without its picture is useless.
         for log in self.db.get_pending_unrecognized():
             photo_url = log['photo_url'] or ''
             if not photo_url.startswith(('http://', 'https://')):
-                self.db.mark_unrecognized_synced(log['id'])
-                continue
+                uploaded = await self.api.upload_photo(photo_url) if photo_url else None
+                if not uploaded:
+                    self.db.mark_unrecognized_synced(log['id'])
+                    continue
+                photo_url = uploaded
             success = await self.api.send_unrecognized_log(
                 school_id=log['school_id'],
                 device_id=log['device_id'],

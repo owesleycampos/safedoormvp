@@ -162,11 +162,12 @@ class PortaSeguraAgent:
             self._last_recognition[student.id] = timestamp
             return
 
-        # Save photo locally (audit/debug). NOT sent to the server: a
-        # tablet-local file path is not a URL the web app can render.
-        # TODO: upload to S3/Blob and send the resulting URL.
+        # Save the frame locally; the sync layer uploads it to the server's
+        # photo storage and attaches the public URL to the event, so the
+        # panel finally shows the moment of each entry/exit.
+        photo_path = None
         if result.frame is not None:
-            save_frame_photo(result.frame, student.id)
+            photo_path = save_frame_photo(result.frame, student.id)
 
         # Queue/send event
         await self.sync.queue_attendance_event(
@@ -174,7 +175,7 @@ class PortaSeguraAgent:
             event_type=event_type,
             confidence=result.confidence,
             timestamp=timestamp,
-            photo_url=None,
+            photo_path=photo_path,
         )
 
         self._last_recognition[student.id] = timestamp
@@ -205,14 +206,17 @@ class PortaSeguraAgent:
 
         # Only log if there's some confidence (actual face detected, not random)
         if result.confidence > 0.3:  # Some resemblance but below threshold
-            # Save locally for review on the device. The server requires an
-            # accessible URL for review photos, so we don't push a local
-            # file path — it would render as a broken image in the admin UI.
-            # TODO: upload to S3/Blob, then queue_unrecognized_log(url).
             if result.frame is not None:
                 photo_path = save_frame_photo(result.frame, None)
                 if photo_path:
-                    logger.info("Unrecognized face saved locally", path=photo_path)
+                    # The review screen only makes sense with the picture, so
+                    # the sync layer uploads it and sends the log with the
+                    # public URL (or queues the local path while offline).
+                    await self.sync.queue_unrecognized_log(
+                        photo_path=photo_path,
+                        confidence=result.confidence,
+                        timestamp=datetime.now(),
+                    )
 
     async def run_camera_loop(self):
         """Main camera capture and processing loop."""

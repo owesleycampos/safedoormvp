@@ -213,11 +213,17 @@ function normalizePagarMe(p: any): NormalizedEvent {
 }
 
 function normalizeGeneric(p: any): NormalizedEvent {
+  // Convention: `amount` is already in centavos (Stripe/PagarMe style);
+  // `value` is in reais (Asaas style) and needs the *100 conversion.
+  const amount =
+    p.amount != null ? Math.round(p.amount)
+    : p.value != null ? Math.round(p.value * 100)
+    : null;
   return {
     externalId: p.id || p.event_id || null,
     eventType: p.type || p.event || p.action || 'unknown',
     paymentStatus: p.status || p.payment_status || null,
-    amount: p.amount || p.value ? Math.round((p.amount || p.value) * 100) : null,
+    amount,
     customerEmail: p.email || p.customer_email || null,
     customerDoc: p.document || p.cpf || p.cnpj || null,
     externalSubId: p.subscription_id || null,

@@ -196,7 +196,7 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
             type: form.type,
           }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Tente novamente.');
         const patchPayload = await res.json();
         const updated: DeviceItem = patchPayload.device ?? patchPayload;
         setDevices((prev) =>
@@ -213,7 +213,7 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
             type: form.type,
           }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Tente novamente.');
         const payload = await res.json();
         const created: DeviceItem = payload.device ?? payload;
         setDevices((prev) => [{ ...created, _count: { attendanceEvents: 0 } }, ...prev]);
@@ -231,7 +231,7 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
     if (!confirm(`Remover dispositivo "${device.name}"? Esta ação não pode ser desfeita.`)) return;
     try {
       const res = await fetch(`/api/devices/${device.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Tente novamente.');
       setDevices((prev) => prev.filter((d) => d.id !== device.id));
       toast({ variant: 'success', title: 'Dispositivo removido', description: device.name });
     } catch (err: any) {

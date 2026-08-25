@@ -77,6 +77,11 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [parentResults, setParentResults] = useState<any[]>([]);
   const [searchingParents, setSearchingParents] = useState(false);
   const [linkingParent, setLinkingParent] = useState<string | null>(null);
+  const [showNewParent, setShowNewParent] = useState(false);
+  const [creatingParent, setCreatingParent] = useState(false);
+  const [newParent, setNewParent] = useState({ name: '', email: '', phone: '' });
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // Reset on open
   useEffect(() => {
@@ -291,6 +296,88 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     } finally {
       setLinkingParent(null);
     }
+  }
+
+  /**
+   * "Find or create" in one step: when the search finds nobody, the admin
+   * fills name/e-mail right here and the guardian is created and linked in a
+   * single request. No password — the guardian sets their own via the invite.
+   */
+  async function handleCreateAndLinkParent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isEdit) return;
+    if (!newParent.name.trim() || !newParent.email.trim()) {
+      toast({ variant: 'warning', title: 'Informe nome e e-mail do responsável.' });
+      return;
+    }
+    setCreatingParent(true);
+    try {
+      const res = await fetch(`/api/students/${student.id}/parents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newParent.name.trim(),
+          email: newParent.email.trim(),
+          phone: newParent.phone.trim() || null,
+          relationship: 'Responsável',
+          isPrimary: parentLinks.length === 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        return;
+      }
+      setParentLinks((prev) => [...prev, data.link]);
+      setNewParent({ name: '', email: '', phone: '' });
+      setShowNewParent(false);
+      setParentSearch('');
+      setParentResults([]);
+      toast({
+        variant: 'success',
+        title: `${data.link.parent.name} vinculado!`,
+        description: data.createdParent
+          ? 'Envie o convite para ele criar a senha e acompanhar o aluno.'
+          : undefined,
+      });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setCreatingParent(false);
+    }
+  }
+
+  /**
+   * Generates the class invite from inside the student's record, so the admin
+   * doesn't have to leave for the Turmas screen to send it. The link is
+   * class-wide by design: the guardian picks their child and confirms the
+   * birth date, which is what proves the relationship.
+   */
+  async function handleGenerateInvite() {
+    if (!isEdit || !student?.classId) return;
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: student.classId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        return;
+      }
+      setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  function inviteMessage() {
+    const school = 'Safe Door';
+    return `Olá! A escola disponibilizou o link abaixo para você acompanhar a entrada e saída de ${student?.name ?? 'seu filho(a)'} em tempo real.\n\n${inviteLink}\n\nAbra o link, escolha o aluno e confirme a data de nascimento. — ${school}`;
   }
 
   async function handleUnlinkParent(parentId: string) {
@@ -709,6 +796,78 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                   </div>
                 )}
 
+                {/* Convite — disponível aqui, não só na tela de Turmas */}
+                <div className="rounded-md bg-secondary/40 p-3 space-y-2.5">
+                  <div>
+                    <p className="text-xs font-medium">Convidar responsável pelo app</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Envie o link para o responsável criar a senha e acompanhar {student?.name?.split(' ')[0] ?? 'o aluno'}.
+                    </p>
+                  </div>
+
+                  {!inviteLink ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={handleGenerateInvite}
+                      loading={inviteLoading}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      Gerar link de convite
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-mono break-all rounded bg-background px-2 py-1.5 border border-border">
+                        {inviteLink}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            navigator.clipboard.writeText(inviteLink);
+                            toast({ variant: 'success', title: 'Link copiado!' });
+                          }}
+                        >
+                          Copiar link
+                        </Button>
+                        {/* Um clique manda no WhatsApp de cada responsável com telefone */}
+                        {parentLinks
+                          .filter((l) => l.parent?.phone)
+                          .map((l) => {
+                            const digits = String(l.parent!.phone).replace(/\D/g, '');
+                            const name = (l.parent?.name || '').split(' ')[0];
+                            return (
+                              <a
+                                key={l.parentId}
+                                href={`https://wa.me/55${digits}?text=${encodeURIComponent(inviteMessage())}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-border text-xs hover:bg-accent transition-colors"
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                                Enviar a {name}
+                              </a>
+                            );
+                          })}
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(inviteMessage())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-border text-xs hover:bg-accent transition-colors"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Search + link parent */}
                 <div className="space-y-2">
                   <Label className="text-xs">Vincular responsável</Label>
@@ -762,15 +921,78 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                     </div>
                   )}
 
-                  {parentSearch.length >= 2 && !searchingParents && parentResults.length === 0 && (
-                    <div className="text-center py-4 text-xs text-muted-foreground">
-                      Nenhum responsável encontrado para "{parentSearch}"
+                  {/* Nothing found is an action, not a dead end: create right here. */}
+                  {parentSearch.length >= 2 && !searchingParents && parentResults.length === 0 && !showNewParent && (
+                    <div className="rounded-md border border-dashed border-border p-3 text-center space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum responsável encontrado para “{parentSearch}”.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          const looksLikeEmail = parentSearch.includes('@');
+                          setNewParent({
+                            name: looksLikeEmail ? '' : parentSearch,
+                            email: looksLikeEmail ? parentSearch : '',
+                            phone: '',
+                          });
+                          setShowNewParent(true);
+                        }}
+                      >
+                        <UserPlus className="h-3 w-3" />
+                        Cadastrar e vincular
+                      </Button>
                     </div>
                   )}
 
-                  {parentLinks.length === 0 && !parentSearch && (
+                  {showNewParent && (
+                    <form onSubmit={handleCreateAndLinkParent} className="rounded-md border border-border p-3 space-y-2.5">
+                      <p className="text-xs font-medium">Novo responsável</p>
+                      <Input
+                        placeholder="Nome completo *"
+                        value={newParent.name}
+                        onChange={(e) => setNewParent((p) => ({ ...p, name: e.target.value }))}
+                        autoFocus
+                      />
+                      <Input
+                        type="email"
+                        placeholder="E-mail *"
+                        value={newParent.email}
+                        onChange={(e) => setNewParent((p) => ({ ...p, email: e.target.value }))}
+                      />
+                      <Input
+                        placeholder="Telefone (WhatsApp)"
+                        value={newParent.phone}
+                        onChange={(e) => setNewParent((p) => ({ ...p, phone: e.target.value }))}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Sem senha: o responsável cria a dele ao abrir o link de convite.
+                      </p>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setShowNewParent(false)}
+                          disabled={creatingParent}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button type="submit" size="sm" className="h-7 text-xs" loading={creatingParent}>
+                          Cadastrar e vincular
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {parentLinks.length === 0 && !parentSearch && !showNewParent && (
                     <p className="text-xs text-muted-foreground text-center py-4">
-                      Nenhum responsável vinculado. Busque e vincule um responsável existente.
+                      Nenhum responsável vinculado. Busque pelo nome ou e-mail — se não existir,
+                      você cadastra na hora.
                     </p>
                   )}
                 </div>

@@ -159,34 +159,57 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
     } catch { setLinkStudents([]); }
   }
 
-  async function handleLinkStudent(studentId: string) {
+  async function handleLinkStudent(studentId: string, studentName: string) {
     if (!linkParent) return;
     setLinkLoading(true);
     try {
-      const res = await fetch(`/api/parents/${linkParent.id}/link`, {
+      // Canonical endpoint — the link belongs to the student.
+      const res = await fetch(`/api/students/${studentId}/parents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({ parentId: linkParent.id }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast({ variant: 'success', title: `${data.student.name} vinculado(a)!` });
-        setLinkOpen(false);
-        window.location.reload();
-      } else {
-        toast({ variant: 'destructive', title: data.error });
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: await readError(res, 'Não foi possível vincular.') });
+        return;
       }
-    } catch { toast({ variant: 'destructive', title: 'Erro de conexão' }); }
-    finally { setLinkLoading(false); }
+      const { link } = await res.json();
+      toast({ variant: 'success', title: `${studentName} vinculado(a)!` });
+
+      // Update in place instead of reloading the page, which used to discard
+      // the search the admin had typed.
+      const added: ParentStudent = {
+        studentId,
+        parentId: linkParent.id,
+        relationship: link?.relationship ?? 'Responsável',
+        isPrimary: link?.isPrimary ?? false,
+        student: {
+          id: studentId,
+          name: studentName,
+          class: linkStudents.find((s) => s.id === studentId)?.class ?? null,
+        },
+      };
+      setParents((prev) =>
+        prev.map((p) => (p.id === linkParent.id ? { ...p, students: [...p.students, added] } : p))
+      );
+      setDetailParent((prev) =>
+        prev && prev.id === linkParent.id ? { ...prev, students: [...prev.students, added] } : prev
+      );
+      setLinkOpen(false);
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setLinkLoading(false);
+    }
   }
 
   async function handleUnlinkStudent(parentId: string, studentId: string, studentName: string) {
     if (!confirm(`Desvincular "${studentName}" deste responsável?`)) return;
     try {
-      const res = await fetch(`/api/parents/${parentId}/link`, {
+      const res = await fetch(`/api/students/${studentId}/parents`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({ parentId }),
       });
       if (res.ok) {
         toast({ variant: 'success', title: `${studentName} desvinculado(a)` });
@@ -554,7 +577,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
                 filteredLinkStudents.slice(0, 50).map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => handleLinkStudent(s.id)}
+                    onClick={() => handleLinkStudent(s.id, s.name)}
                     disabled={linkLoading}
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
                   >

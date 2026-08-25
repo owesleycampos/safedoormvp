@@ -179,6 +179,42 @@ check "conta removida do banco" "0" \
 check "sem sessão não cria responsável → 401" "401" \
   "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/parents" -H 'Content-Type: application/json' -d '{"name":"X","email":"y@z.com"}')"
 
+echo "── Vínculo em um passo e convite (Fase 2) ──"
+
+sql0 "DELETE FROM \"User\" WHERE email='inline@teste.com';" >/dev/null 2>&1
+LIVRE=$(sql0 "SELECT s.id FROM \"Student\" s WHERE s.\"schoolId\"=(SELECT \"schoolId\" FROM \"User\" WHERE email='admin@teste.com') AND s.id NOT IN (SELECT \"studentId\" FROM \"StudentParent\") LIMIT 1")
+
+BODY_NEW=$(printf '{"name":"Inline Resp","email":"inline@teste.com","phone":"11911112222","relationship":"Pai"}')
+check "criar responsável e vincular num passo → 201" "201" \
+  "$(api POST "/api/students/$LIVRE/parents" "$BODY_NEW")"
+check "a resposta marca que criou o responsável" "True" "$(jfield createdParent)"
+check "conta criada sem senha (define pelo convite)" "t" \
+  "$(sql0 "SELECT \"passwordHash\" IS NULL FROM \"User\" WHERE email='inline@teste.com'")"
+
+INLINE_PID=$(sql0 "SELECT p.id FROM \"Parent\" p JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='inline@teste.com'")
+BODY_DUP=$(printf '{"parentId":"%s"}' "$INLINE_PID")
+check "vincular o mesmo responsável de novo → 409" "409" \
+  "$(api POST "/api/students/$LIVRE/parents" "$BODY_DUP")"
+
+# O endpoint canônico é do aluno: precisa validar a escola do aluno também
+PEDRO_OUTRA_ESCOLA="$PEDRO"
+check "aluno de outra escola → 404 (isolamento)" "404" \
+  "$(api POST "/api/students/$PEDRO_OUTRA_ESCOLA/parents" "$BODY_DUP")"
+
+BODY_UNLINK=$(printf '{"parentId":"%s"}' "$INLINE_PID")
+check "desvincular → 200" "200" "$(api DELETE "/api/students/$LIVRE/parents" "$BODY_UNLINK")"
+check "vínculo removido do banco" "0" \
+  "$(sql0 "SELECT count(*) FROM \"StudentParent\" WHERE \"parentId\"='$INLINE_PID'")"
+
+check "endpoint duplicado /api/parents/[id]/link foi removido" "404" \
+  "$(api POST "/api/parents/$INLINE_PID/link" '{"studentId":"x"}')"
+
+# Código de acesso aposentado. As duas rotas foram apagadas; o caminho agora
+# cai no segmento dinâmico /api/students/[id], que não implementa POST — daí
+# 405 em vez de 404. O que importa é que não existe mais handler próprio.
+check "API de gerar códigos removida" "405" "$(api POST /api/students/generate-codes '{}')"
+check "API de vincular por código removida" "405" "$(api POST /api/students/link '{"accessCode":"ABC123"}')"
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

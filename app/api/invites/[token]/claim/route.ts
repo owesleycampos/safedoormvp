@@ -52,30 +52,81 @@ export async function POST(
     }
   }
 
-  // Find or create user
-  let user;
-  if (email) {
-    user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  // ── Find or create the account ────────────────────────────────────────
+  // Three cases, and they must be told apart: an existing account has to
+  // prove the password (it used to be accepted without any check, so anyone
+  // knowing an e-mail and a birth date could attach children to someone
+  // else's account); an account the school pre-created has no password yet
+  // and the guardian sets it here; a brand-new account is created.
+  const normalizedEmail = email ? String(email).toLowerCase().trim() : '';
+  let user = normalizedEmail
+    ? await prisma.user.findUnique({ where: { email: normalizedEmail } })
+    : null;
+
+  if (!normalizedEmail) {
+    return NextResponse.json(
+      { error: 'Informe seu e-mail.', needsAccount: true, accountExists: false },
+      { status: 400 }
+    );
   }
 
-  if (!user && email && password) {
-    const passwordHash = await bcrypt.hash(password, 10);
+  if (user && user.passwordHash) {
+    // Existing account with a password — authenticate.
+    if (!password) {
+      return NextResponse.json(
+        {
+          error: 'Já existe uma conta com este e-mail. Informe sua senha para continuar.',
+          needsAccount: true,
+          accountExists: true,
+        },
+        { status: 400 }
+      );
+    }
+    const valid = await bcrypt.compare(String(password), user.passwordHash);
+    if (!valid) {
+      return NextResponse.json(
+        { error: 'Senha incorreta.', needsAccount: true, accountExists: true },
+        { status: 401 }
+      );
+    }
+  } else if (user && !user.passwordHash) {
+    // Account created by the school without a password — the guardian
+    // defines it now, which is exactly what the invite is for.
+    if (!password || String(password).length < 8) {
+      return NextResponse.json(
+        {
+          error: 'Crie uma senha de ao menos 8 caracteres para acessar sua conta.',
+          needsAccount: true,
+          accountExists: true,
+          needsPasswordSetup: true,
+        },
+        { status: 400 }
+      );
+    }
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(String(password), 10), name: user.name || parentName },
+    });
+  } else {
+    if (!password || String(password).length < 8) {
+      return NextResponse.json(
+        {
+          error: 'Crie uma senha de ao menos 8 caracteres.',
+          needsAccount: true,
+          accountExists: false,
+        },
+        { status: 400 }
+      );
+    }
     user = await prisma.user.create({
       data: {
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         name: parentName,
-        passwordHash,
+        passwordHash: await bcrypt.hash(String(password), 10),
         role: 'PARENT',
         schoolId: invite.schoolId,
       },
     });
-  }
-
-  if (!user) {
-    return NextResponse.json({
-      error: 'E-mail e senha são necessários para criar sua conta.',
-      needsAccount: true,
-    }, { status: 400 });
   }
 
   // Update user's school if needed

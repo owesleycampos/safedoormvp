@@ -393,7 +393,10 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
                         className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent/30 transition-colors"
                       >
                         <Avatar className="h-7 w-7 flex-shrink-0">
-                          <AvatarImage src={event.student.photoUrl || ''} />
+                          {/* A foto do MOMENTO da passagem (capturada pelo
+                              tablet) vale mais que a de perfil no feed ao
+                              vivo; a de perfil é o fallback. */}
+                          <AvatarImage src={event.photoUrl || event.student.photoUrl || ''} />
                           <AvatarFallback className="text-[9px] font-medium bg-muted text-muted-foreground">
                             {getInitials(event.student.name)}
                           </AvatarFallback>

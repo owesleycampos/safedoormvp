@@ -251,6 +251,36 @@ check "conta existente com senha errada → 401" "401" "$(claim "$B")"
 
 sql0 "DELETE FROM \"User\" WHERE email IN ('claim1@teste.com','claim2@teste.com','claim3@teste.com');" >/dev/null 2>&1
 
+echo "── Fotos do agente (upload para o Blob) ──"
+
+python3 -c "
+import base64
+jpg = base64.b64decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==')
+open('/tmp/smoke-frame.jpg','wb').write(jpg)
+"
+check "upload sem credencial → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/agent/photos" -F 'photo=@/tmp/smoke-frame.jpg;type=image/jpeg')"
+check "upload sem o campo photo → 400" "400" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/agent/photos" -H "x-device-api-key: $KEY_A")"
+check "upload de tipo não-imagem → 415" "415" \
+  "$(printf 'x' > /tmp/smoke-x.txt; curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/agent/photos" -H "x-device-api-key: $KEY_A" -F 'photo=@/tmp/smoke-x.txt;type=text/plain')"
+
+# Upload real só roda quando o Blob está configurado no servidor de teste;
+# sem token o endpoint responde 503 e o agente segue registrando sem foto.
+UP=$(curl -s -o /tmp/p.json -w '%{http_code}' -X POST "$BASE/api/agent/photos" -H "x-device-api-key: $KEY_A" -F 'photo=@/tmp/smoke-frame.jpg;type=image/jpeg')
+if [ "$UP" = "503" ]; then
+  check "sem Blob configurado → 503 (degrada sem travar presença)" "503" "$UP"
+else
+  check "upload com chave do dispositivo → 201" "201" "$UP"
+  PHOTO_URL=$(jfield url)
+  check "URL devolvida é pública e serve a imagem" "200" \
+    "$(curl -s -o /dev/null -w '%{http_code}' "$PHOTO_URL")"
+  BODY_EV=$(printf '{"studentId":"%s","eventType":"EXIT","confidence":0.97,"timestamp":"%sT12:20:00-03:00","photoUrl":"%s"}' "$JOAO" "$TODAY" "$PHOTO_URL")
+  curl -s -o /dev/null -X POST "$BASE/api/events/checkin-checkout" -H "Content-Type: application/json" -H "x-device-api-key: $KEY_A" -d "$BODY_EV"
+  check "evento carrega a foto no banco" "1" \
+    "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"photoUrl\" LIKE 'https://%'")"
+fi
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

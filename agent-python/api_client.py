@@ -41,6 +41,30 @@ class ApiClient:
         except httpx.RequestError:
             return False
 
+    async def upload_photo(self, photo_path: str) -> Optional[str]:
+        """
+        Upload a locally captured frame and return its public URL.
+
+        Local file paths are useless to the web panel, so events used to go
+        out without any image. Returns None on failure — the caller sends the
+        event without a photo rather than blocking the attendance record.
+        """
+        try:
+            with open(photo_path, 'rb') as f:
+                resp = await self._client.post(
+                    f"{self.base_url}/api/agent/photos",
+                    headers={'x-device-api-key': config.device_api_key},
+                    files={'photo': (photo_path.split('/')[-1], f, 'image/jpeg')},
+                    timeout=30.0,
+                )
+            if resp.status_code == 201:
+                return resp.json().get('url')
+            logger.warning("Photo upload rejected", status=resp.status_code, body=resp.text[:150])
+            return None
+        except (httpx.RequestError, OSError) as e:
+            logger.warning("Photo upload failed", error=str(e))
+            return None
+
     async def sync_face_vectors(self) -> Optional[dict]:
         """
         Fetch all student face vectors from the server.

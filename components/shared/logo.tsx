@@ -1,9 +1,5 @@
-'use client';
-
-import Image from 'next/image';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { LogoMark } from '@/components/shared/logo-mark';
 
 interface LogoProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
@@ -13,32 +9,29 @@ interface LogoProps {
 }
 
 const sizes = {
-  xs: { img: 20, text: 'text-sm',   gap: 'gap-2'   },
-  sm: { img: 26, text: 'text-base', gap: 'gap-2.5' },
-  md: { img: 32, text: 'text-lg',   gap: 'gap-3'   },
-  lg: { img: 48, text: 'text-2xl',  gap: 'gap-4'   },
+  xs: { img: 22, text: 'text-sm',   gap: 'gap-2'   },
+  sm: { img: 28, text: 'text-base', gap: 'gap-2.5' },
+  md: { img: 34, text: 'text-lg',   gap: 'gap-3'   },
+  lg: { img: 52, text: 'text-2xl',  gap: 'gap-4'   },
 };
 
+/**
+ * No tema claro a marca vive num disco preto (estilo avatar do Instagram);
+ * no escuro o símbolo branco fica direto sobre o fundo. Trocado por CSS
+ * (`dark:`), então não há mais o flash de imagem errada que o antigo
+ * useTheme + <Image> causava no primeiro paint.
+ */
 export function Logo({ size = 'sm', className, showText = true, collapsed = false }: LogoProps) {
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
   const s = sizes[size];
-  // Use light logo on light backgrounds, dark logo on dark backgrounds
-  const src = mounted && resolvedTheme !== 'dark' ? '/logo-light.png' : '/logo.png';
 
   return (
     <div className={cn('flex items-center', s.gap, className)}>
-      <Image
-        src={src}
-        alt="Safe Door"
-        width={s.img}
-        height={s.img}
-        className="flex-shrink-0 object-contain"
-        priority
-      />
+      <span
+        className="flex-shrink-0 flex items-center justify-center rounded-full bg-black text-white dark:bg-transparent"
+        style={{ width: s.img, height: s.img }}
+      >
+        <LogoMark className="h-[70%] w-[70%] dark:h-full dark:w-full" />
+      </span>
       {showText && !collapsed && (
         <span className={cn('font-semibold tracking-tight text-foreground leading-none', s.text)}>
           Safe Door

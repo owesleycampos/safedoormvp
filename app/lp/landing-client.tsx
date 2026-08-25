@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { LogoMark } from '@/components/shared/logo-mark';
 import {
   motion,
   useScroll,
@@ -383,7 +383,7 @@ export function LandingPageClient() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Image src="/logo.png" alt="Safe Door" width={26} height={26} className="object-contain" />
+            <LogoMark className="h-[26px] w-[26px] text-white" />
             <span className="font-semibold text-base tracking-tight text-white leading-none">Safe Door</span>
           </div>
 
@@ -940,7 +940,7 @@ export function LandingPageClient() {
             {/* Logo + description */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 mb-4">
-                <Image src="/logo.png" alt="Safe Door" width={26} height={26} className="object-contain" />
+                <LogoMark className="h-[26px] w-[26px] text-white" />
                 <span className="font-semibold text-base tracking-tight text-white">Safe Door</span>
               </div>
               <p className="text-sm text-neutral-500 max-w-sm leading-relaxed">

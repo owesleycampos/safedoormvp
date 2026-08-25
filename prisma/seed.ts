@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding Safe Door Brasil database...');
+  console.log('🌱 Seeding Porta Segura database...');
 
   // Create School
   const school = await prisma.school.upsert({

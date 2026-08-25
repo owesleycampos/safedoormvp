@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import {
   Search, Loader2, CheckCircle2, AlertCircle, ArrowLeft,
   GraduationCap, Shield, Users, ChevronRight,
@@ -34,6 +35,8 @@ interface ClaimResult {
   message?: string;
   error?: string;
   needsAccount?: boolean;
+  accountExists?: boolean;
+  needsPasswordSetup?: boolean;
   hasMoreStudents?: boolean;
   student?: { name: string; className: string };
 }
@@ -78,6 +81,10 @@ export default function VincularPage() {
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
+  const [accountExists, setAccountExists] = useState(false);
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [autoSignedIn, setAutoSignedIn] = useState(false);
   const [result, setResult] = useState<ClaimResult | null>(null);
 
   // ── Fetch invite data ──
@@ -141,6 +148,15 @@ export default function VincularPage() {
       const data: ClaimResult = await res.json();
 
       if (data.needsAccount) {
+        // The server tells us whether this e-mail already has an account, so
+        // the screen can say "entre com sua senha" instead of insisting on
+        // "criar sua conta" for someone who has had one for months.
+        setAccountExists(!!data.accountExists && !data.needsPasswordSetup);
+        setNeedsPasswordSetup(!!data.needsPasswordSetup);
+        // Only surface the message once the account step is already open,
+        // otherwise the first pass (which never sends an e-mail) would show
+        // an error before the guardian had a chance to type anything.
+        setAccountError(step === 'account' ? data.error ?? null : null);
         setStep('account');
         return;
       }
@@ -148,6 +164,13 @@ export default function VincularPage() {
       setResult(data);
       if (data.success) {
         setStep('success');
+        // Sign the guardian in with what they just typed: the old flow sent
+        // them to the login screen to type the same e-mail and password again.
+        if (email && password) {
+          signIn('credentials', { email, password, redirect: false })
+            .then((r) => setAutoSignedIn(!!r?.ok))
+            .catch(() => setAutoSignedIn(false));
+        }
       }
     } catch {
       setResult({ error: 'Erro de conexão. Tente novamente.' });
@@ -377,9 +400,15 @@ export default function VincularPage() {
 
         <Card className="p-4 space-y-4">
           <div>
-            <h2 className="text-base font-semibold">Criar sua conta</h2>
+            <h2 className="text-base font-semibold">
+              {accountExists ? 'Entre na sua conta' : needsPasswordSetup ? 'Crie sua senha' : 'Criar sua conta'}
+            </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Para acompanhar a frequência do seu filho(a), crie uma conta com e-mail e senha.
+              {accountExists
+                ? 'Já existe uma conta com este e-mail. Informe sua senha para vincular o aluno.'
+                : needsPasswordSetup
+                ? 'A escola já cadastrou você. Defina uma senha para acessar o aplicativo.'
+                : 'Para acompanhar a frequência do seu filho(a), crie uma conta com e-mail e senha.'}
             </p>
           </div>
 
@@ -397,29 +426,29 @@ export default function VincularPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Senha *</Label>
+              <Label htmlFor="password">{accountExists ? 'Sua senha *' : 'Crie uma senha *'}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Mínimo 6 caracteres"
+                placeholder={accountExists ? 'Digite sua senha' : 'Mínimo 8 caracteres'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
-            {result?.error && (
+            {(accountError || result?.error) && (
               <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
-                {result.error}
+                {accountError || result?.error}
               </div>
             )}
 
             <Button
               className="w-full"
               onClick={() => handleClaim(true)}
-              disabled={!email.trim() || password.length < 6 || submitting}
+              disabled={!email.trim() || password.length < (accountExists ? 1 : 8) || submitting}
               loading={submitting}
             >
-              Criar Conta e Vincular
+              {accountExists ? 'Entrar e Vincular' : 'Criar Conta e Vincular'}
             </Button>
           </div>
         </Card>
@@ -463,12 +492,18 @@ export default function VincularPage() {
 
           <div className="border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              Agora você pode acessar o app Safe Door para acompanhar a frequência escolar.
+              {autoSignedIn
+                ? 'Você já está conectado. Abra o app para acompanhar a frequência escolar.'
+                : 'Agora você pode acessar o app Porta Segura para acompanhar a frequência escolar.'}
             </p>
             <Button
               variant="default"
               className="w-full mt-3"
-              onClick={() => window.location.href = '/auth/login'}
+              onClick={() => {
+                // Already signed in right after the claim — go straight to the
+                // app instead of asking for the same e-mail and password again.
+                window.location.href = autoSignedIn ? '/pwa/children' : '/auth/login';
+              }}
             >
               Acessar o App
             </Button>

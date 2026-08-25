@@ -5,22 +5,36 @@ export default async function BillingPage() {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [subscriptions, invoices, platformSettings] = await Promise.all([
-    prisma.subscription.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        school: { select: { id: true, name: true, status: true } },
-      },
-    }),
-    prisma.invoice.findMany({
-      orderBy: { dueDate: 'desc' },
-      take: 50,
-      include: {
-        school: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.platformSettings.findFirst(),
-  ]);
+  // The KPIs are aggregated in the database over ALL invoices. They used to be
+  // derived from the same `take: 50` slice used for the table, so past 50
+  // historical invoices the revenue figures silently under-reported.
+  const [subscriptions, invoices, platformSettings, paidAgg, overdueAgg, pendingAgg] =
+    await Promise.all([
+      prisma.subscription.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: {
+          school: { select: { id: true, name: true, status: true } },
+        },
+      }),
+      prisma.invoice.findMany({
+        orderBy: { dueDate: 'desc' },
+        take: 50,
+        include: {
+          school: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.platformSettings.findFirst(),
+      prisma.invoice.aggregate({
+        where: { status: 'PAID', paidAt: { gte: thisMonthStart } },
+        _sum: { amount: true },
+      }),
+      prisma.invoice.aggregate({
+        where: { status: 'OVERDUE' },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.invoice.count({ where: { status: 'PENDING' } }),
+    ]);
 
   // Calculate totals
   const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'TRIAL');
@@ -31,20 +45,15 @@ export default async function BillingPage() {
     return acc + monthly;
   }, 0);
 
-  const paidThisMonth = invoices
-    .filter((i) => i.status === 'PAID' && i.paidAt && i.paidAt >= thisMonthStart)
-    .reduce((acc, i) => acc + i.amount, 0);
-
-  const overdueInvoices = invoices.filter((i) => i.status === 'OVERDUE');
-  const pendingInvoices = invoices.filter((i) => i.status === 'PENDING');
-
   const data = {
     mrr,
     arr: mrr * 12,
-    paidThisMonth,
-    overdueCount: overdueInvoices.length,
-    overdueAmount: overdueInvoices.reduce((acc, i) => acc + i.amount, 0),
-    pendingCount: pendingInvoices.length,
+    paidThisMonth: paidAgg._sum.amount ?? 0,
+    overdueCount: overdueAgg._count,
+    overdueAmount: overdueAgg._sum.amount ?? 0,
+    pendingCount: pendingAgg,
+    // The table below still shows the 50 most recent invoices; say so.
+    invoicesTruncated: invoices.length === 50,
     subscriptions: subscriptions.map((s) => ({
       id: s.id,
       schoolId: s.schoolId,

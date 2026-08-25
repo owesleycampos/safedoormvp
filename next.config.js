@@ -4,6 +4,10 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  // Without this the generated sw.js calls importScripts() with no arguments
+  // and the push / notificationclick handlers in sw-custom.js never run —
+  // the server sends the notification and nothing shows on the phone.
+  importScripts: ['/sw-custom.js'],
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,

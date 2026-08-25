@@ -3,35 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import {
-  LayoutDashboard, Video, ScanFace, GraduationCap,
-  Users, UserCheck, ClipboardList, CalendarDays,
-  Settings, LogOut,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
+import { ADMIN_NAV, ADMIN_NAV_SECONDARY, isNavActive } from '@/lib/admin-nav';
 import { Logo } from '@/components/shared/logo';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
-const nav = [
-  { href: '/admin/dashboard',    icon: LayoutDashboard, label: 'Dashboard'         },
-  { href: '/admin/camera',       icon: Video,           label: 'Câmera ao Vivo'    },
-  { href: '/admin/unrecognized', icon: ScanFace,        label: 'Não Identificados' },
-  { href: '/admin/students',     icon: GraduationCap,   label: 'Alunos'            },
-  { href: '/admin/classes',      icon: Users,           label: 'Turmas'            },
-  { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis'      },
-  { href: '/admin/attendance',   icon: ClipboardList,   label: 'Frequência'        },
-  { href: '/admin/subjects',     icon: CalendarDays,    label: 'Grade Escolar'     },
-];
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as any;
 
-  function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + '/');
-  }
+  const isActive = (href: string) => isNavActive(pathname, href);
 
   return (
     <aside className="sidebar fixed inset-y-0 left-0 z-40 hidden lg:flex w-[220px] flex-col">
@@ -42,7 +26,7 @@ export function AdminSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-        {nav.map((item) => {
+        {ADMIN_NAV.map((item) => {
           const active = isActive(item.href);
           return (
             <Link key={item.href} href={item.href}>
@@ -59,15 +43,20 @@ export function AdminSidebar() {
 
         <div className="my-3 h-px bg-border" />
 
-        <Link href="/admin/settings">
-          <div className={cn('nav-item', isActive('/admin/settings') && 'active')}>
-            <Settings
-              className={cn('h-4 w-4 flex-shrink-0 text-muted-foreground', isActive('/admin/settings') && 'text-foreground')}
-              strokeWidth={1.5}
-            />
-            <span>Configurações</span>
-          </div>
-        </Link>
+        {ADMIN_NAV_SECONDARY.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <Link key={item.href} href={item.href}>
+              <div className={cn('nav-item', active && 'active')}>
+                <item.icon
+                  className={cn('h-4 w-4 flex-shrink-0 text-muted-foreground', active && 'text-foreground')}
+                  strokeWidth={1.5}
+                />
+                <span>{item.label}</span>
+              </div>
+            </Link>
+          );
+        })}
       </nav>
 
       {/* User */}

@@ -30,6 +30,11 @@ const config: Config = {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
+        // The CSS variables existed but were never registered here, so every
+        // text-success / bg-warn in the app emitted no rule at all.
+        // `warn` is the class name used across the code; --warning is the token.
+        success: 'hsl(var(--success))',
+        warn:    'hsl(var(--warning))',
         muted: {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',

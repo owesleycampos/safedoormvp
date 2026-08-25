@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — Agent Configuration
+Porta Segura — Agent Configuration
 """
 from pydantic_settings import BaseSettings
 from pydantic import Field

@@ -43,7 +43,7 @@ interface StudentDialogProps {
   onOpenChange: (open: boolean) => void;
   student?: any;
   classes: any[];
-  onSaved: (student: any) => void;
+  onSaved: (student: any, wasCreated?: boolean) => void;
   defaultTab?: 'info' | 'photos' | 'parents' | 'history';
 }
 
@@ -77,6 +77,25 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [parentResults, setParentResults] = useState<any[]>([]);
   const [searchingParents, setSearchingParents] = useState(false);
   const [linkingParent, setLinkingParent] = useState<string | null>(null);
+  const [showNewParent, setShowNewParent] = useState(false);
+  const [creatingParent, setCreatingParent] = useState(false);
+  const [newParent, setNewParent] = useState({ name: '', email: '', phone: '' });
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteWarning, setInviteWarning] = useState<string[]>([]);
+
+  /** O que falta para o aluno estar pronto: foto, biometria, responsável. */
+  const pending: Array<{ tab: 'photos' | 'parents'; label: string }> = [];
+  if (isEdit) {
+    if (photos.length === 0) {
+      pending.push({ tab: 'photos', label: 'Adicionar ao menos uma foto' });
+    } else if (!student?.azurePersonId && !student?.faceVector) {
+      pending.push({ tab: 'photos', label: 'Treinar a biometria com as fotos' });
+    }
+    if (parentLinks.length === 0) {
+      pending.push({ tab: 'parents', label: 'Vincular um responsável para receber os avisos' });
+    }
+  }
 
   // Reset on open
   useEffect(() => {
@@ -144,7 +163,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const t = setTimeout(async () => {
       setSearchingParents(true);
       try {
-        const res = await fetch(`/api/parents?search=${encodeURIComponent(parentSearch)}&limit=8`);
+        const res = await fetch(`/api/parents?search=${encodeURIComponent(parentSearch)}&limit=8&includeUnlinked=true`);
         const data = await res.json();
         // Filter out already linked parents
         const linkedIds = parentLinks.map((l) => l.parentId);
@@ -162,7 +181,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const t = setTimeout(async () => {
       setQuickParentSearching(true);
       try {
-        const res = await fetch(`/api/parents?search=${encodeURIComponent(quickParentSearch)}&limit=5`);
+        const res = await fetch(`/api/parents?search=${encodeURIComponent(quickParentSearch)}&limit=5&includeUnlinked=true`);
         const data = await res.json();
         setQuickParentResults(data.parents || []);
       } finally {
@@ -293,6 +312,89 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     }
   }
 
+  /**
+   * "Find or create" in one step: when the search finds nobody, the admin
+   * fills name/e-mail right here and the guardian is created and linked in a
+   * single request. No password — the guardian sets their own via the invite.
+   */
+  async function handleCreateAndLinkParent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isEdit) return;
+    if (!newParent.name.trim() || !newParent.email.trim()) {
+      toast({ variant: 'warning', title: 'Informe nome e e-mail do responsável.' });
+      return;
+    }
+    setCreatingParent(true);
+    try {
+      const res = await fetch(`/api/students/${student.id}/parents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newParent.name.trim(),
+          email: newParent.email.trim(),
+          phone: newParent.phone.trim() || null,
+          relationship: 'Responsável',
+          isPrimary: parentLinks.length === 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        return;
+      }
+      setParentLinks((prev) => [...prev, data.link]);
+      setNewParent({ name: '', email: '', phone: '' });
+      setShowNewParent(false);
+      setParentSearch('');
+      setParentResults([]);
+      toast({
+        variant: 'success',
+        title: `${data.link.parent.name} vinculado!`,
+        description: data.createdParent
+          ? 'Envie o convite para ele criar a senha e acompanhar o aluno.'
+          : undefined,
+      });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setCreatingParent(false);
+    }
+  }
+
+  /**
+   * Generates the class invite from inside the student's record, so the admin
+   * doesn't have to leave for the Turmas screen to send it. The link is
+   * class-wide by design: the guardian picks their child and confirms the
+   * birth date, which is what proves the relationship.
+   */
+  async function handleGenerateInvite() {
+    if (!isEdit || !student?.classId) return;
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: student.classId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+        return;
+      }
+      setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
+      setInviteWarning(data.studentsMissingBirthDate ?? []);
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  function inviteMessage() {
+    const school = 'Porta Segura';
+    return `Olá! A escola disponibilizou o link abaixo para você acompanhar a entrada e saída de ${student?.name ?? 'seu filho(a)'} em tempo real.\n\n${inviteLink}\n\nAbra o link, escolha o aluno e confirme a data de nascimento. — ${school}`;
+  }
+
   async function handleUnlinkParent(parentId: string) {
     if (!isEdit) return;
     const res = await fetch(`/api/students/${student.id}/parents`, {
@@ -310,6 +412,14 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'Nome é obrigatório';
     if (!form.classId) e.classId = 'Turma é obrigatória';
+    // Required because it is what the guardian types to prove the
+    // relationship when claiming the invite. Without it, no one can link.
+    if (!form.birthDate) {
+      e.birthDate = 'Data de nascimento é obrigatória';
+    } else {
+      const d = new Date(form.birthDate + 'T00:00:00');
+      if (isNaN(d.getTime()) || d > new Date()) e.birthDate = 'Data inválida';
+    }
     return e;
   }
 
@@ -355,7 +465,10 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
           title: isEdit ? 'Aluno atualizado!' : 'Aluno cadastrado!',
           description: form.name,
         });
-        onSaved(data.student);
+        // O segundo argumento diz que foi uma CRIAÇÃO: a lista mantém a ficha
+        // aberta na aba de fotos em vez de fechar tudo e obrigar o usuário a
+        // reabrir o aluno pelo menu para continuar o cadastro.
+        onSaved(data.student, !isEdit);
       }
     } finally {
       setLoading(false);
@@ -394,6 +507,32 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             {/* ── Info Tab ── */}
             <TabsContent value="info" className="flex-1 overflow-y-auto mt-0 pt-4">
               <form onSubmit={handleSubmit} className="space-y-4 pb-4">
+                {/* O que ainda falta para este aluno funcionar de ponta a
+                    ponta. Antes nada sinalizava "tem foto mas falta treinar"
+                    ou "ninguém é notificado por esta criança". */}
+                {pending.length > 0 && (
+                  <div className="rounded-md border border-warn/25 bg-warn/[0.07] p-3 space-y-2">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-warn" />
+                      Faltam {pending.length} {pending.length === 1 ? 'item' : 'itens'} para concluir o cadastro
+                    </p>
+                    <div className="space-y-1">
+                      {pending.map((p) => (
+                        <button
+                          key={p.tab}
+                          type="button"
+                          onClick={() => setActiveTab(p.tab)}
+                          className="w-full flex items-center gap-2 text-left text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
+                        >
+                          <span className="h-1 w-1 rounded-full bg-warn shrink-0" />
+                          <span className="flex-1">{p.label}</span>
+                          <ChevronRight className="h-3 w-3 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Profile photo preview */}
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-border/40 flex-shrink-0">
@@ -434,13 +573,18 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="s-birth">Data de nascimento</Label>
+                    <Label htmlFor="s-birth">Data de nascimento *</Label>
                     <Input
                       id="s-birth"
                       type="date"
                       value={form.birthDate}
                       onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                     />
+                    {errors.birthDate
+                      ? <p className="text-xs text-destructive">{errors.birthDate}</p>
+                      : <p className="text-[11px] text-muted-foreground">
+                          O responsável confirma esta data para se vincular ao aluno.
+                        </p>}
                   </div>
 
                   <div className="space-y-1.5">
@@ -552,7 +696,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                           </div>
                         )}
                         {/* Hover actions */}
-                        <div className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <div className="absolute inset-0 bg-black/60 rounded-lg action-reveal transition-opacity flex items-center justify-center gap-2">
                           {!photo.isProfile && (
                             <button
                               onClick={() => handleSetProfile(photo.id)}
@@ -697,7 +841,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                               >
                                 <MessageCircle className="h-3 w-3 flex-shrink-0 group-hover:text-success transition-colors" />
                                 <span>{phone}</span>
-                                <span className="text-[9px] text-success opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[9px] text-success action-reveal transition-opacity">
                                   Abrir WhatsApp
                                 </span>
                               </a>
@@ -708,6 +852,90 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                     })}
                   </div>
                 )}
+
+                {/* Convite — disponível aqui, não só na tela de Turmas */}
+                <div className="rounded-md bg-secondary/40 p-3 space-y-2.5">
+                  <div>
+                    <p className="text-xs font-medium">Convidar responsável pelo app</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Envie o link para o responsável criar a senha e acompanhar {student?.name?.split(' ')[0] ?? 'o aluno'}.
+                    </p>
+                  </div>
+
+                  {!inviteLink ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={handleGenerateInvite}
+                      loading={inviteLoading}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      Gerar link de convite
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-mono break-all rounded bg-background px-2 py-1.5 border border-border">
+                        {inviteLink}
+                      </p>
+
+                      {inviteWarning.length > 0 && (
+                        <div className="flex gap-2 rounded-md bg-warn/10 border border-warn/20 p-2.5">
+                          <AlertCircle className="h-3.5 w-3.5 text-warn shrink-0 mt-0.5" />
+                          <p className="text-[11px] text-foreground">
+                            {inviteWarning.length === 1
+                              ? <>O aluno <strong>{inviteWarning[0]}</strong> está sem data de nascimento e não poderá ser vinculado por este link.</>
+                              : <>{inviteWarning.length} alunos desta turma estão sem data de nascimento e não poderão ser vinculados: {inviteWarning.slice(0, 4).join(', ')}{inviteWarning.length > 4 ? ` e mais ${inviteWarning.length - 4}` : ''}.</>}
+                            {' '}Complete o cadastro para liberar o vínculo.
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            navigator.clipboard.writeText(inviteLink);
+                            toast({ variant: 'success', title: 'Link copiado!' });
+                          }}
+                        >
+                          Copiar link
+                        </Button>
+                        {/* Um clique manda no WhatsApp de cada responsável com telefone */}
+                        {parentLinks
+                          .filter((l) => l.parent?.phone)
+                          .map((l) => {
+                            const digits = String(l.parent!.phone).replace(/\D/g, '');
+                            const name = (l.parent?.name || '').split(' ')[0];
+                            return (
+                              <a
+                                key={l.parentId}
+                                href={`https://wa.me/55${digits}?text=${encodeURIComponent(inviteMessage())}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-border text-xs hover:bg-accent transition-colors"
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                                Enviar a {name}
+                              </a>
+                            );
+                          })}
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(inviteMessage())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-border text-xs hover:bg-accent transition-colors"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Search + link parent */}
                 <div className="space-y-2">
@@ -762,15 +990,78 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                     </div>
                   )}
 
-                  {parentSearch.length >= 2 && !searchingParents && parentResults.length === 0 && (
-                    <div className="text-center py-4 text-xs text-muted-foreground">
-                      Nenhum responsável encontrado para "{parentSearch}"
+                  {/* Nothing found is an action, not a dead end: create right here. */}
+                  {parentSearch.length >= 2 && !searchingParents && parentResults.length === 0 && !showNewParent && (
+                    <div className="rounded-md border border-dashed border-border p-3 text-center space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum responsável encontrado para “{parentSearch}”.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          const looksLikeEmail = parentSearch.includes('@');
+                          setNewParent({
+                            name: looksLikeEmail ? '' : parentSearch,
+                            email: looksLikeEmail ? parentSearch : '',
+                            phone: '',
+                          });
+                          setShowNewParent(true);
+                        }}
+                      >
+                        <UserPlus className="h-3 w-3" />
+                        Cadastrar e vincular
+                      </Button>
                     </div>
                   )}
 
-                  {parentLinks.length === 0 && !parentSearch && (
+                  {showNewParent && (
+                    <form onSubmit={handleCreateAndLinkParent} className="rounded-md border border-border p-3 space-y-2.5">
+                      <p className="text-xs font-medium">Novo responsável</p>
+                      <Input
+                        placeholder="Nome completo *"
+                        value={newParent.name}
+                        onChange={(e) => setNewParent((p) => ({ ...p, name: e.target.value }))}
+                        autoFocus
+                      />
+                      <Input
+                        type="email"
+                        placeholder="E-mail *"
+                        value={newParent.email}
+                        onChange={(e) => setNewParent((p) => ({ ...p, email: e.target.value }))}
+                      />
+                      <Input
+                        placeholder="Telefone (WhatsApp)"
+                        value={newParent.phone}
+                        onChange={(e) => setNewParent((p) => ({ ...p, phone: e.target.value }))}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Sem senha: o responsável cria a dele ao abrir o link de convite.
+                      </p>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setShowNewParent(false)}
+                          disabled={creatingParent}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button type="submit" size="sm" className="h-7 text-xs" loading={creatingParent}>
+                          Cadastrar e vincular
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {parentLinks.length === 0 && !parentSearch && !showNewParent && (
                     <p className="text-xs text-muted-foreground text-center py-4">
-                      Nenhum responsável vinculado. Busque e vincule um responsável existente.
+                      Nenhum responsável vinculado. Busque pelo nome ou e-mail — se não existir,
+                      você cadastra na hora.
                     </p>
                   )}
                 </div>
@@ -780,7 +1071,19 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             {/* ── History Tab ── */}
             <TabsContent value="history" className="flex-1 overflow-y-auto mt-0 pt-4">
               <div className="space-y-3 pb-4">
-                <p className="text-sm font-medium">Últimos registros de entrada e saída</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Últimos registros de entrada e saída</p>
+                  {/* As duas telas mostravam a mesma coisa de formas
+                      diferentes. Aqui fica o resumo; a análise (frequência,
+                      permanência média, alerta da LDB) vive numa tela só. */}
+                  <a
+                    href={`/admin/students/${student?.id}/history`}
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap inline-flex items-center gap-0.5"
+                  >
+                    Frequência completa
+                    <ChevronRight className="h-3 w-3" />
+                  </a>
+                </div>
                 {historyLoading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -847,13 +1150,18 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="s-birth">Data de nascimento</Label>
+                <Label htmlFor="s-birth">Data de nascimento *</Label>
                 <Input
                   id="s-birth"
                   type="date"
                   value={form.birthDate}
                   onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                 />
+                {errors.birthDate
+                  ? <p className="text-xs text-destructive">{errors.birthDate}</p>
+                  : <p className="text-[11px] text-muted-foreground">
+                      O responsável confirma esta data para se vincular ao aluno.
+                    </p>}
               </div>
 
               <div className="space-y-1.5">
@@ -938,7 +1246,8 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             </div>
 
             <div className="rounded-md bg-secondary/40 p-3 text-xs text-muted-foreground">
-              Após cadastrar, adicione fotos na aba "Fotos" para ativar o reconhecimento facial.
+              Ao cadastrar, a ficha continua aberta para você adicionar as fotos e treinar o
+              reconhecimento facial.
             </div>
 
             <DialogFooter className="gap-2 pt-1">

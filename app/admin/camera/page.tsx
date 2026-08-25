@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { CameraClient } from '@/components/admin/camera-client';
 
-export const metadata = { title: 'Câmera ao Vivo — Safe Door' };
+export const metadata = { title: 'Câmera ao Vivo — Porta Segura' };
 
 export default function CameraPage() {
   return (

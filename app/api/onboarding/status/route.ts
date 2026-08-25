@@ -76,9 +76,9 @@ export async function GET() {
     },
     {
       key: 'devices',
-      label: 'Configurar câmera',
+      label: 'Cadastrar o dispositivo da portaria',
       completed: devicesCount > 0,
-      href: '/admin/camera',
+      href: '/admin/devices',
     },
   ];
 

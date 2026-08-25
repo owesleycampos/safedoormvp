@@ -55,6 +55,16 @@ interface ParentsClientProps {
 
 const EMPTY_FORM = { name: '', email: '', phone: '', cpf: '', password: '' };
 
+/** Reads the API's `error` message instead of dumping the raw response body. */
+async function readError(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    return data?.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ParentsClient({ parents: initialParents, schoolId }: ParentsClientProps) {
   const [parents, setParents] = useState<ParentItem[]>(initialParents);
   const [search, setSearch] = useState('');
@@ -103,7 +113,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, phone: form.phone || null, cpf: form.cpf || null, ...(form.password ? { password: form.password } : {}) }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readError(res, 'Não foi possível salvar as alterações.'));
         const updated: ParentItem = await res.json();
         setParents((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
         toast({ variant: 'success', title: 'Responsável atualizado', description: updated.name });
@@ -113,7 +123,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone || null, cpf: form.cpf || null, password: form.password }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readError(res, 'Não foi possível criar o responsável.'));
         const created: ParentItem = await res.json();
         setParents((prev) => [{ ...created, students: [] }, ...prev]);
         toast({ variant: 'success', title: 'Responsável criado', description: created.name });
@@ -132,7 +142,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
     if (!confirm(`Excluir responsável "${parent.name}"?`)) return;
     try {
       const res = await fetch(`/api/parents/${parent.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readError(res, 'Não foi possível excluir o responsável.'));
       setParents((prev) => prev.filter((p) => p.id !== parent.id));
       toast({ variant: 'success', title: 'Responsável excluído', description: parent.name });
     } catch (err: any) {
@@ -149,34 +159,57 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
     } catch { setLinkStudents([]); }
   }
 
-  async function handleLinkStudent(studentId: string) {
+  async function handleLinkStudent(studentId: string, studentName: string) {
     if (!linkParent) return;
     setLinkLoading(true);
     try {
-      const res = await fetch(`/api/parents/${linkParent.id}/link`, {
+      // Canonical endpoint — the link belongs to the student.
+      const res = await fetch(`/api/students/${studentId}/parents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({ parentId: linkParent.id }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast({ variant: 'success', title: `${data.student.name} vinculado(a)!` });
-        setLinkOpen(false);
-        window.location.reload();
-      } else {
-        toast({ variant: 'destructive', title: data.error });
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: await readError(res, 'Não foi possível vincular.') });
+        return;
       }
-    } catch { toast({ variant: 'destructive', title: 'Erro de conexão' }); }
-    finally { setLinkLoading(false); }
+      const { link } = await res.json();
+      toast({ variant: 'success', title: `${studentName} vinculado(a)!` });
+
+      // Update in place instead of reloading the page, which used to discard
+      // the search the admin had typed.
+      const added: ParentStudent = {
+        studentId,
+        parentId: linkParent.id,
+        relationship: link?.relationship ?? 'Responsável',
+        isPrimary: link?.isPrimary ?? false,
+        student: {
+          id: studentId,
+          name: studentName,
+          class: linkStudents.find((s) => s.id === studentId)?.class ?? null,
+        },
+      };
+      setParents((prev) =>
+        prev.map((p) => (p.id === linkParent.id ? { ...p, students: [...p.students, added] } : p))
+      );
+      setDetailParent((prev) =>
+        prev && prev.id === linkParent.id ? { ...prev, students: [...prev.students, added] } : prev
+      );
+      setLinkOpen(false);
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setLinkLoading(false);
+    }
   }
 
   async function handleUnlinkStudent(parentId: string, studentId: string, studentName: string) {
     if (!confirm(`Desvincular "${studentName}" deste responsável?`)) return;
     try {
-      const res = await fetch(`/api/parents/${parentId}/link`, {
+      const res = await fetch(`/api/students/${studentId}/parents`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({ parentId }),
       });
       if (res.ok) {
         toast({ variant: 'success', title: `${studentName} desvinculado(a)` });
@@ -341,14 +374,14 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
 
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent transition-all"
+                        className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground action-reveal hover:bg-accent transition-all"
                         onClick={() => openDetail(parent)}
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent transition-all">
+                          <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground action-reveal hover:bg-accent transition-all">
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                         </DropdownMenuTrigger>
@@ -405,11 +438,16 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
               </div>
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="parent-password">
-                  {editingParent ? 'Nova senha (deixe em branco para manter)' : 'Senha *'}
+                  {editingParent ? 'Nova senha (deixe em branco para manter)' : 'Senha (opcional)'}
                 </Label>
                 <Input id="parent-password" type="password"
                   placeholder={editingParent ? '••••••••' : 'Mínimo 8 caracteres'}
                   value={form.password} onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))} />
+                {!editingParent && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe em branco para o responsável criar a própria senha pelo link de convite.
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter className="mt-6">
@@ -539,7 +577,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
                 filteredLinkStudents.slice(0, 50).map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => handleLinkStudent(s.id)}
+                    onClick={() => handleLinkStudent(s.id, s.name)}
                     disabled={linkLoading}
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
                   >

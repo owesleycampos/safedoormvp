@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — API Client
+Porta Segura — API Client
 Handles communication with the Next.js backend.
 Implements retry logic and error handling.
 """

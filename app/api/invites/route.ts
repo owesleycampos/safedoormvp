@@ -54,10 +54,17 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true },
-  });
+  const [school, missingBirthDate] = await Promise.all([
+    prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } }),
+    // The guardian proves the relationship by typing the child's birth date.
+    // Students without one on file can't be claimed, so warn the admin now
+    // instead of letting parents hit a wall after receiving the link.
+    prisma.student.findMany({
+      where: { classId, isActive: true, birthDate: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
   return NextResponse.json({
     success: true,
@@ -68,6 +75,7 @@ export async function POST(req: NextRequest) {
       schoolName: school?.name,
       expiresAt: invite.expiresAt,
     },
+    studentsMissingBirthDate: missingBirthDate.map((s) => s.name),
   });
 }
 

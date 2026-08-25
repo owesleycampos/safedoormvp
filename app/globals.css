@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* ── SafeDoor 2.0 — Light Mode ── */
+    /* ── PortaSegura 2.0 — Light Mode ── */
     --background:   0 0% 98%;         /* #FAFAFA */
     --foreground:   0 0% 7%;          /* #121212 */
 
@@ -52,7 +52,7 @@
   }
 
   .dark {
-    /* ── SafeDoor 2.0 — Dark Mode ── */
+    /* ── PortaSegura 2.0 — Dark Mode ── */
     --background:   0 0% 4%;          /* #0A0A0A */
     --foreground:   0 0% 95%;         /* #F2F2F2 */
 
@@ -153,6 +153,36 @@
 
   .skeleton {
     @apply rounded-md bg-muted animate-pulse;
+  }
+
+  /* Ações que aparecem no hover da linha.
+     Em telas de toque não existe :hover, então essas ações ficavam
+     permanentemente invisíveis — no celular, editar ou excluir era
+     impossível em Alunos, Turmas, Responsáveis, Dispositivos e Matérias.
+     Aqui elas seguem discretas no desktop e sempre visíveis no toque. */
+  .action-reveal {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .group:hover .action-reveal,
+  .group:focus-within .action-reveal,
+  .action-reveal:focus-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .action-reveal { opacity: 1; }
+  }
+
+  /* Tab bar — PWA do responsável.
+     Perdida no redesign monocromático: sem estas regras o <nav> deixa de ser
+     fixo e os três itens empilham na vertical no fim da página, atrás do
+     padding-bottom que o layout reserva para ela. */
+  .tab-bar {
+    @apply fixed bottom-0 inset-x-0 z-50 flex items-stretch;
+    background: hsl(var(--sidebar));
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border-top: 1px solid hsl(var(--border));
   }
 
   .input-base {

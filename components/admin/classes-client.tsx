@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus, Search, GraduationCap, Edit, Trash2, Users, MoreHorizontal,
-  Send, Copy, Check, Loader2,
+  Send, Copy, Check, Loader2, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +65,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const [inviteDialog, setInviteDialog] = useState<{ classId: string; className: string } | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteWarning, setInviteWarning] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, { present: number; total: number }>>({});
 
@@ -182,6 +183,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
       const data = await res.json();
       if (data.success) {
         setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
+        setInviteWarning(data.studentsMissingBirthDate ?? []);
       } else {
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
         setInviteDialog(null);
@@ -194,7 +196,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
 
   function getWhatsAppMessage() {
     if (!inviteLink || !inviteDialog) return '';
-    return `Olá! A escola disponibilizou o link abaixo para você vincular seu filho(a) da turma *${inviteDialog.className}* ao sistema Safe Door.\n\nAcesse o link e siga as instruções:\n${inviteLink}\n\nCom o Safe Door você acompanha a entrada e saída do seu filho em tempo real.`;
+    return `Olá! A escola disponibilizou o link abaixo para você vincular seu filho(a) da turma *${inviteDialog.className}* ao sistema Porta Segura.\n\nAcesse o link e siga as instruções:\n${inviteLink}\n\nCom o Porta Segura você acompanha a entrada e saída do seu filho em tempo real.`;
   }
 
   function handleCopyLink() {
@@ -339,7 +341,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent transition-all">
+                            <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground action-reveal hover:bg-accent transition-all">
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
@@ -411,6 +413,27 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
+
+              {/* Sem data de nascimento o responsável não tem como provar o
+                  vínculo, então o convite não funciona para esses alunos. */}
+              {inviteWarning.length > 0 && (
+                <div className="flex gap-2 rounded-md bg-warn/10 border border-warn/20 p-3">
+                  <AlertTriangle className="h-4 w-4 text-warn shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-medium">
+                      {inviteWarning.length === 1
+                        ? '1 aluno não poderá ser vinculado'
+                        : `${inviteWarning.length} alunos não poderão ser vinculados`}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">
+                      {inviteWarning.slice(0, 5).join(', ')}
+                      {inviteWarning.length > 5 ? ` e mais ${inviteWarning.length - 5}` : ''}
+                      {' '}— está sem data de nascimento, que é o dado que o responsável confirma
+                      para se vincular. Complete o cadastro em Alunos.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-2">
                 <button

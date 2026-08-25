@@ -100,7 +100,7 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Visão geral da plataforma Safe Door</p>
+        <p className="text-sm text-muted-foreground mt-1">Visão geral da plataforma Porta Segura</p>
       </div>
 
       {/* KPI Cards */}

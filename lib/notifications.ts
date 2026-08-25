@@ -122,13 +122,13 @@ export function formatAttendanceNotification(
   let body: string;
 
   if (isLate) {
-    title = `Safe Door — Atraso Registrado`;
+    title = `Porta Segura — Atraso Registrado`;
     body = `${studentName} chegou com atraso na ${schoolName} às ${time}`;
   } else if (isEarlyExit) {
-    title = `Safe Door — Saída Antecipada`;
+    title = `Porta Segura — Saída Antecipada`;
     body = `${studentName} saiu antecipadamente da ${schoolName} às ${time}`;
   } else {
-    title = `Safe Door — ${isEntry ? 'Entrada' : 'Saída'} Registrada`;
+    title = `Porta Segura — ${isEntry ? 'Entrada' : 'Saída'} Registrada`;
     body = isEntry
       ? `${studentName} entrou na ${schoolName} às ${time}`
       : `${studentName} saiu da ${schoolName} às ${time}`;

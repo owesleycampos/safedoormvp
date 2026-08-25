@@ -232,7 +232,7 @@ export default function ParentDashboard() {
         <div className="text-center py-4">
           <div className="flex items-center justify-center gap-2 text-muted-foreground/60">
             <Shield className="h-3.5 w-3.5" />
-            <span className="text-[10px]">Safe Door Brasil</span>
+            <span className="text-[10px]">Porta Segura</span>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — Face Recognition Engine
+Porta Segura — Face Recognition Engine
 Uses face_recognition library with DeepFace as fallback.
 Handles: detection, embedding, comparison, and basic anti-spoofing.
 """

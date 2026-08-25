@@ -13,8 +13,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Safe Door — Segurança Escolar Inteligente',
-    template: '%s | Safe Door',
+    default: 'Porta Segura — Segurança Escolar Inteligente',
+    template: '%s | Porta Segura',
   },
   description:
     'Reconhecimento facial para controle de acesso escolar em tempo real. Segurança para sua família.',
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Safe Door',
+    title: 'Porta Segura',
   },
   icons: {
     icon: [
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
   },
   openGraph: {
-    title: 'Safe Door — Segurança Escolar Inteligente',
+    title: 'Porta Segura — Segurança Escolar Inteligente',
     description: 'Controle de acesso escolar com reconhecimento facial em tempo real.',
     type: 'website',
     locale: 'pt_BR',

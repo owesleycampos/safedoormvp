@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { AdminSidebar } from '@/components/admin/sidebar';
 import { AdminMobileHeader } from '@/components/admin/mobile-header';
+import { AdminMobileBottomNav } from '@/components/admin/mobile-bottom-nav';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -28,10 +29,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="flex-1 lg:ml-[220px] min-h-screen flex flex-col">
         {/* Mobile header — only on small screens */}
         <AdminMobileHeader />
-        <main className="flex-1 flex flex-col">
+        {/* Bottom padding on phones so content never hides behind the bar */}
+        <main className="flex-1 flex flex-col pb-[calc(3.25rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>
+
+      {/* Phone bottom bar with the day-to-day destinations */}
+      <AdminMobileBottomNav />
     </div>
   );
 }

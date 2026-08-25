@@ -1,5 +1,5 @@
 """
-Safe Door Brasil — Sync Manager
+Porta Segura — Sync Manager
 Handles offline-first data syncing between local SQLite and the cloud backend.
 """
 import asyncio

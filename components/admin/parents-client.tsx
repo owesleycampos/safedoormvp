@@ -55,6 +55,16 @@ interface ParentsClientProps {
 
 const EMPTY_FORM = { name: '', email: '', phone: '', cpf: '', password: '' };
 
+/** Reads the API's `error` message instead of dumping the raw response body. */
+async function readError(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    return data?.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ParentsClient({ parents: initialParents, schoolId }: ParentsClientProps) {
   const [parents, setParents] = useState<ParentItem[]>(initialParents);
   const [search, setSearch] = useState('');
@@ -103,7 +113,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, phone: form.phone || null, cpf: form.cpf || null, ...(form.password ? { password: form.password } : {}) }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readError(res, 'Não foi possível salvar as alterações.'));
         const updated: ParentItem = await res.json();
         setParents((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
         toast({ variant: 'success', title: 'Responsável atualizado', description: updated.name });
@@ -113,7 +123,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone || null, cpf: form.cpf || null, password: form.password }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readError(res, 'Não foi possível criar o responsável.'));
         const created: ParentItem = await res.json();
         setParents((prev) => [{ ...created, students: [] }, ...prev]);
         toast({ variant: 'success', title: 'Responsável criado', description: created.name });
@@ -132,7 +142,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
     if (!confirm(`Excluir responsável "${parent.name}"?`)) return;
     try {
       const res = await fetch(`/api/parents/${parent.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readError(res, 'Não foi possível excluir o responsável.'));
       setParents((prev) => prev.filter((p) => p.id !== parent.id));
       toast({ variant: 'success', title: 'Responsável excluído', description: parent.name });
     } catch (err: any) {
@@ -405,11 +415,16 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
               </div>
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="parent-password">
-                  {editingParent ? 'Nova senha (deixe em branco para manter)' : 'Senha *'}
+                  {editingParent ? 'Nova senha (deixe em branco para manter)' : 'Senha (opcional)'}
                 </Label>
                 <Input id="parent-password" type="password"
                   placeholder={editingParent ? '••••••••' : 'Mínimo 8 caracteres'}
                   value={form.password} onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))} />
+                {!editingParent && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe em branco para o responsável criar a própria senha pelo link de convite.
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter className="mt-6">

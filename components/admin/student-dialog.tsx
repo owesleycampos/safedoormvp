@@ -144,7 +144,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const t = setTimeout(async () => {
       setSearchingParents(true);
       try {
-        const res = await fetch(`/api/parents?search=${encodeURIComponent(parentSearch)}&limit=8`);
+        const res = await fetch(`/api/parents?search=${encodeURIComponent(parentSearch)}&limit=8&includeUnlinked=true`);
         const data = await res.json();
         // Filter out already linked parents
         const linkedIds = parentLinks.map((l) => l.parentId);
@@ -162,7 +162,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const t = setTimeout(async () => {
       setQuickParentSearching(true);
       try {
-        const res = await fetch(`/api/parents?search=${encodeURIComponent(quickParentSearch)}&limit=5`);
+        const res = await fetch(`/api/parents?search=${encodeURIComponent(quickParentSearch)}&limit=5&includeUnlinked=true`);
         const data = await res.json();
         setQuickParentResults(data.parents || []);
       } finally {

@@ -235,6 +235,7 @@ export default function ReportsTab() {
   const [allRows, setAllRows] = useState<StudentRow[]>([]);
   const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const [alerts, setAlerts] = useState<AlertStudent[]>([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
@@ -253,9 +254,13 @@ export default function ReportsTab() {
       const data = await res.json();
       setAllRows(data.rows ?? []);
       setDates(data.dates ?? []);
+      setLoadError(false);
     } catch {
       setAllRows([]);
       setDates([]);
+      // Without this the failure rendered as "Nenhum aluno encontrado",
+      // which reads as "there are no students" rather than "it failed".
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -445,6 +450,21 @@ export default function ReportsTab() {
       {loading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!loading && loadError && (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <AlertTriangle className="h-10 w-10 text-muted-foreground/30" />
+          <div>
+            <p className="text-sm font-medium">Não foi possível carregar o relatório</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Verifique sua conexão e tente novamente.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={fetchData}>
+            Tentar novamente
+          </Button>
         </div>
       )}
 
@@ -639,7 +659,7 @@ export default function ReportsTab() {
         </Card>
       )}
 
-      {!loading && filteredRows.length === 0 && (
+      {!loading && !loadError && filteredRows.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Users className="h-8 w-8 text-muted-foreground/20 mb-3" />
           <p className="text-sm text-muted-foreground">Nenhum aluno encontrado</p>

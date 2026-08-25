@@ -155,6 +155,18 @@
     @apply rounded-md bg-muted animate-pulse;
   }
 
+  /* Tab bar — PWA do responsável.
+     Perdida no redesign monocromático: sem estas regras o <nav> deixa de ser
+     fixo e os três itens empilham na vertical no fim da página, atrás do
+     padding-bottom que o layout reserva para ela. */
+  .tab-bar {
+    @apply fixed bottom-0 inset-x-0 z-50 flex items-stretch;
+    background: hsl(var(--sidebar));
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border-top: 1px solid hsl(var(--border));
+  }
+
   .input-base {
     @apply h-10 w-full rounded-md border border-input bg-card px-3.5 py-2
            text-sm transition-colors duration-150

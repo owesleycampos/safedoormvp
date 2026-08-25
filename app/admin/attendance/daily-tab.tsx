@@ -237,6 +237,7 @@ export default function DailyTab() {
   const [search, setSearch] = useState('');
   const [data, setData] = useState<DailyData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [busyStudent, setBusyStudent] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
 
@@ -257,8 +258,12 @@ export default function DailyTab() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setData(json);
+      setLoadError(false);
     } catch {
       setData(null);
+      // A failed request used to fall through to the "no students found"
+      // empty state — the secretary read it as "this class is empty".
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -520,7 +525,22 @@ export default function DailyTab() {
         </Card>
       )}
 
-      {!loading && filtered.length === 0 && (
+      {!loading && loadError && (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <AlertTriangle className="h-10 w-10 text-muted-foreground/30" />
+          <div>
+            <p className="text-sm font-medium">Não foi possível carregar a chamada</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Verifique sua conexão e tente novamente.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={fetchData}>
+            <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {!loading && !loadError && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <Users className="h-10 w-10 text-muted-foreground/20" />
           <div>

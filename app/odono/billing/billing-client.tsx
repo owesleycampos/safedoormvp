@@ -15,6 +15,7 @@ interface BillingData {
   overdueCount: number;
   overdueAmount: number;
   pendingCount: number;
+  invoicesTruncated?: boolean;
   subscriptions: {
     id: string;
     schoolId: string;
@@ -191,7 +192,7 @@ export function BillingClient({ data }: { data: BillingData }) {
           }`}
         >
           <Receipt className="h-4 w-4 inline mr-1.5" />
-          Faturas ({data.invoices.length})
+          Faturas ({data.invoices.length}{data.invoicesTruncated ? ' mais recentes' : ''})
         </button>
       </div>
 

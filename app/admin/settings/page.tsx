@@ -175,6 +175,7 @@ export default function SettingsPage() {
   const [loadingSchool, setLoadingSchool] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [activeSection, setActiveSection] = useState('school');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [schoolLogoUrl, setSchoolLogoUrl] = useState<string | null>(null);
@@ -220,7 +221,10 @@ export default function SettingsPage() {
           });
         }
       } catch {
-        // Use defaults if API not ready
+        // Falling through to the defaults would render 06:00–09:00 / 90% as if
+        // they were this school's saved values — and saving would overwrite the
+        // real configuration that governs late arrivals across the product.
+        setLoadError(true);
       } finally {
         setFetchLoading(false);
       }
@@ -291,6 +295,29 @@ export default function SettingsPage() {
         <AdminHeader title="Configurações" subtitle="Configurações da escola e do sistema" />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  // Never show the form on a failed load: the fields would hold defaults, and
+  // saving them would silently replace the school's real configuration.
+  if (loadError) {
+    return (
+      <div className="flex flex-col flex-1 page-enter">
+        <AdminHeader title="Configurações" subtitle="Configurações da escola e do sistema" />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+          <AlertTriangle className="h-10 w-10 text-muted-foreground/30" />
+          <div>
+            <p className="text-sm font-medium">Não foi possível carregar as configurações</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+              Os campos não são exibidos para evitar salvar valores padrão por cima
+              das configurações da sua escola.
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Tentar novamente
+          </Button>
         </div>
       </div>
     );

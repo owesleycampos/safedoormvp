@@ -82,6 +82,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [newParent, setNewParent] = useState({ name: '', email: '', phone: '' });
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteWarning, setInviteWarning] = useState<string[]>([]);
 
   // Reset on open
   useEffect(() => {
@@ -368,6 +369,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
         return;
       }
       setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
+      setInviteWarning(data.studentsMissingBirthDate ?? []);
     } catch {
       toast({ variant: 'destructive', title: 'Erro de conexão' });
     } finally {
@@ -397,6 +399,14 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'Nome é obrigatório';
     if (!form.classId) e.classId = 'Turma é obrigatória';
+    // Required because it is what the guardian types to prove the
+    // relationship when claiming the invite. Without it, no one can link.
+    if (!form.birthDate) {
+      e.birthDate = 'Data de nascimento é obrigatória';
+    } else {
+      const d = new Date(form.birthDate + 'T00:00:00');
+      if (isNaN(d.getTime()) || d > new Date()) e.birthDate = 'Data inválida';
+    }
     return e;
   }
 
@@ -521,13 +531,18 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="s-birth">Data de nascimento</Label>
+                    <Label htmlFor="s-birth">Data de nascimento *</Label>
                     <Input
                       id="s-birth"
                       type="date"
                       value={form.birthDate}
                       onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                     />
+                    {errors.birthDate
+                      ? <p className="text-xs text-destructive">{errors.birthDate}</p>
+                      : <p className="text-[11px] text-muted-foreground">
+                          O responsável confirma esta data para se vincular ao aluno.
+                        </p>}
                   </div>
 
                   <div className="space-y-1.5">
@@ -822,6 +837,18 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                       <p className="text-[11px] font-mono break-all rounded bg-background px-2 py-1.5 border border-border">
                         {inviteLink}
                       </p>
+
+                      {inviteWarning.length > 0 && (
+                        <div className="flex gap-2 rounded-md bg-warn/10 border border-warn/20 p-2.5">
+                          <AlertCircle className="h-3.5 w-3.5 text-warn shrink-0 mt-0.5" />
+                          <p className="text-[11px] text-foreground">
+                            {inviteWarning.length === 1
+                              ? <>O aluno <strong>{inviteWarning[0]}</strong> está sem data de nascimento e não poderá ser vinculado por este link.</>
+                              : <>{inviteWarning.length} alunos desta turma estão sem data de nascimento e não poderão ser vinculados: {inviteWarning.slice(0, 4).join(', ')}{inviteWarning.length > 4 ? ` e mais ${inviteWarning.length - 4}` : ''}.</>}
+                            {' '}Complete o cadastro para liberar o vínculo.
+                          </p>
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
                         <Button
                           type="button"
@@ -1069,13 +1096,18 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="s-birth">Data de nascimento</Label>
+                <Label htmlFor="s-birth">Data de nascimento *</Label>
                 <Input
                   id="s-birth"
                   type="date"
                   value={form.birthDate}
                   onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                 />
+                {errors.birthDate
+                  ? <p className="text-xs text-destructive">{errors.birthDate}</p>
+                  : <p className="text-[11px] text-muted-foreground">
+                      O responsável confirma esta data para se vincular ao aluno.
+                    </p>}
               </div>
 
               <div className="space-y-1.5">

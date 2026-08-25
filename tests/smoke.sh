@@ -215,6 +215,42 @@ check "endpoint duplicado /api/parents/[id]/link foi removido" "404" \
 check "API de gerar códigos removida" "405" "$(api POST /api/students/generate-codes '{}')"
 check "API de vincular por código removida" "405" "$(api POST /api/students/link '{"accessCode":"ABC123"}')"
 
+echo "── Convite: data de nascimento como prova de vínculo ──"
+
+# João tem data; Maria fica sem, para cobrir os dois caminhos
+sql0 "UPDATE \"Student\" SET \"birthDate\"='2015-05-20' WHERE id='$JOAO';" >/dev/null
+sql0 "UPDATE \"Student\" SET \"birthDate\"=NULL WHERE id='$MARIA';" >/dev/null
+CLS_A=$(sql0 "SELECT \"classId\" FROM \"Student\" WHERE id='$JOAO'")
+INV=$(curl -s -b "$JAR" -X POST "$BASE/api/invites" -H "Content-Type: application/json" -d "{\"classId\":\"$CLS_A\"}")
+TOK=$(echo "$INV" | python3 -c 'import json,sys;print(json.load(sys.stdin)["invite"]["token"])')
+
+check "convite avisa quais alunos estão sem data" "1" \
+  "$(echo "$INV" | python3 -c 'import json,sys;print(len(json.load(sys.stdin).get("studentsMissingBirthDate",[])))')"
+
+claim() { curl -s -o /tmp/p.json -w '%{http_code}' -X POST "$BASE/api/invites/$TOK/claim" -H "Content-Type: application/json" -d "$1"; }
+
+B=$(printf '{"studentId":"%s","birthDate":"1999-01-01","parentName":"X","email":"claim1@teste.com","password":"senha12345"}' "$MARIA")
+check "aluno sem data → 409 (antes: qualquer data passava)" "409" "$(claim "$B")"
+check "resposta identifica a causa" "True" "$(jfield missingBirthDate)"
+
+B=$(printf '{"studentId":"%s","birthDate":"1999-01-01","parentName":"X","email":"claim2@teste.com","password":"senha12345"}' "$JOAO")
+check "data de nascimento errada → 400" "400" "$(claim "$B")"
+
+sql0 "DELETE FROM \"User\" WHERE email='claim3@teste.com';" >/dev/null 2>&1
+B=$(printf '{"studentId":"%s","birthDate":"2015-05-20","parentName":"Resp Convite","email":"claim3@teste.com","password":"senha12345"}' "$JOAO")
+check "data correta → vincula" "200" "$(claim "$B")"
+check "vínculo criado pelo convite" "1" \
+  "$(sql0 "SELECT count(*) FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='claim3@teste.com'")"
+
+# Conta existente com senha precisa autenticar (era aceita sem conferência)
+B=$(printf '{"studentId":"%s","birthDate":"2015-05-20","parentName":"Invasor","email":"claim3@teste.com"}' "$JOAO")
+check "conta existente sem senha → 400" "400" "$(claim "$B")"
+check "resposta avisa que a conta existe" "True" "$(jfield accountExists)"
+B=$(printf '{"studentId":"%s","birthDate":"2015-05-20","parentName":"Invasor","email":"claim3@teste.com","password":"senhaerrada"}' "$JOAO")
+check "conta existente com senha errada → 401" "401" "$(claim "$B")"
+
+sql0 "DELETE FROM \"User\" WHERE email IN ('claim1@teste.com','claim2@teste.com','claim3@teste.com');" >/dev/null 2>&1
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

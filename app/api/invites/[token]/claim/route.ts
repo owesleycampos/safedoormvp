@@ -43,13 +43,27 @@ export async function POST(
     return NextResponse.json({ error: 'Aluno não encontrado nesta turma.' }, { status: 404 });
   }
 
-  // Validate birth date
-  if (student.birthDate) {
-    const studentBD = student.birthDate.toISOString().slice(0, 10);
-    const inputBD = new Date(birthDate + 'T00:00:00').toISOString().slice(0, 10);
-    if (studentBD !== inputBD) {
-      return NextResponse.json({ error: 'Data de nascimento incorreta.' }, { status: 400 });
-    }
+  // The birth date is the ONLY proof that this person is related to this
+  // child. Without it on file there is nothing to check, so the claim is
+  // refused instead of silently letting anyone through.
+  if (!student.birthDate) {
+    return NextResponse.json(
+      {
+        error:
+          'Este aluno ainda não tem data de nascimento cadastrada, então não é possível confirmar o vínculo por aqui. Peça à secretaria da escola para completar o cadastro.',
+        missingBirthDate: true,
+      },
+      { status: 409 }
+    );
+  }
+
+  const studentBD = student.birthDate.toISOString().slice(0, 10);
+  const inputBD = new Date(birthDate + 'T00:00:00').toISOString().slice(0, 10);
+  if (studentBD !== inputBD) {
+    return NextResponse.json(
+      { error: 'Data de nascimento incorreta. Confira com a escola e tente novamente.' },
+      { status: 400 }
+    );
   }
 
   // ── Find or create the account ────────────────────────────────────────

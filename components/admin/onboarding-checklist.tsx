@@ -23,7 +23,7 @@ const DEFAULT_STEPS: OnboardingStep[] = [
   { key: 'students', label: 'Adicionar alunos', completed: false, href: '/admin/students' },
   { key: 'photos', label: 'Upload de fotos', completed: false, href: '/admin/students' },
   { key: 'parents', label: 'Vincular responsáveis', completed: false, href: '/admin/parents' },
-  { key: 'devices', label: 'Configurar câmera', completed: false, href: '/admin/camera' },
+  { key: 'devices', label: 'Cadastrar o dispositivo da portaria', completed: false, href: '/admin/devices' },
 ];
 
 export function OnboardingChecklist() {
@@ -80,7 +80,7 @@ export function OnboardingChecklist() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
         transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="fixed bottom-4 right-4 z-50 max-w-[280px]"
+        className="fixed right-4 z-50 max-w-[280px] bottom-[calc(3.25rem+1rem+env(safe-area-inset-bottom))] lg:bottom-4"
       >
         <div className="bg-card border border-border rounded-lg shadow-lg overflow-hidden">
           {/* Header */}

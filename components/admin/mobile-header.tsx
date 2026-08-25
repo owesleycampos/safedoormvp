@@ -4,28 +4,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import {
-  Menu, LayoutDashboard, Video, ScanFace, GraduationCap,
-  Users, UserCheck, ClipboardList, CalendarDays,
-  Settings, LogOut, Search,
-} from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
+import { ADMIN_NAV, ADMIN_NAV_SECONDARY, ADMIN_NAV_ALL, isNavActive } from '@/lib/admin-nav';
 import { Logo } from '@/components/shared/logo';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-
-const nav = [
-  { href: '/admin/dashboard',    icon: LayoutDashboard, label: 'Dashboard'         },
-  { href: '/admin/camera',       icon: Video,           label: 'Câmera ao Vivo'    },
-  { href: '/admin/unrecognized', icon: ScanFace,        label: 'Não Identificados' },
-  { href: '/admin/students',     icon: GraduationCap,   label: 'Alunos'            },
-  { href: '/admin/classes',      icon: Users,           label: 'Turmas'            },
-  { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis'      },
-  { href: '/admin/attendance',   icon: ClipboardList,   label: 'Frequência'        },
-  { href: '/admin/subjects',     icon: CalendarDays,    label: 'Grade Escolar'     },
-  { href: '/admin/settings',     icon: Settings,        label: 'Configurações'     },
-];
 
 export function AdminMobileHeader() {
   const [open, setOpen] = useState(false);
@@ -33,11 +18,37 @@ export function AdminMobileHeader() {
   const { data: session } = useSession();
   const user = session?.user as any;
 
-  function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + '/');
-  }
+  const isActive = (href: string) => isNavActive(pathname, href);
+  const currentPage = ADMIN_NAV_ALL.find((n) => isActive(n.href))?.label ?? 'Safe Door';
 
-  const currentPage = nav.find((n) => isActive(n.href))?.label ?? 'Safe Door';
+  function NavLinks({ items }: { items: typeof ADMIN_NAV }) {
+    return (
+      <>
+        {items.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <Link key={item.href} href={item.href} onClick={() => setOpen(false)}>
+              <div className={cn('nav-item group', active && 'active')}>
+                <div className={cn(
+                  'flex items-center justify-center h-8 w-8 rounded-lg transition-all flex-shrink-0',
+                  active ? 'bg-primary/15 text-primary' : 'text-muted-foreground'
+                )}>
+                  <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                </div>
+                <span className={cn(
+                  'text-[13px]',
+                  active ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                )}>
+                  {item.label}
+                </span>
+                {active && <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />}
+              </div>
+            </Link>
+          );
+        })}
+      </>
+    );
+  }
 
   return (
     <>
@@ -60,7 +71,9 @@ export function AdminMobileHeader() {
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer — same list, same order and same hierarchy as the
+          desktop sidebar. The fake search field (a div with no handler that
+          did nothing when tapped) was removed. */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-[280px] p-0 flex flex-col bg-sidebar">
           {/* Logo */}
@@ -68,38 +81,11 @@ export function AdminMobileHeader() {
             <Logo size="xs" showText />
           </div>
 
-          {/* Search */}
-          <div className="px-3 mb-2">
-            <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-secondary/60 text-muted-foreground">
-              <Search className="h-3.5 w-3.5" />
-              <span className="text-xs">Buscar...</span>
-            </div>
-          </div>
-
           {/* Nav */}
           <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-            {nav.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link key={item.href} href={item.href} onClick={() => setOpen(false)}>
-                  <div className={cn('nav-item group', active && 'active')}>
-                    <div className={cn(
-                      'flex items-center justify-center h-8 w-8 rounded-lg transition-all flex-shrink-0',
-                      active ? 'bg-primary/15 text-primary' : 'text-muted-foreground'
-                    )}>
-                      <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
-                    </div>
-                    <span className={cn(
-                      'text-[13px]',
-                      active ? 'text-foreground font-semibold' : 'text-muted-foreground'
-                    )}>
-                      {item.label}
-                    </span>
-                    {active && <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />}
-                  </div>
-                </Link>
-              );
-            })}
+            <NavLinks items={ADMIN_NAV} />
+            <div className="my-3 h-px bg-border" />
+            <NavLinks items={ADMIN_NAV_SECONDARY} />
           </nav>
 
           {/* User */}

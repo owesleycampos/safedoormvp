@@ -55,6 +55,16 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [confirmSuspend, setConfirmSuspend] = useState<SchoolData | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createForm, setCreateForm] = useState({
+    name: '', cnpj: '', city: '', state: '',
+    contactEmail: '', contactPhone: '',
+    plan: 'ESSENCIAL', billing: 'MONTHLY',
+    adminName: '', adminEmail: '', adminPassword: '',
+  });
 
   const filtered = schools.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -67,15 +77,66 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
   async function toggleSchoolStatus(schoolId: string, newStatus: string) {
     setActionLoading(true);
     try {
-      await fetch('/api/odono/schools', {
+      const res = await fetch('/api/odono/schools', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schoolId, status: newStatus }),
       });
+      if (!res.ok) {
+        // Antes o try/finally não tinha catch nem checava o status: uma
+        // sessão expirada fechava o modal e o dono achava que suspendeu.
+        const data = await res.json().catch(() => null);
+        alert(data?.error || 'A alteração falhou. Recarregue a página e tente novamente.');
+        return;
+      }
       router.refresh();
       setSelectedSchool(null);
+      setConfirmSuspend(null);
+    } catch {
+      alert('Sem conexão com o servidor. A escola NÃO foi alterada.');
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function handleCreateSchool(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateError(null);
+    if (!createForm.name.trim() || !createForm.adminEmail.trim() || createForm.adminPassword.length < 8) {
+      setCreateError('Preencha nome da escola, e-mail do admin e uma senha de ao menos 8 caracteres.');
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      const res = await fetch('/api/odono/schools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...createForm,
+          cnpj: createForm.cnpj || null,
+          city: createForm.city || null,
+          state: createForm.state || null,
+          contactEmail: createForm.contactEmail || null,
+          contactPhone: createForm.contactPhone || null,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setCreateError(data?.error || 'Não foi possível criar a escola.');
+        return;
+      }
+      setCreateOpen(false);
+      setCreateForm({
+        name: '', cnpj: '', city: '', state: '',
+        contactEmail: '', contactPhone: '',
+        plan: 'ESSENCIAL', billing: 'MONTHLY',
+        adminName: '', adminEmail: '', adminPassword: '',
+      });
+      router.refresh();
+    } catch {
+      setCreateError('Sem conexão com o servidor.');
+    } finally {
+      setCreateLoading(false);
     }
   }
 
@@ -89,6 +150,13 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
             {schools.length} escola(s) cadastrada(s)
           </p>
         </div>
+        <button
+          onClick={() => { setCreateOpen(true); setCreateError(null); }}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Nova Escola
+        </button>
       </div>
 
       {/* Filters */}
@@ -166,11 +234,20 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                      statusColors[school.status] || 'text-zinc-400 bg-zinc-400/10'
-                    }`}>
-                      {statusLabels[school.status] || school.status}
-                    </span>
+                    <div className="inline-flex flex-col items-center gap-1">
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        statusColors[school.status] || 'text-zinc-400 bg-zinc-400/10'
+                      }`}>
+                        {statusLabels[school.status] || school.status}
+                      </span>
+                      {/* subStatus era carregado do banco e nunca exibido:
+                          inadimplente aparecia com badge verde "Ativo". */}
+                      {school.subStatus === 'PAST_DUE' && (
+                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded text-amber-400 bg-amber-400/10">
+                          Inadimplente
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
@@ -267,7 +344,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
               <div className="flex gap-2 pt-2">
                 {selectedSchool.status === 'ACTIVE' && (
                   <button
-                    onClick={() => toggleSchoolStatus(selectedSchool.id, 'SUSPENDED')}
+                    onClick={() => setConfirmSuspend(selectedSchool)}
                     disabled={actionLoading}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
                   >
@@ -294,6 +371,182 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {/* Confirmação de suspensão — antes um clique derrubava todos os admins
+          do cliente sem barreira nenhuma, enquanto excluir uma turma exigia
+          confirm(). */}
+      {confirmSuspend && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirmSuspend(null)}>
+          <div className="bg-card border border-border rounded-xl w-full max-w-sm p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <Ban className="h-4 w-4 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold">Suspender {confirmSuspend.name}?</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Todos os administradores da escola serão desconectados e o painel deles
+                  ficará bloqueado até a reativação. Os dados são preservados.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmSuspend(null)}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => toggleSchoolStatus(confirmSuspend.id, 'SUSPENDED')}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {actionLoading ? 'Suspendendo...' : 'Suspender escola'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Nova escola — a API transacional existia completa e nenhuma tela a
+          chamava; onboardar cliente exigia curl. */}
+      {createOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => setCreateOpen(false)}>
+          <form
+            onSubmit={handleCreateSchool}
+            className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-border">
+              <h2 className="text-lg font-bold">Nova Escola</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Cria a escola, a assinatura e a conta do administrador de uma vez.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Escola</p>
+                <input
+                  placeholder="Nome da escola *"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  autoFocus
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    placeholder="CNPJ"
+                    value={createForm.cnpj}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, cnpj: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <input
+                    placeholder="Telefone"
+                    value={createForm.contactPhone}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, contactPhone: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <input
+                    placeholder="Cidade"
+                    value={createForm.city}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, city: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <input
+                    placeholder="UF"
+                    maxLength={2}
+                    value={createForm.state}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, state: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+                <input
+                  type="email"
+                  placeholder="E-mail de contato da escola"
+                  value={createForm.contactEmail}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, contactEmail: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Plano</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={createForm.plan}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, plan: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  >
+                    <option value="ESSENCIAL">Essencial</option>
+                    <option value="PROFISSIONAL">Profissional</option>
+                    <option value="PREMIUM">Premium</option>
+                  </select>
+                  <select
+                    value={createForm.billing}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, billing: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  >
+                    <option value="MONTHLY">Mensal</option>
+                    <option value="ANNUAL">Anual (com desconto)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Administrador da escola</p>
+                <input
+                  placeholder="Nome do administrador"
+                  value={createForm.adminName}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, adminName: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="email"
+                    placeholder="E-mail de acesso *"
+                    value={createForm.adminEmail}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, adminEmail: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Senha inicial (mín. 8) *"
+                    value={createForm.adminPassword}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, adminPassword: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {createError && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-400">
+                  {createError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-border flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                disabled={createLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+              >
+                {createLoading ? 'Criando...' : 'Criar escola'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

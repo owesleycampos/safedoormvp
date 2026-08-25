@@ -9,6 +9,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ManualCheckinWizard } from '@/components/admin/manual-checkin-wizard';
+import { OnboardingChecklist } from '@/components/admin/onboarding-checklist';
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 

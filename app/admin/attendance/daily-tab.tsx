@@ -117,13 +117,14 @@ function TimePicker({ open, onClose, onConfirm, title }: TimePickerProps) {
 
 interface StatusMenuProps {
   student: StudentRow;
-  isToday: boolean;
+  /** Dias passados e o dia corrente são corrigíveis; o futuro não. */
+  canEdit: boolean;
   onAction: (studentId: string, action: string, entryEventId?: string | null, time?: string) => Promise<void>;
   busy: boolean;
   currentDate: string;
 }
 
-function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMenuProps) {
+function StatusMenu({ student, canEdit, onAction, busy, currentDate }: StatusMenuProps) {
   const [open, setOpen] = useState(false);
   const [timePicker, setTimePicker] = useState<{ action: string; title: string } | null>(null);
   const [dropUp, setDropUp] = useState(false);
@@ -190,10 +191,10 @@ function StatusMenu({ student, isToday, onAction, busy, currentDate }: StatusMen
       >
         {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Icon className={cn('h-3 w-3', cfg.iconColor)} />}
         <span>{cfg.label}</span>
-        {isToday && <ChevronDown className="h-3 w-3 opacity-60" />}
+        {canEdit && <ChevronDown className="h-3 w-3 opacity-60" />}
       </button>
 
-      {open && isToday && actions.length > 0 && (
+      {open && canEdit && actions.length > 0 && (
         <div className={cn(
           'absolute right-0 z-50 min-w-[180px] rounded-lg border border-border bg-card shadow-lg py-1',
           dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
@@ -238,11 +239,15 @@ export default function DailyTab() {
   const [data, setData] = useState<DailyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
   const [busyStudent, setBusyStudent] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
 
   const dateStr = date.toISOString().slice(0, 10);
   const isToday = dateStr === today.toISOString().slice(0, 10);
+  // Corrigir a chamada de ontem é a operação real de secretaria; antes o menu
+  // simplesmente não abria em dias passados, sem dizer por quê.
+  const canEdit = dateStr <= today.toISOString().slice(0, 10);
 
   useEffect(() => {
     if (classFilter !== 'all') localStorage.setItem('daily_class', classFilter);
@@ -281,16 +286,27 @@ export default function DailyTab() {
     ? Array.from(new Map(data.students.map(s => [s.classId, s.className])).entries()).sort((a, b) => a[1].localeCompare(b[1]))
     : [];
 
-  const filtered = (data?.students ?? [])
+  // Os números do resumo contam a turma inteira; a lista abaixo é que responde
+  // ao filtro de status, senão clicar em "Ausentes" zeraria o próprio card.
+  const searched = (data?.students ?? [])
     .filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   const stats = {
-    total: filtered.length,
-    present: filtered.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
-    absent: filtered.filter(s => getEffectiveStatus(s) === 'absent').length,
-    late: filtered.filter(s => getEffectiveStatus(s) === 'late').length,
+    total: searched.length,
+    present: searched.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
+    absent: searched.filter(s => getEffectiveStatus(s) === 'absent').length,
+    late: searched.filter(s => getEffectiveStatus(s) === 'late').length,
   };
+
+  const filtered = searched.filter(s => {
+    if (statusFilter === 'all') return true;
+    const st = getEffectiveStatus(s);
+    if (statusFilter === 'present') return ['present', 'late', 'left', 'early_exit'].includes(st);
+    if (statusFilter === 'absent') return st === 'absent';
+    if (statusFilter === 'late') return st === 'late';
+    return true;
+  });
 
   async function handleBatchPresent() {
     const absentStudents = filtered.filter(s => getEffectiveStatus(s) === 'absent');
@@ -444,16 +460,29 @@ export default function DailyTab() {
       {/* Summary bar */}
       {!loading && data && (
         <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'Total',     value: stats.total },
-            { label: 'Presentes', value: stats.present },
-            { label: 'Ausentes',  value: stats.absent },
-            { label: 'Atrasos',   value: stats.late },
-          ].map(s => (
-            <Card key={s.label} className="p-3 text-center">
+          {([
+            { label: 'Total',     value: stats.total,   key: 'all'     },
+            { label: 'Presentes', value: stats.present, key: 'present' },
+            { label: 'Ausentes',  value: stats.absent,  key: 'absent'  },
+            { label: 'Atrasos',   value: stats.late,    key: 'late'    },
+          ] as const).map(s => (
+            // Clicar filtra a lista. Antes era preciso rolar a turma inteira
+            // procurando quem faltou — que é justamente quem a escola precisa
+            // ligar para o responsável.
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => setStatusFilter(prev => (prev === s.key ? 'all' : s.key))}
+              className={cn(
+                'rounded-lg border p-3 text-center transition-colors',
+                statusFilter === s.key
+                  ? 'border-foreground bg-foreground/[0.06]'
+                  : 'border-border bg-card hover:bg-accent/40'
+              )}
+            >
               <p className="text-[10px] text-muted-foreground">{s.label}</p>
               <p className="text-xl font-semibold tabular-nums mt-0.5">{s.value}</p>
-            </Card>
+            </button>
           ))}
         </div>
       )}
@@ -464,10 +493,21 @@ export default function DailyTab() {
         </div>
       )}
 
-      {!loading && filtered.length > 0 && isToday && (
+      {!loading && filtered.length > 0 && canEdit && (
         <p className="text-[11px] text-muted-foreground">
           Toque no status do aluno para alterar. Um seletor de horário permite definir o momento exato.
+          {!isToday && ' Você está corrigindo um dia anterior.'}
         </p>
+      )}
+
+      {statusFilter !== 'all' && (
+        <button
+          type="button"
+          onClick={() => setStatusFilter('all')}
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+        >
+          Mostrando apenas {statusFilter === 'present' ? 'presentes' : statusFilter === 'absent' ? 'ausentes' : 'atrasos'} — limpar filtro
+        </button>
       )}
 
       {!loading && filtered.length > 0 && (
@@ -513,7 +553,7 @@ export default function DailyTab() {
 
                   <StatusMenu
                     student={s}
-                    isToday={isToday}
+                    canEdit={canEdit}
                     onAction={handleAction}
                     busy={isBusy}
                     currentDate={dateStr}

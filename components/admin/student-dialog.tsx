@@ -43,7 +43,7 @@ interface StudentDialogProps {
   onOpenChange: (open: boolean) => void;
   student?: any;
   classes: any[];
-  onSaved: (student: any) => void;
+  onSaved: (student: any, wasCreated?: boolean) => void;
   defaultTab?: 'info' | 'photos' | 'parents' | 'history';
 }
 
@@ -83,6 +83,19 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteWarning, setInviteWarning] = useState<string[]>([]);
+
+  /** O que falta para o aluno estar pronto: foto, biometria, responsável. */
+  const pending: Array<{ tab: 'photos' | 'parents'; label: string }> = [];
+  if (isEdit) {
+    if (photos.length === 0) {
+      pending.push({ tab: 'photos', label: 'Adicionar ao menos uma foto' });
+    } else if (!student?.azurePersonId && !student?.faceVector) {
+      pending.push({ tab: 'photos', label: 'Treinar a biometria com as fotos' });
+    }
+    if (parentLinks.length === 0) {
+      pending.push({ tab: 'parents', label: 'Vincular um responsável para receber os avisos' });
+    }
+  }
 
   // Reset on open
   useEffect(() => {
@@ -452,7 +465,10 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
           title: isEdit ? 'Aluno atualizado!' : 'Aluno cadastrado!',
           description: form.name,
         });
-        onSaved(data.student);
+        // O segundo argumento diz que foi uma CRIAÇÃO: a lista mantém a ficha
+        // aberta na aba de fotos em vez de fechar tudo e obrigar o usuário a
+        // reabrir o aluno pelo menu para continuar o cadastro.
+        onSaved(data.student, !isEdit);
       }
     } finally {
       setLoading(false);
@@ -491,6 +507,32 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             {/* ── Info Tab ── */}
             <TabsContent value="info" className="flex-1 overflow-y-auto mt-0 pt-4">
               <form onSubmit={handleSubmit} className="space-y-4 pb-4">
+                {/* O que ainda falta para este aluno funcionar de ponta a
+                    ponta. Antes nada sinalizava "tem foto mas falta treinar"
+                    ou "ninguém é notificado por esta criança". */}
+                {pending.length > 0 && (
+                  <div className="rounded-md border border-warn/25 bg-warn/[0.07] p-3 space-y-2">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-warn" />
+                      Faltam {pending.length} {pending.length === 1 ? 'item' : 'itens'} para concluir o cadastro
+                    </p>
+                    <div className="space-y-1">
+                      {pending.map((p) => (
+                        <button
+                          key={p.tab}
+                          type="button"
+                          onClick={() => setActiveTab(p.tab)}
+                          className="w-full flex items-center gap-2 text-left text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
+                        >
+                          <span className="h-1 w-1 rounded-full bg-warn shrink-0" />
+                          <span className="flex-1">{p.label}</span>
+                          <ChevronRight className="h-3 w-3 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Profile photo preview */}
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-border/40 flex-shrink-0">
@@ -654,7 +696,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                           </div>
                         )}
                         {/* Hover actions */}
-                        <div className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <div className="absolute inset-0 bg-black/60 rounded-lg action-reveal transition-opacity flex items-center justify-center gap-2">
                           {!photo.isProfile && (
                             <button
                               onClick={() => handleSetProfile(photo.id)}
@@ -799,7 +841,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                               >
                                 <MessageCircle className="h-3 w-3 flex-shrink-0 group-hover:text-success transition-colors" />
                                 <span>{phone}</span>
-                                <span className="text-[9px] text-success opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[9px] text-success action-reveal transition-opacity">
                                   Abrir WhatsApp
                                 </span>
                               </a>
@@ -1029,7 +1071,19 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             {/* ── History Tab ── */}
             <TabsContent value="history" className="flex-1 overflow-y-auto mt-0 pt-4">
               <div className="space-y-3 pb-4">
-                <p className="text-sm font-medium">Últimos registros de entrada e saída</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Últimos registros de entrada e saída</p>
+                  {/* As duas telas mostravam a mesma coisa de formas
+                      diferentes. Aqui fica o resumo; a análise (frequência,
+                      permanência média, alerta da LDB) vive numa tela só. */}
+                  <a
+                    href={`/admin/students/${student?.id}/history`}
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap inline-flex items-center gap-0.5"
+                  >
+                    Frequência completa
+                    <ChevronRight className="h-3 w-3" />
+                  </a>
+                </div>
                 {historyLoading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -1192,7 +1246,8 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
             </div>
 
             <div className="rounded-md bg-secondary/40 p-3 text-xs text-muted-foreground">
-              Após cadastrar, adicione fotos na aba "Fotos" para ativar o reconhecimento facial.
+              Ao cadastrar, a ficha continua aberta para você adicionar as fotos e treinar o
+              reconhecimento facial.
             </div>
 
             <DialogFooter className="gap-2 pt-1">

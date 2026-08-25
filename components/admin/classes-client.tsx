@@ -341,7 +341,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent transition-all">
+                            <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground action-reveal hover:bg-accent transition-all">
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>

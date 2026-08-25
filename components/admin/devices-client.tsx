@@ -364,7 +364,7 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
                     {/* Actions menu */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon-sm" className="action-reveal transition-opacity">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>

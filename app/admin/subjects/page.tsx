@@ -482,7 +482,7 @@ function SubjectsTab() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
+                        <Button variant="ghost" size="icon-sm" className="action-reveal">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -1106,7 +1106,7 @@ function ScheduleTab() {
                                   )}
                                   <button
                                     onClick={() => handleDeleteSchedule(entry.id)}
-                                    className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                    className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-background/80 flex items-center justify-center action-reveal transition-opacity text-muted-foreground hover:text-destructive"
                                   >
                                     <Trash2 className="h-2.5 w-2.5" />
                                   </button>

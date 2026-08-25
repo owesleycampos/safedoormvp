@@ -190,7 +190,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
                   />
 
                   {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 action-reveal">
                     <button
                       onClick={() => { setSelectedLog(log); setLightboxOpen(true); }}
                       className="h-8 w-8 flex items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/80 transition-colors"

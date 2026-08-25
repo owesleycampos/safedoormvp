@@ -93,7 +93,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     }
   }
 
-  function handleSaved(student: any) {
+  function handleSaved(student: any, wasCreated?: boolean) {
     setStudents((prev) => {
       const idx = prev.findIndex((s) => s.id === student.id);
       if (idx >= 0) {
@@ -103,6 +103,15 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
       }
       return [student, ...prev];
     });
+
+    if (wasCreated) {
+      // Continua na mesma ficha, agora em modo edição e na aba de fotos:
+      // cadastrar um aluno completo exigia fechar e reabrir o diálogo.
+      setEditingStudent(student);
+      setDialogDefaultTab('photos');
+      return;
+    }
+
     setDialogOpen(false);
     setEditingStudent(null);
   }
@@ -346,7 +355,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                       animate={{ opacity: 1 }}
                       transition={{ duration: 0.2, delay: i * 0.02 }}
                       className="flex items-center gap-3 px-4 md:px-5 py-3.5 hover:bg-secondary/30 transition-all duration-150 group cursor-pointer"
-                      onClick={() => router.push(`/admin/students/${student.id}/history`)}
+                      // Abre a ficha completa (dados, fotos, responsáveis,
+                      // histórico) em vez de pular direto para o histórico —
+                      // que era só um dos quatro destinos, com os outros três
+                      // escondidos num menu que não existe no celular.
+                      onClick={() => handleEdit(student, 'info')}
                     >
                       {/* Avatar */}
                       <div className="relative flex-shrink-0">
@@ -400,7 +413,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                           <DropdownMenuTrigger asChild>
                             <button
                               onClick={(e) => e.stopPropagation()}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-secondary transition-all"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg action-reveal hover:bg-secondary transition-all"
                             >
                               <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                             </button>
@@ -412,8 +425,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <DropdownMenuItem onClick={() => handleEdit(student, 'photos')}>
                               <Camera className="h-4 w-4" /> Foto / biometria
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(student, 'parents')}>
+                              <Users className="h-4 w-4" /> Responsáveis
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => router.push(`/admin/students/${student.id}/history`)}>
-                              <Eye className="h-4 w-4" /> Ver histórico
+                              <Eye className="h-4 w-4" /> Frequência completa
                             </DropdownMenuItem>
                             {(student.azurePersonId || student.faceVector) && (
                               <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>

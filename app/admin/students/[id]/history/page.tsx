@@ -39,11 +39,14 @@ interface StudentHistory {
   dailySummary: DayRecord[];
 }
 
+// Era a única tela colorida do admin inteiro (emerald/yellow/red/orange),
+// destoando do monocromático de todas as irmãs. Presença usa o tom cheio,
+// ausência o tom apagado, e só o que exige ação carrega cor semântica.
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  present: { label: 'Presente', color: 'text-emerald-600', bg: 'bg-emerald-500' },
-  late: { label: 'Atraso', color: 'text-yellow-600', bg: 'bg-yellow-500' },
-  absent: { label: 'Ausente', color: 'text-red-500', bg: 'bg-red-400' },
-  early_exit: { label: 'Saída antecipada', color: 'text-orange-500', bg: 'bg-orange-500' },
+  present:    { label: 'Presente',         color: 'text-foreground',       bg: 'bg-foreground' },
+  late:       { label: 'Atraso',           color: 'text-warn',             bg: 'bg-warn' },
+  absent:     { label: 'Ausente',          color: 'text-muted-foreground', bg: 'bg-muted-foreground/25' },
+  early_exit: { label: 'Saída antecipada', color: 'text-muted-foreground', bg: 'bg-muted-foreground/60' },
 };
 
 function formatTime(iso: string | null): string {
@@ -126,10 +129,10 @@ export default function StudentHistoryPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {[
-          { label: 'Frequência', value: `${stats.frequencyRate}%`, icon: TrendingUp, color: stats.frequencyRate >= 75 ? 'text-emerald-600' : 'text-red-500' },
-          { label: 'Presentes', value: stats.presentDays, icon: UserCheck, color: 'text-emerald-600' },
-          { label: 'Ausentes', value: stats.absentDays, icon: UserX, color: 'text-red-500' },
-          { label: 'Atrasos', value: stats.lateDays, icon: Clock, color: 'text-yellow-600' },
+          { label: 'Frequência', value: `${stats.frequencyRate}%`, icon: TrendingUp, color: stats.frequencyRate >= 75 ? 'text-foreground' : 'text-warn' },
+          { label: 'Presentes', value: stats.presentDays, icon: UserCheck, color: 'text-foreground' },
+          { label: 'Ausentes', value: stats.absentDays, icon: UserX, color: 'text-muted-foreground' },
+          { label: 'Atrasos', value: stats.lateDays, icon: Clock, color: 'text-warn' },
           { label: 'Perm. média', value: stats.avgStayMinutes ? formatMinutes(stats.avgStayMinutes) : '—', icon: Clock, color: '' },
         ].map((s) => (
           <Card key={s.label} className="p-3">
@@ -160,10 +163,10 @@ export default function StudentHistoryPage() {
 
       {/* Frequency alert */}
       {stats.frequencyRate < 75 && (
-        <Card className="p-3 border-yellow-500/30 bg-yellow-500/5">
+        <Card className="p-3 border-warn/30 bg-warn/[0.07]">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-            <p className="text-xs text-yellow-700">
+            <AlertTriangle className="h-4 w-4 text-warn flex-shrink-0" />
+            <p className="text-xs text-foreground">
               Frequência abaixo do limite legal de 75% (LDB). Aluno em risco de reprovação por falta.
             </p>
           </div>

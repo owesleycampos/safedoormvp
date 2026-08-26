@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ManualCheckinWizard } from '@/components/admin/manual-checkin-wizard';
 import { OnboardingChecklist } from '@/components/admin/onboarding-checklist';
+import { EventPhoto } from '@/components/shared/event-photo';
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -415,15 +416,29 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
                         key={event.id}
                         className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent/30 transition-colors"
                       >
-                        <Avatar className="h-7 w-7 flex-shrink-0">
-                          {/* A foto do MOMENTO da passagem (capturada pelo
-                              tablet) vale mais que a de perfil no feed ao
-                              vivo; a de perfil é o fallback. */}
-                          <AvatarImage src={event.photoUrl || event.student.photoUrl || ''} />
-                          <AvatarFallback className="text-[9px] font-medium bg-muted text-muted-foreground">
-                            {getInitials(event.student.name)}
-                          </AvatarFallback>
-                        </Avatar>
+                        {/* A foto do MOMENTO da passagem vale mais que a de
+                            perfil no feed ao vivo; a de perfil é o fallback.
+                            Quando existe foto do momento, clicar amplia. */}
+                        {event.photoUrl ? (
+                          <EventPhoto
+                            src={event.photoUrl}
+                            className="flex-shrink-0 rounded-full ring-offset-background transition-shadow hover:ring-2 hover:ring-ring/40 hover:ring-offset-1"
+                          >
+                            <Avatar className="h-7 w-7">
+                              <AvatarImage src={event.photoUrl} />
+                              <AvatarFallback className="text-[9px] font-medium bg-muted text-muted-foreground">
+                                {getInitials(event.student.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          </EventPhoto>
+                        ) : (
+                          <Avatar className="h-7 w-7 flex-shrink-0">
+                            <AvatarImage src={event.student.photoUrl || ''} />
+                            <AvatarFallback className="text-[9px] font-medium bg-muted text-muted-foreground">
+                              {getInitials(event.student.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">{event.student.name}</p>
                         </div>

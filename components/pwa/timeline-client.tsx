@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { LogIn, LogOut, Clock, ChevronLeft, CalendarDays } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { EventPhoto } from '@/components/shared/event-photo';
 import { Badge } from '@/components/ui/badge';
 import { cn, getInitials, formatTime } from '@/lib/utils';
 
@@ -179,13 +180,16 @@ function EventCard({ event }: { event: any }) {
 
         {/* Event Photo */}
         {event.photoUrl && (
-          <div className="h-14 w-14 rounded-md overflow-hidden flex-shrink-0 border border-border">
+          <EventPhoto
+            src={event.photoUrl}
+            className="h-14 w-14 rounded-md overflow-hidden flex-shrink-0 border border-border transition-transform active:scale-95"
+          >
             <img
               src={event.photoUrl}
-              alt="Foto do evento"
+              alt="Foto do evento — toque para ampliar"
               className="h-full w-full object-cover"
             />
-          </div>
+          </EventPhoto>
         )}
       </div>
     </div>

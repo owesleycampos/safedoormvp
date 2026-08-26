@@ -355,6 +355,50 @@ check "PARENT em ficha de aluno → 401" "401" \
 check "PARENT em fotos de aluno → 401" "401" \
   "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' "$BASE/api/students/$JOAO/photos")"
 
+echo "── Passagem de ano, reset de senha e convite estável ──"
+
+# setup independente: cria responsável vinculado ao João via SQL
+sql0 "DELETE FROM \"StudentParent\" WHERE \"parentId\"='pass-ano-parent';
+      DELETE FROM \"Parent\" WHERE id='pass-ano-parent';
+      DELETE FROM \"User\" WHERE id='pass-ano-user';
+      DELETE FROM \"Class\" WHERE id='pass-ano-class';" >/dev/null 2>&1
+sql0 "INSERT INTO \"User\" (id, email, name, \"passwordHash\", role, \"createdAt\", \"updatedAt\")
+      VALUES ('pass-ano-user','passano@teste.com','Pai Passagem','hash-qualquer','PARENT',now(),now());
+      INSERT INTO \"Parent\" (id, \"userId\", name, \"createdAt\", \"updatedAt\")
+      VALUES ('pass-ano-parent','pass-ano-user','Pai Passagem',now(),now());
+      INSERT INTO \"StudentParent\" (\"studentId\", \"parentId\", relationship, \"isPrimary\")
+      VALUES ('$JOAO','pass-ano-parent','Responsável',true);
+      INSERT INTO \"Class\" (id, \"schoolId\", name, grade, \"createdAt\", \"updatedAt\")
+      VALUES ('pass-ano-class', (SELECT \"schoolId\" FROM \"Student\" WHERE id='$JOAO'), 'Turma Ano Seguinte', '9º Ano', now(), now())
+      ON CONFLICT (id) DO NOTHING;" >/dev/null
+CLS_B='pass-ano-class' # a escola de teste só tem uma turma — cria a de destino
+SP_STUDENT="$JOAO"
+PARENT_ID="pass-ano-parent"
+CLS_ORIG=$(sql0 "SELECT \"classId\" FROM \"Student\" WHERE id='$JOAO'")
+BODY_MV=$(printf '{"studentIds":["%s"],"classId":"%s"}' "$SP_STUDENT" "$CLS_B")
+check "mover aluno de turma → 200" "200" "$(api POST /api/students/bulk-move "$BODY_MV")"
+check "aluno mudou de turma" "$CLS_B" "$(sql0 "SELECT \"classId\" FROM \"Student\" WHERE id='$SP_STUDENT'")"
+check "vínculo com responsável sobreviveu à mudança" "t" \
+  "$(sql0 "SELECT count(*)>0 FROM \"StudentParent\" WHERE \"studentId\"='$SP_STUDENT'")"
+BODY_MV2=$(printf '{"studentIds":["%s"],"classId":"%s"}' "$SP_STUDENT" "$CLS_ORIG")
+api POST /api/students/bulk-move "$BODY_MV2" >/dev/null
+check "resetar senha do responsável → 200" "200" "$(api POST /api/parents/$PARENT_ID/reset-password '{}')"
+check "senha apagada (redefine no link da turma)" "t" \
+  "$(sql0 "SELECT \"passwordHash\" IS NULL FROM \"User\" WHERE id=(SELECT \"userId\" FROM \"Parent\" WHERE id='$PARENT_ID')")"
+
+BODY_INV=$(printf '{"classId":"%s"}' "$CLS_ORIG")
+T1=$(api POST /api/invites "$BODY_INV" >/dev/null; jfield invite | python3 -c "import json,sys;print(json.load(open('/tmp/p.json'))['invite']['token'])")
+T2=$(api POST /api/invites "$BODY_INV" >/dev/null; python3 -c "import json;print(json.load(open('/tmp/p.json'))['invite']['token'])")
+check "recopiar convite devolve o MESMO link" "igual" "$([ "$T1" = "$T2" ] && echo igual || echo diferente)"
+BODY_REG=$(printf '{"classId":"%s","regenerate":true}' "$CLS_ORIG")
+T3=$(api POST /api/invites "$BODY_REG" >/dev/null; python3 -c "import json;print(json.load(open('/tmp/p.json'))['invite']['token'])")
+check "regenerate explícito gera link NOVO" "diferente" "$([ "$T2" = "$T3" ] && echo igual || echo diferente)"
+
+sql0 "DELETE FROM \"StudentParent\" WHERE \"parentId\"='pass-ano-parent';
+      DELETE FROM \"Parent\" WHERE id='pass-ano-parent';
+      DELETE FROM \"User\" WHERE id='pass-ano-user';
+      DELETE FROM \"Class\" WHERE id='pass-ano-class';" >/dev/null 2>&1
+
 echo "── Import em massa com responsáveis ──"
 
 sql0 "DELETE FROM \"User\" WHERE email IN ('massa1@teste.com','massa2@teste.com');" >/dev/null 2>&1

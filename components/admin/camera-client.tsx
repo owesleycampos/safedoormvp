@@ -40,6 +40,8 @@ export function CameraClient() {
   const cooldownRef = useRef<Map<string, number>>(new Map());
   const scanningRef = useRef(false);
   const modeRef = useRef<'ENTRY' | 'EXIT'>('ENTRY');
+  const modeChosenRef = useRef(false);
+  const failStreakRef = useRef(0);
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [mode, setMode] = useState<'ENTRY' | 'EXIT'>('ENTRY');
@@ -60,6 +62,7 @@ export function CameraClient() {
   }, []);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { modeChosenRef.current = modeChosen; }, [modeChosen]);
 
   useEffect(() => {
     fetch('/api/camera/recognize')
@@ -78,12 +81,14 @@ export function CameraClient() {
         const suggested: 'ENTRY' | 'EXIT' =
           now >= (s.exitStartTime ?? '11:00') ? 'EXIT' : 'ENTRY';
         setSuggestedMode(suggested);
-        setMode(suggested);
+        // Só pré-seleciona se o operador ainda não escolheu — o fetch chega
+        // depois da tela estar interativa e revertia um SAÍDA já tocado.
+        setMode((prev) => (modeChosenRef.current ? prev : suggested));
       })
       .catch(() => {});
   }, []);
 
-  const registerAttendance = useCallback((match: FaceMatch, frame?: Blob | null) => {
+  const registerAttendance = useCallback((match: FaceMatch, frame?: Blob | null): Promise<void> => {
     const currentMode = modeRef.current;
     // O frame do momento vai junto: vira a foto do evento no feed do admin
     // e no histórico do responsável — a prova de que era mesmo a criança.
@@ -92,7 +97,7 @@ export function CameraClient() {
     form.append('type', currentMode);
     form.append('confidence', String(match.confidence));
     if (frame) form.append('photo', frame, 'momento.jpg');
-    fetch('/api/attendance/recognize', {
+    return fetch('/api/attendance/recognize', {
       method: 'POST',
       body: form,
     })
@@ -124,11 +129,20 @@ export function CameraClient() {
           toast({ variant: 'destructive', title: 'Erro ao registrar', description: data.error });
         }
       })
-      .catch((err) => console.error('[attendance] error:', err));
+      .catch((err) => {
+        console.error('[attendance] error:', err);
+        throw err;
+      });
   }, []);
+
+  const confirmationRef = useRef(false);
+  useEffect(() => { confirmationRef.current = !!confirmation; }, [confirmation]);
 
   const scanFrame = useCallback(async () => {
     if (scanningRef.current) return;
+    // Com o overlay verde cobrindo o vídeo não há o que reconhecer — cada
+    // frame enviado é uma chamada cobrada do Rekognition.
+    if (confirmationRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < 2) return;
@@ -150,7 +164,20 @@ export function CameraClient() {
       formData.append('image', blob, 'frame.jpg');
 
       const res = await fetch('/api/camera/recognize', { method: 'POST', body: formData });
-      if (!res.ok) { if (res.status === 503) setRekognitionConfigured(false); return; }
+      if (!res.ok) {
+        if (res.status === 503) { setRekognitionConfigured(false); return; }
+        // 401/403/500 eram engolidos: a tela dizia "Monitorando" enquanto
+        // subia um frame a cada 2s sem registrar nada.
+        failStreakRef.current += 1;
+        if (failStreakRef.current === 3) {
+          const msg = res.status === 401 ? 'Sessão expirada — recarregue a página e entre de novo.'
+            : res.status === 403 ? 'Acesso bloqueado — verifique a situação da escola.'
+            : 'O servidor de reconhecimento está retornando erro.';
+          toast({ variant: 'destructive', title: 'Reconhecimento interrompido', description: msg });
+        }
+        return;
+      }
+      failStreakRef.current = 0;
 
       const data = await res.json();
       const matches: FaceMatch[] = data.matches ?? [];
@@ -161,8 +188,13 @@ export function CameraClient() {
         const cooldownKey = `${match.studentId}:${modeRef.current}`;
         const lastTime = cooldownRef.current.get(cooldownKey) ?? 0;
         if (Date.now() - lastTime > CLIENT_COOLDOWN_MS) {
+          // O cooldown entra ANTES (evita rajada de POSTs do mesmo rosto),
+          // mas um envio que falhar o desfaz — antes, uma falha de rede
+          // bloqueava o aluno por 60s em silêncio.
           cooldownRef.current.set(cooldownKey, Date.now());
-          registerAttendance(match, blob);
+          registerAttendance(match, blob).catch(() => {
+            cooldownRef.current.delete(cooldownKey);
+          });
         }
       }
     } catch (err) { console.error('[scan] error:', err); }

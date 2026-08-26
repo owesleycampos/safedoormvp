@@ -7,7 +7,9 @@ export default async function PwaLayout({ children }: { children: React.ReactNod
   const session = await getServerSession(authOptions);
 
   if (!session) redirect('/auth/login');
-  if ((session.user as any)?.role !== 'PARENT') redirect('/admin/dashboard');
+  const role = (session.user as any)?.role;
+  if (role === 'SUPERADMIN') redirect('/odono');
+  if (role !== 'PARENT') redirect('/admin/dashboard');
 
   return (
     <div

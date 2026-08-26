@@ -69,6 +69,8 @@ export async function PATCH(req: NextRequest) {
     const {
       entryStartTime, entryEndTime, exitStartTime, exitEndTime,
       minConfidence, notifyOnEntry, notifyOnExit, timezone,
+      // (timezone validado logo abaixo — um valor inválido derrubava TODAS
+      // as contas de data da escola com RangeError, sem volta pela UI)
     } = body;
 
     for (const [name, value] of Object.entries({ entryStartTime, entryEndTime, exitStartTime, exitEndTime })) {
@@ -79,6 +81,16 @@ export async function PATCH(req: NextRequest) {
 
     if (minConfidence !== undefined && (typeof minConfidence !== 'number' || minConfidence < 0.5 || minConfidence > 0.99)) {
       return NextResponse.json({ error: 'minConfidence deve estar entre 0.5 e 0.99.' }, { status: 400 });
+    }
+
+    let tzClean: string | undefined = undefined;
+    if (timezone !== undefined) {
+      try {
+        new Intl.DateTimeFormat('pt-BR', { timeZone: String(timezone) });
+        tzClean = String(timezone);
+      } catch {
+        return NextResponse.json({ error: 'Fuso horário inválido.' }, { status: 400 });
+      }
     }
 
     let shiftSchedules: string | null | undefined = undefined;
@@ -98,7 +110,7 @@ export async function PATCH(req: NextRequest) {
       ...(minConfidence !== undefined && { minConfidence }),
       ...(notifyOnEntry !== undefined && { notifyOnEntry: !!notifyOnEntry }),
       ...(notifyOnExit !== undefined && { notifyOnExit: !!notifyOnExit }),
-      ...(timezone !== undefined && { timezone }),
+      ...(tzClean !== undefined && { timezone: tzClean }),
       ...(shiftSchedules !== undefined && { shiftSchedules }),
     };
 

@@ -67,6 +67,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteWarning, setInviteWarning] = useState<string[]>([]);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, { present: number; total: number }>>({});
 
@@ -174,21 +175,23 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
     }
   }
 
-  async function handleGenerateInvite(classId: string, className: string) {
+  async function handleGenerateInvite(classId: string, className: string, regenerate = false) {
     setInviteDialog({ classId, className });
-    setInviteLink(null);
+    if (!regenerate) { setInviteLink(null); }
     setCopied(false);
     setInviteLoading(true);
     try {
       const res = await fetch('/api/invites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ classId }),
+        body: JSON.stringify({ classId, ...(regenerate ? { regenerate: true } : {}) }),
       });
       const data = await res.json();
       if (data.success) {
         setInviteLink(`${window.location.origin}/vincular/${data.invite.token}`);
         setInviteWarning(data.studentsMissingBirthDate ?? []);
+        setInviteExpiresAt(data.invite.expiresAt ?? null);
+        if (regenerate) toast({ variant: 'success', title: 'Novo link gerado', description: 'O link anterior deixou de funcionar.' });
       } else {
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
         setInviteDialog(null);
@@ -382,6 +385,16 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                           </span>
                         </div>
                       )}
+                      {/* A ação mais valiosa do onboarding vivia escondida num
+                          menu de hover — invisível no toque. Agora é botão. */}
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateInvite(cls.id, cls.name)}
+                        className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      >
+                        <Send className="h-3 w-3" />
+                        Convidar responsáveis
+                      </button>
                     </Card>
                   ))}
                 </div>
@@ -407,6 +420,29 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
             </div>
           ) : inviteLink ? (
             <div className="space-y-4 mt-2">
+              {inviteExpiresAt && (
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>
+                    Link ativo — o mesmo já enviado continua valendo, até{' '}
+                    {new Date(inviteExpiresAt).toLocaleDateString('pt-BR')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!inviteDialog) return;
+                      if (!(await confirmDialog({
+                        title: 'Gerar um novo link?',
+                        description: 'O link atual PARA DE FUNCIONAR — quem já o recebeu não conseguirá mais usar. Só faça isso se o link vazou.',
+                        confirmLabel: 'Gerar novo link', destructive: true,
+                      }))) return;
+                      handleGenerateInvite(inviteDialog.classId, inviteDialog.className, true);
+                    }}
+                    className="underline underline-offset-2 hover:text-foreground transition-colors flex-shrink-0 ml-3"
+                  >
+                    Gerar novo
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <div className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground truncate font-mono">
                   {inviteLink}

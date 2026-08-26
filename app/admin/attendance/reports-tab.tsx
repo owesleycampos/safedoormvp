@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   FileSpreadsheet, Search,
   Users, TrendingUp, XCircle, Loader2,
-  Clock, AlertTriangle, FileText, ChevronDown, ChevronUp,
+  Clock, AlertTriangle, FileText, ChevronDown, ChevronUp, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +47,12 @@ function addDays(date: Date, n: number): Date {
 const DAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 // ─── PDF export (print) ──────────────────────────────────────────────────────
-function exportPdf(rows: StudentRow[], dates: string[], classFilter: string) {
+function exportPdf(
+  rows: StudentRow[],
+  dates: string[],
+  classFilter: string,
+  school?: { name?: string | null; logoUrl?: string | null }
+) {
   const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   // Compute summary stats
@@ -116,9 +123,11 @@ function exportPdf(rows: StudentRow[], dates: string[], classFilter: string) {
 
 <!-- Header -->
 <div class="header">
-  <div class="logo-placeholder">Logo</div>
+  ${school?.logoUrl
+    ? `<img src="${school.logoUrl}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:6px;" />`
+    : '<div class="logo-placeholder">Logo</div>'}
   <div class="header-text">
-    <h1>Relatório de Frequência</h1>
+    <h1>Relatório de Frequência${school?.name ? ` — ${school.name}` : ''}</h1>
     <p>${classFilter !== 'all' ? `Turma: ${rows[0]?.className || classFilter}` : 'Todas as turmas'} · ${dates[0]} a ${dates[dates.length - 1]}</p>
   </div>
 </div>
@@ -179,7 +188,7 @@ ${dates.map(d => {
 <!-- Footer -->
 <div class="footer">
   <span>P = Presente · A = Atraso · F = Falta</span>
-  <span>Gerado em ${new Date().toLocaleString('pt-BR')} · Porta Segura</span>
+  <span>Gerado em ${new Date().toLocaleString('pt-BR')} · ${school?.name || 'Porta Segura'}</span>
 </div>
 
 </body></html>`;
@@ -239,6 +248,15 @@ export default function ReportsTab() {
 
   const [alerts, setAlerts] = useState<AlertStudent[]>([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [school, setSchool] = useState<{ name?: string; logoUrl?: string } | null>(null);
+
+  // Nome e logo reais no cabeçalho do PDF (o logo era uma caixa "Logo").
+  useEffect(() => {
+    fetch('/api/school')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setSchool({ name: d.name, logoUrl: d.logoUrl }); })
+      .catch(() => {});
+  }, []);
 
   const { from, to } = useMemo(() => {
     if (preset === '7d') return { from: toDateStr(addDays(today, -6)), to: toDateStr(today) };
@@ -319,8 +337,14 @@ export default function ReportsTab() {
           </button>
           {alertsExpanded && (
             <div className="border-t border-border divide-y divide-border">
+              {/* A lista mais acionável do produto terminava num número:
+                  agora cada linha abre o histórico completo do aluno. */}
               {alerts.map((a) => (
-                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                <Link
+                  key={a.id}
+                  href={`/admin/students/${a.id}/history`}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent/50 transition-colors"
+                >
                   <div className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-muted-foreground" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{a.name}</p>
@@ -332,7 +356,8 @@ export default function ReportsTab() {
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
                     {a.status === 'critical' ? 'Crítico' : 'Alerta'}
                   </span>
-                </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                </Link>
               ))}
             </div>
           )}
@@ -384,7 +409,7 @@ export default function ReportsTab() {
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={() => exportPdf(filteredRows, dates, classFilter)}
+            onClick={() => exportPdf(filteredRows, dates, classFilter, school ?? undefined)}
             disabled={loading || filteredRows.length === 0}
           >
             <FileText className="h-3.5 w-3.5" />

@@ -268,18 +268,34 @@ export default function SettingsPage() {
     }
   }
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       toast({ variant: 'warning', title: 'Arquivo muito grande', description: 'O logo deve ter no máximo 2MB.' });
       return;
     }
+    // Preview imediato + upload de verdade — a versão anterior só fazia o
+    // preview e o "logo salvo" evaporava no primeiro reload.
     const reader = new FileReader();
-    reader.onload = () => {
-      setLogoPreview(reader.result as string);
-    };
+    reader.onload = () => setLogoPreview(reader.result as string);
     reader.readAsDataURL(file);
+    try {
+      const form = new FormData();
+      form.append('logo', file);
+      const res = await fetch('/api/school/logo', { method: 'POST', body: form });
+      const data = await res.json();
+      if (res.ok) {
+        setSchoolLogoUrl(data.logoUrl);
+        toast({ variant: 'success', title: 'Logo atualizado!' });
+      } else {
+        setLogoPreview(null);
+        toast({ variant: 'destructive', title: 'Erro ao enviar logo', description: data.error });
+      }
+    } catch {
+      setLogoPreview(null);
+      toast({ variant: 'destructive', title: 'Erro de conexão ao enviar o logo' });
+    }
   }
 
   const navItems = [

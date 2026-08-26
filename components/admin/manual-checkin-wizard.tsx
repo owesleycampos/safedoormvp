@@ -134,7 +134,21 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: student.id, eventType, timestamp: ts.toISOString() }),
       });
-      if (res.ok) {
+      const data = await res.json();
+      // A API devolve 200 com { skipped } em duplicado/cooldown — tratar
+      // como sucesso fazia o operador acreditar num registro que não houve.
+      if (res.ok && data.skipped) {
+        toast({
+          variant: 'warning',
+          title: 'Nada foi registrado',
+          description: data.reason === 'cooldown'
+            ? `${student.name} teve um registro há instantes.`
+            : `${student.name} já tem ${eventType === 'ENTRY' ? 'entrada' : 'saída'} hoje.`,
+        });
+        setSubmitting(false);
+        return;
+      }
+      if (res.ok && data.success) {
         setLastRegistered(student);
         toast({
           variant: 'success',
@@ -151,7 +165,6 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
           }
         }, 1000);
       } else {
-        const data = await res.json();
         toast({ variant: 'destructive', title: 'Erro', description: data.error || 'Falha ao registrar.' });
       }
     } finally {

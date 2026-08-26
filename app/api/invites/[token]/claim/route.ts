@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { clientIp, rateLimitOk } from '@/lib/rate-limit';
 
 /**
  * POST /api/invites/[token]/claim — public endpoint
@@ -13,6 +14,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { token: string } }
 ) {
+  // Endpoint público que compara senha (bcrypt) e data de nascimento —
+  // sem limite era um oráculo de força bruta a céu aberto.
+  if (!rateLimitOk(`claim:${clientIp(req)}:${params.token}`, 15, 10 * 60_000)) {
+    return NextResponse.json(
+      { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
+      { status: 429 }
+    );
+  }
+
   const invite = await prisma.classInvite.findUnique({
     where: { token: params.token },
   });

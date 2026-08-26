@@ -3,7 +3,6 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +18,12 @@ function LoginForm() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  // Só caminhos relativos: callbackUrl vindo da URL é input de estranho —
+  // sem o filtro, /auth/login?callbackUrl=https://site-falso.com virava um
+  // open redirect pós-autenticação.
+  const rawCallback = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = /^\/(?!\/)/.test(rawCallback) ? rawCallback : '/';
+  const loginError = searchParams.get('error');
 
   function validate() {
     const e: Record<string, string> = {};
@@ -75,6 +79,14 @@ function LoginForm() {
           Acesse o painel com suas credenciais
         </p>
       </div>
+
+      {/* Aviso vindo do redirect (ex.: escola suspensa) — antes o admin
+          logava, era devolvido para cá e ficava num loop sem explicação. */}
+      {loginError === 'school_suspended' && (
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-foreground animate-fade-in">
+          O acesso da sua escola está suspenso. Fale com o suporte do Porta Segura para regularizar.
+        </div>
+      )}
 
       {/* Error Banner */}
       {errors.general && (
@@ -139,12 +151,12 @@ function LoginForm() {
           incluíam um login de ADMIN funcional exposto ao mundo, numa conta
           que carrega dados reais. Quem demonstra o produto sabe as senhas. */}
 
-      {/* Register link */}
-      <p className="text-center text-sm text-muted-foreground">
-        Novo responsável?{' '}
-        <Link href="/auth/register" className="text-foreground font-medium hover:underline">
-          Criar conta
-        </Link>
+      {/* O caminho de conta do responsável é o LINK DA TURMA: criar conta
+          solta aqui gerava um usuário órfão (sem escola, sem filhos) que não
+          conseguia fazer nada — puro suporte. */}
+      <p className="text-center text-xs text-muted-foreground">
+        Responsável sem acesso? Peça o link da turma na secretaria da escola —
+        a conta é criada por ele.
       </p>
     </div>
   );

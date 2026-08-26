@@ -7,7 +7,7 @@ import {
   UserPlus, Search, MoreHorizontal, Edit, Trash2,
   Camera, Users, GraduationCap, Eye, ScanFace, ScanLine,
   Upload, Loader2, AlertTriangle, ChevronDown, ChevronUp,
-  ChevronRight,
+  ChevronRight, ArrowRightLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +51,12 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [pEmailCol, setPEmailCol] = useState(-1);
   const [pPhoneCol, setPPhoneCol] = useState(-1);
   const [orphanAlertOpen, setOrphanAlertOpen] = useState(true);
+  // Passagem de ano: seleciona os aprovados e move de turma em um clique —
+  // responsáveis, biometria e histórico moram no aluno, nada se perde.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moveTarget, setMoveTarget] = useState('');
+  const [moving, setMoving] = useState(false);
 
   const orphanStudents = students.filter((s) => (s._count?.parents ?? 0) === 0);
 
@@ -122,6 +128,45 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
 
     setDialogOpen(false);
     setEditingStudent(null);
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkMove() {
+    if (!moveTarget || selectedIds.size === 0) return;
+    const target = classes.find((c: any) => c.id === moveTarget);
+    if (!(await confirmDialog({
+      title: `Mover ${selectedIds.size} aluno${selectedIds.size !== 1 ? 's' : ''} para ${target?.name ?? 'a turma'}?`,
+      description: 'Responsáveis, biometria e histórico são mantidos — só a turma muda.',
+      confirmLabel: 'Mover',
+    }))) return;
+    setMoving(true);
+    try {
+      const res = await fetch('/api/students/bulk-move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds: Array.from(selectedIds), classId: moveTarget }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ variant: 'success', title: data.message });
+        setSelectMode(false); setSelectedIds(new Set()); setMoveTarget('');
+        router.refresh();
+        setStudents((prev) => prev.map((st) =>
+          selectedIds.has(st.id) ? { ...st, classId: moveTarget, class: { ...st.class, id: moveTarget, name: target?.name ?? st.class?.name } } : st
+        ));
+      } else {
+        toast({ variant: 'destructive', title: 'Erro ao mover', description: data.error });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally { setMoving(false); }
   }
 
   function handleImportCsv() {
@@ -239,6 +284,16 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+            className={cn(
+              'flex items-center gap-2 h-10 px-4 rounded-md border text-sm font-medium transition-all duration-200',
+              selectMode ? 'border-foreground bg-foreground text-background' : 'border-border bg-card hover:bg-secondary'
+            )}
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">{selectMode ? 'Cancelar' : 'Mover de turma'}</span>
+          </button>
           <button
             onClick={handleImportCsv}
             disabled={importing}
@@ -385,8 +440,17 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                       // histórico) em vez de pular direto para o histórico —
                       // que era só um dos quatro destinos, com os outros três
                       // escondidos num menu que não existe no celular.
-                      onClick={() => handleEdit(student, 'info')}
+                      onClick={() => (selectMode ? toggleSelected(student.id) : handleEdit(student, 'info'))}
                     >
+                      {selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(student.id)}
+                          onChange={() => toggleSelected(student.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-border accent-foreground flex-shrink-0"
+                        />
+                      )}
                       {/* Avatar */}
                       <div className="relative flex-shrink-0">
                         <Avatar className="h-10 w-10">
@@ -477,6 +541,35 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
               </Card>
             </motion.div>
           ))}
+        </div>
+      )}
+
+      {/* Barra da passagem de ano — aparece no modo de seleção */}
+      {selectMode && (
+        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur-sm px-4 py-3 md:pl-[240px]">
+          <div className="max-w-[1200px] mx-auto flex items-center gap-3">
+            <span className="text-sm font-medium tabular-nums flex-shrink-0">
+              {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+            <select
+              value={moveTarget}
+              onChange={(e) => setMoveTarget(e.target.value)}
+              className="input-base h-9 max-w-[220px] text-sm"
+            >
+              <option value="">Turma de destino...</option>
+              {classes.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <Button
+              onClick={handleBulkMove}
+              disabled={!moveTarget || selectedIds.size === 0 || moving}
+              loading={moving}
+              size="sm"
+            >
+              Mover
+            </Button>
+          </div>
         </div>
       )}
 

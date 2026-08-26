@@ -47,6 +47,19 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.schoolId = (user as any).schoolId;
+      } else if (!token.schoolId && token.sub) {
+        // O vínculo pelo link da turma atribui a escola a uma conta que pode
+        // já estar logada — sem esta releitura, o JWT ficava com schoolId
+        // nulo até o próximo login e as inscrições de push nasciam órfãs.
+        // Custo: 1 consulta apenas para tokens ainda sem escola.
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { schoolId: true, role: true },
+        }).catch(() => null);
+        if (fresh?.schoolId) {
+          token.schoolId = fresh.schoolId;
+          token.role = fresh.role;
+        }
       }
       return token;
     },

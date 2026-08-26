@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus, Search, Mail, Phone, Users, MoreHorizontal, Edit, Trash2,
-  UserCheck, ChevronRight, Link2, Unlink, Loader2,
+  UserCheck, ChevronRight, Link2, Unlink, Loader2, KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,6 +133,21 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erro', description: err.message || 'Tente novamente.' });
     } finally { setLoading(false); }
+  }
+
+  async function handleResetPassword(parent: ParentItem) {
+    // Sem e-mail transacional, a redefinição é mediada pela escola: apaga a
+    // senha e o responsável cria a nova pelo link da turma (mesmo fluxo do
+    // primeiro acesso, provando o vínculo pela data de nascimento).
+    if (!(await confirmDialog({
+      title: `Resetar a senha de ${parent.name}?`,
+      description: 'A senha atual deixa de funcionar na hora. Envie o link da turma: ao abrir, será pedido para criar uma senha nova.',
+      confirmLabel: 'Resetar senha', destructive: true,
+    }))) return;
+    const res = await fetch(`/api/parents/${parent.id}/reset-password`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) toast({ variant: 'success', title: 'Senha resetada', description: data.message });
+    else toast({ variant: 'destructive', title: 'Erro', description: data.error });
   }
 
   async function handleDelete(parent: ParentItem) {
@@ -397,6 +412,9 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(parent)}>
                             <Edit className="h-4 w-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(parent)}>
+                            <KeyRound className="h-4 w-4 mr-2" /> Resetar senha
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDelete(parent)} className="text-destructive focus:text-destructive">

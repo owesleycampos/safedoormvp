@@ -16,7 +16,7 @@ export default async function HomePage() {
   } else if (role === 'PARENT') {
     redirect('/pwa/children');
   } else if (role === 'SUPERADMIN') {
-    redirect('/odono');
+    redirect('/hq');
   }
 
   redirect('/auth/login');

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 
 /**
- * Limite de alunos por plano — configurado em /odono/settings e, até aqui,
+ * Limite de alunos por plano — configurado em /hq/settings e, até aqui,
  * aplicado em lugar NENHUM: uma escola ESSENCIAL cadastrava alunos sem fim.
  *
  * Retorna null quando pode criar, ou a mensagem de erro quando estourou.

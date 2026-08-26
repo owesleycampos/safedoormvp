@@ -102,21 +102,24 @@ model School {
 }
 
 model SchoolSettings {
-  id             String   @id @default(cuid())
-  schoolId       String   @unique
-  school         School   @relation(fields: [schoolId], references: [id])
-  entryStartTime String   @default("06:00")
-  entryEndTime   String   @default("09:00")
-  exitStartTime  String   @default("11:00")
-  exitEndTime    String   @default("18:00")
+  id                String   @id @default(cuid())
+  schoolId          String   @unique
+  school            School   @relation(fields: [schoolId], references: [id])
+  entryStartTime    String   @default("06:00")
+  entryEndTime      String   @default("09:00")
+  exitStartTime     String   @default("11:00")
+  exitEndTime       String   @default("18:00")
   // Per-shift schedule overrides (JSON: { "MANHA": { entry: "07:00", entryLimit: "07:30", exit: "12:00" }, ... })
-  shiftSchedules String?  @db.Text
-  minConfidence  Float    @default(0.90)
-  notifyOnEntry  Boolean  @default(true)
-  notifyOnExit   Boolean  @default(true)
-  timezone       String   @default("America/Sao_Paulo")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  shiftSchedules    String?  @db.Text
+  minConfidence     Float    @default(0.90)
+  notifyOnEntry     Boolean  @default(true)
+  notifyOnExit      Boolean  @default(true)
+  timezone          String   @default("America/Sao_Paulo")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  // Contingência por escola: o dono do SaaS pausa o reconhecimento de UMA
+  // escola (inadimplência, abuso, incidente) sem suspender o acesso.
+  recognitionPaused Boolean  @default(false)
 }
 
 // ============================================================
@@ -479,6 +482,14 @@ model PlatformSettings {
   maxStudentsEssencial    Int      @default(200)
   maxStudentsProfissional Int      @default(500)
   maxStudentsPremium      Int      @default(0) // 0 = ilimitado
+  // Cota MENSAL de chamadas de reconhecimento por plano (0 = ilimitado).
+  // Cada frame analisado pela câmera é uma chamada cobrada na AWS.
+  maxRecogEssencial       Int      @default(0)
+  maxRecogProfissional    Int      @default(0)
+  maxRecogPremium         Int      @default(0)
+  // Contingência global: pausa o reconhecimento da plataforma inteira
+  // (incidente na AWS, estouro de custo). Presença manual continua.
+  recognitionPaused       Boolean  @default(false)
   // Webhook configuration
   webhookSecret           String? // secret to validate incoming webhooks
   paymentProvider         String   @default("MANUAL") // "MANUAL" | "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME"
@@ -508,4 +519,22 @@ model WebhookEvent {
   @@index([status])
   @@index([schoolId])
   @@index([externalId])
+}
+
+// ============================================================
+// USO DE RECONHECIMENTO (medição por escola/mês)
+// ============================================================
+
+// Uma linha por escola por mês ("YYYY-MM"). Incrementada a cada chamada de
+// reconhecimento (cada frame analisado) — é o que permite mostrar usados/
+// restantes no /hq e aplicar a cota do plano.
+model RecognitionUsage {
+  id        String   @id @default(cuid())
+  schoolId  String
+  monthKey  String // "YYYY-MM" no fuso da escola
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, monthKey])
+  @@index([monthKey])
 }

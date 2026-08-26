@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard, School, CreditCard,
-  ScrollText, Settings, LogOut, ChevronRight, Shield, Webhook,
+  ScrollText, Settings, LogOut, ChevronRight, Shield, Webhook, Activity, FileSearch,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { Logo } from '@/components/shared/logo';
@@ -16,17 +16,19 @@ import {
 } from '@/components/ui/tooltip';
 
 const nav = [
-  { href: '/odono',            icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/odono/schools',     icon: School,          label: 'Escolas' },
-  { href: '/odono/billing',     icon: CreditCard,      label: 'Faturamento' },
+  { href: '/hq',            icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/hq/monitor',     icon: Activity,        label: 'Monitoramento' },
+  { href: '/hq/schools',     icon: School,          label: 'Escolas' },
+  { href: '/hq/billing',     icon: CreditCard,      label: 'Faturamento' },
+  { href: '/hq/audit',       icon: FileSearch,      label: 'Auditoria' },
   // 'AWS Contas' congelada: gestão de contingência multi-conta para uma
   // escala inexistente, com medidores sem fonte de dados ($0.00 fixo).
-  { href: '/odono/webhooks',    icon: Webhook,         label: 'Webhooks' },
-  { href: '/odono/logs',        icon: ScrollText,      label: 'Logs' },
+  { href: '/hq/webhooks',    icon: Webhook,         label: 'Webhooks' },
+  { href: '/hq/logs',        icon: ScrollText,      label: 'Logs' },
 ];
 
 const bottom = [
-  { href: '/odono/settings', icon: Settings, label: 'Configurações' },
+  { href: '/hq/settings', icon: Settings, label: 'Configurações' },
 ];
 
 export function SuperAdminSidebar() {
@@ -35,7 +37,7 @@ export function SuperAdminSidebar() {
   const user = session?.user as any;
 
   function isActive(href: string) {
-    if (href === '/odono') return pathname === '/odono';
+    if (href === '/hq') return pathname === '/hq';
     return pathname === href || pathname.startsWith(href + '/');
   }
 

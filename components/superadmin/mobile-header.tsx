@@ -15,12 +15,12 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 const nav = [
-  { href: '/odono',            icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/odono/schools',     icon: School,          label: 'Escolas' },
-  { href: '/odono/billing',     icon: CreditCard,      label: 'Faturamento' },
-  { href: '/odono/webhooks',    icon: Webhook,         label: 'Webhooks' },
-  { href: '/odono/logs',        icon: ScrollText,      label: 'Logs' },
-  { href: '/odono/settings',    icon: Settings,        label: 'Configurações' },
+  { href: '/hq',            icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/hq/schools',     icon: School,          label: 'Escolas' },
+  { href: '/hq/billing',     icon: CreditCard,      label: 'Faturamento' },
+  { href: '/hq/webhooks',    icon: Webhook,         label: 'Webhooks' },
+  { href: '/hq/logs',        icon: ScrollText,      label: 'Logs' },
+  { href: '/hq/settings',    icon: Settings,        label: 'Configurações' },
 ];
 
 export function SuperAdminMobileHeader() {
@@ -30,7 +30,7 @@ export function SuperAdminMobileHeader() {
   const user = session?.user as any;
 
   function isActive(href: string) {
-    if (href === '/odono') return pathname === '/odono';
+    if (href === '/hq') return pathname === '/hq';
     return pathname === href || pathname.startsWith(href + '/');
   }
 

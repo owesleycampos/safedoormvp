@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session) redirect('/auth/login');
   const role = (session.user as any)?.role;
   // SUPERADMIN ia para /pwa, cujo layout devolvia para /admin — loop infinito.
-  if (role === 'SUPERADMIN') redirect('/odono');
+  if (role === 'SUPERADMIN') redirect('/hq');
   if (role !== 'ADMIN') redirect('/pwa/children');
 
   const schoolId = (session.user as any)?.schoolId;

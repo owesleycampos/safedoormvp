@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 
 /**
  * Núcleo do processamento de webhooks de pagamento, extraído da rota para
- * que o "Reprocessar" do /odono possa REALMENTE reprocessar (route files do
+ * que o "Reprocessar" do /hq possa REALMENTE reprocessar (route files do
  * Next não exportam helpers). A rota pública e o retry usam o mesmo código.
  */
 

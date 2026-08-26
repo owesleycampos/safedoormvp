@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import * as rekognition from '@/lib/rekognition';
 import { requireActiveSchool } from '@/lib/require-active-school';
+import { checkRecognitionAllowed, countRecognitionCall } from '@/lib/recognition-usage';
 
 /**
  * GET /api/camera/recognize
@@ -54,6 +55,13 @@ export async function POST(req: NextRequest) {
 
   const schoolId = auth.schoolId;
 
+  // Contingência (pausa global/por escola) e cota mensal do plano — cada
+  // frame é uma chamada cobrada; sem isso não há freio de custo.
+  const blocked = await checkRecognitionAllowed(schoolId, auth.timezone);
+  if (blocked) {
+    return NextResponse.json({ error: blocked.error }, { status: blocked.status });
+  }
+
   // School-configured minimum confidence drives the AWS match threshold
   const settings = await prisma.schoolSettings.findUnique({
     where: { schoolId },
@@ -79,6 +87,8 @@ export async function POST(req: NextRequest) {
 
   try {
     // ── Search for matching faces ──────────────────────────────────────────
+    // Mede ANTES da chamada: a AWS cobra mesmo quando não há match.
+    await countRecognitionCall(schoolId, auth.timezone);
     const { matches: faceMatches, box } = await rekognition.searchFacesByImage(
       collectionId, imageBytes, faceMatchThreshold
     );

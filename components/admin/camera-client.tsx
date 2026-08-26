@@ -172,6 +172,7 @@ export function CameraClient() {
         if (failStreakRef.current === 3) {
           const msg = res.status === 401 ? 'Sessão expirada — recarregue a página e entre de novo.'
             : res.status === 403 ? 'Acesso bloqueado — verifique a situação da escola.'
+            : res.status === 429 ? 'Cota mensal de reconhecimentos atingida — use o registro manual.'
             : 'O servidor de reconhecimento está retornando erro.';
           toast({ variant: 'destructive', title: 'Reconhecimento interrompido', description: msg });
         }

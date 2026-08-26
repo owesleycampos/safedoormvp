@@ -61,7 +61,7 @@ function LoginForm() {
       const dest = callbackUrl !== '/'
         ? callbackUrl
         : role === 'SUPERADMIN'
-          ? '/odono'
+          ? '/hq'
           : role === 'ADMIN'
             ? '/admin/dashboard'
             : '/pwa/children';

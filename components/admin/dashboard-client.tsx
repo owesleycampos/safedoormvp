@@ -158,13 +158,13 @@ function LineChart({ data }: { data: TrendPoint[] }) {
 }
 
 /* ── Main ─────────────────────────────────────────────────────── */
-export function DashboardClient({ data: initialData }: { data: StatsData }) {
+export function DashboardClient({ data: initialData }: { data: StatsData | null }) {
   const [manualOpen, setManualOpen] = useState(false);
   const [classFilter, setClassFilter] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('dashboard_class_filter') || 'all' : 'all'
   );
   const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
-  const [data, setData] = useState<StatsData>(initialData);
+  const [data, setData] = useState<StatsData | null>(initialData);
 
   // KPIs always fetch "today", chart fetches the selected period
   const fetchStats = useCallback(async (cid?: string) => {
@@ -191,6 +191,20 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
       localStorage.setItem('dashboard_class_filter', classFilter);
     }
   }, [classFilter]);
+
+  if (!data) {
+    // Primeiro paint instantâneo; os números chegam da API em seguida.
+    return (
+      <div className="flex-1 p-5 md:p-8 space-y-6 w-full animate-pulse">
+        <div className="skeleton h-7 w-44" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28" />)}
+        </div>
+        <div className="skeleton h-64 w-full" />
+        <div className="skeleton h-48 w-full" />
+      </div>
+    );
+  }
 
   const presenceRate = data.totalStudents > 0
     ? Math.round((data.presentCount / data.totalStudents) * 100) : 0;

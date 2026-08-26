@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireActiveSchool } from '@/lib/require-active-school';
-import { getSchoolTimezone } from '@/lib/school-tz';
 import {
   addDaysStr, dayRangeForDateStr, isWeekendDateStr, localDateStr,
 } from '@/lib/timezone';
@@ -23,7 +22,7 @@ export async function GET(req: NextRequest) {
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
 
-  const tz = await getSchoolTimezone(schoolId);
+  const tz = auth.timezone;
   const todayStr = localDateStr(new Date(), tz);
   const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 

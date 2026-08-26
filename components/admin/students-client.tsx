@@ -49,7 +49,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [birthCol, setBirthCol] = useState(-1);
   const [orphanAlertOpen, setOrphanAlertOpen] = useState(true);
 
-  const orphanStudents = students.filter((s) => !s.parents || s.parents.length === 0);
+  const orphanStudents = students.filter((s) => (s._count?.parents ?? 0) === 0);
 
   const filtered = students.filter((s) => {
     const matchSearch =
@@ -379,7 +379,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                         </Avatar>
                         <span className={cn(
                           'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card',
-                          (student.azurePersonId || student.faceVector) ? 'bg-foreground' : 'bg-muted-foreground/30'
+                          student.azurePersonId ? 'bg-foreground' : 'bg-muted-foreground/30'
                         )} />
                       </div>
 
@@ -392,9 +392,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {student.photos?.length > 0 && `${student.photos.length} foto${student.photos.length !== 1 ? 's' : ''} · `}
-                          {student.parents?.length || 0} responsável(is)
-                          {student.recognitionEnabled === false && (student.azurePersonId || student.faceVector) && (
+                          {(student._count?.photos ?? 0) > 0 && `${student._count.photos} foto${student._count.photos !== 1 ? 's' : ''} · `}
+                          {student._count?.parents ?? 0} responsável(is)
+                          {student.recognitionEnabled === false && student.azurePersonId && (
                             <span className="text-muted-foreground"> · Reconhecimento off</span>
                           )}
                         </p>
@@ -436,7 +436,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                             <DropdownMenuItem onClick={() => router.push(`/admin/students/${student.id}/history`)}>
                               <Eye className="h-4 w-4" /> Frequência completa
                             </DropdownMenuItem>
-                            {(student.azurePersonId || student.faceVector) && (
+                            {student.azurePersonId && (
                               <DropdownMenuItem onClick={() => handleToggleRecognition(student)}>
                                 <ScanFace className="h-4 w-4" />
                                 {student.recognitionEnabled !== false ? 'Desativar reconhecimento' : 'Ativar reconhecimento'}

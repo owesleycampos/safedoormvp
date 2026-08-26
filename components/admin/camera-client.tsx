@@ -50,6 +50,14 @@ export function CameraClient() {
   const [rekognitionConfigured, setRekognitionConfigured] = useState<boolean | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [suggestedMode, setSuggestedMode] = useState<'ENTRY' | 'EXIT' | null>(null);
+  // Confirmação em tela cheia: o aluno na frente da câmera precisa ver de
+  // longe que a passagem registrou — um toast no canto não comunica isso.
+  const [confirmation, setConfirmation] = useState<{ name: string; type: 'ENTRY' | 'EXIT' } | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+  }, []);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -100,8 +108,9 @@ export function CameraClient() {
           return;
         }
         if (data.success) {
-          const label = currentMode === 'ENTRY' ? 'Entrada registrada!' : 'Saída registrada!';
-          toast({ variant: 'success', title: label, description: match.name });
+          setConfirmation({ name: match.name, type: currentMode });
+          if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+          confirmTimerRef.current = setTimeout(() => setConfirmation(null), 2500);
           setRecentRecognitions((prev) =>
             [{ id: data.event?.id ?? crypto.randomUUID(), studentId: match.studentId!, name: match.name, photoUrl: match.photoUrl, type: currentMode, timestamp: new Date(), confidence: match.confidence }, ...prev].slice(0, MAX_RECENT)
           );
@@ -400,6 +409,31 @@ export function CameraClient() {
               <span className="text-[10px] font-semibold px-2 py-1 rounded-md bg-foreground text-background">
                 {mode === 'ENTRY' ? 'ENTRADA' : 'SAÍDA'}
               </span>
+            </div>
+          )}
+
+          {/* Confirmação de presença — tela cheia, visível de longe */}
+          {confirmation && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-5 bg-emerald-500/95 animate-fade-in">
+              <svg className="h-28 w-28" viewBox="0 0 52 52" aria-hidden="true">
+                <circle
+                  cx="26" cy="26" r="24"
+                  fill="none" stroke="white" strokeWidth="2.5"
+                  className="check-circle"
+                />
+                <path
+                  fill="none" stroke="white" strokeWidth="4"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  d="M15 27l8 8 15-16"
+                  className="check-mark"
+                />
+              </svg>
+              <div className="text-center px-6">
+                <p className="text-white text-3xl font-bold tracking-tight">
+                  {confirmation.type === 'ENTRY' ? 'Entrada registrada' : 'Saída registrada'}
+                </p>
+                <p className="text-white/90 text-xl mt-1">{confirmation.name}</p>
+              </div>
             </div>
           )}
 

@@ -8,6 +8,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
@@ -42,6 +43,7 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [nameSearch, setNameSearch] = useState('');
   const [eventType, setEventType] = useState<'ENTRY' | 'EXIT'>('ENTRY');
   const [submitting, setSubmitting] = useState(false);
   const [lastRegistered, setLastRegistered] = useState<StudentItem | null>(null);
@@ -313,6 +315,25 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
                 </div>
               ) : (
                 <div className="absolute inset-0 flex flex-col">
+                  {/* Busca por nome: numa turma de 30, achar UM aluno era
+                      paginar o carrossel na mão. Digitar pula direto. */}
+                  <div className="px-6 pt-2">
+                    <Input
+                      value={nameSearch}
+                      placeholder="Buscar aluno pelo nome..."
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setNameSearch(v);
+                        if (v.trim()) {
+                          const idx = students.findIndex((st) =>
+                            st.name.toLowerCase().includes(v.trim().toLowerCase())
+                          );
+                          if (idx >= 0) setCarouselIndex(idx);
+                        }
+                      }}
+                      className="h-9 text-sm"
+                    />
+                  </div>
                   {/* Student Card */}
                   <div className="flex-1 flex flex-col items-center justify-center px-6 pb-2 relative">
                     {/* Arrows */}

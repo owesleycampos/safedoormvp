@@ -62,7 +62,7 @@ export function AwsClient({ data }: { data: AwsData }) {
     if (!form.label || !form.accountId) return;
     setSaving(true);
     try {
-      await fetch('/api/odono/aws', {
+      const res = await fetch('/api/odono/aws', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,20 +80,30 @@ export function AwsClient({ data }: { data: AwsData }) {
   }
 
   async function assignSchool(awsAccountId: string, schoolId: string) {
-    await fetch('/api/odono/aws', {
+    const res = await fetch('/api/odono/aws', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'assign-school', awsAccountId, schoolId }),
-    });
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const d = await res?.json().catch(() => null);
+      alert(d?.error || 'Falha na operação.');
+      return;
+    }
     router.refresh();
   }
 
   async function toggleStatus(accountId: string, newStatus: string) {
-    await fetch('/api/odono/aws', {
+    const res = await fetch('/api/odono/aws', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update-status', accountId, status: newStatus }),
-    });
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const d = await res?.json().catch(() => null);
+      alert(d?.error || 'Falha na operação.');
+      return;
+    }
     router.refresh();
   }
 

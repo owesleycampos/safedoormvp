@@ -107,11 +107,16 @@ export function BillingClient({ data }: { data: BillingData }) {
   );
 
   async function markInvoicePaid(invoiceId: string) {
-    await fetch('/api/odono/invoices', {
+    const res = await fetch('/api/odono/invoices', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoiceId, status: 'PAID', paidAt: new Date().toISOString() }),
-    });
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const d = await res?.json().catch(() => null);
+      alert(d?.error || 'Falha ao marcar como paga — nada foi alterado.');
+      return;
+    }
     router.refresh();
   }
 
@@ -119,7 +124,7 @@ export function BillingClient({ data }: { data: BillingData }) {
     if (!invoiceForm.schoolId || !invoiceForm.amount || !invoiceForm.dueDate) return;
     setSaving(true);
     try {
-      await fetch('/api/odono/invoices', {
+      const res = await fetch('/api/odono/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +133,12 @@ export function BillingClient({ data }: { data: BillingData }) {
           dueDate: invoiceForm.dueDate,
           description: invoiceForm.description,
         }),
-      });
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const d = await res?.json().catch(() => null);
+        alert(d?.error || 'Falha ao criar a fatura.');
+        return;
+      }
       router.refresh();
       setShowAddInvoice(false);
       setInvoiceForm({ schoolId: '', amount: '', dueDate: '', description: '' });

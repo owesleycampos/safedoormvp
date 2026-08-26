@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkStudentCap } from '@/lib/plan-limits';
 
 export async function GET(req: NextRequest) {
   // ADMIN apenas: a lista traz e-mails de responsáveis e flags biométricas.
@@ -55,6 +56,10 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
+
+  const capError = await checkStudentCap(schoolId, 1);
+  if (capError) return NextResponse.json({ error: capError }, { status: 403 });
 
   try {
     const formData = await req.formData();

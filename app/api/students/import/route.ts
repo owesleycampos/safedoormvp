@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkStudentCap } from '@/lib/plan-limits';
 
 interface ImportRow {
   name: string;
@@ -78,6 +79,12 @@ export async function POST(req: NextRequest) {
     select: { id: true, name: true },
   });
   const byName = new Map(existingStudents.map((s) => [s.name.toLowerCase().trim(), s.id]));
+
+  // Teto do plano vale também para o caminho em massa — senão o import era
+  // a porta dos fundos do limite.
+  const newRows = studentRows.filter((r) => r.name?.trim() && !byName.has(r.name.trim().toLowerCase())).length;
+  const capError = await checkStudentCap(schoolId, newRows);
+  if (capError) return NextResponse.json({ error: capError }, { status: 403 });
 
   let created = 0;
   let skipped = 0;

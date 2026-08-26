@@ -62,7 +62,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
   const [createForm, setCreateForm] = useState({
     name: '', cnpj: '', city: '', state: '',
     contactEmail: '', contactPhone: '',
-    plan: 'ESSENCIAL', billing: 'MONTHLY',
+    plan: 'ESSENCIAL', billing: 'MONTHLY', trial: false,
     adminName: '', adminEmail: '', adminPassword: '',
   });
 
@@ -129,7 +129,7 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
       setCreateForm({
         name: '', cnpj: '', city: '', state: '',
         contactEmail: '', contactPhone: '',
-        plan: 'ESSENCIAL', billing: 'MONTHLY',
+        plan: 'ESSENCIAL', billing: 'MONTHLY', trial: false,
         adminName: '', adminEmail: '', adminPassword: '',
       });
       router.refresh();
@@ -494,6 +494,15 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
                     <option value="ANNUAL">Anual (com desconto)</option>
                   </select>
                 </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.trial}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, trial: e.target.checked }))}
+                    className="h-4 w-4 rounded border-border accent-foreground"
+                  />
+                  Começar em período de teste (trial)
+                </label>
               </div>
 
               <div className="space-y-3">

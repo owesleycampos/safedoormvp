@@ -16,7 +16,13 @@ export async function POST(req: NextRequest) {
   const session = await requireSuperAdmin();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const { name, cnpj, city, state, contactEmail, contactPhone, plan, billing, adminEmail, adminName, adminPassword } = await req.json();
+  const { name, cnpj, city, state, contactEmail, contactPhone, plan, billing, adminEmail, adminName, adminPassword, trial } = await req.json();
+
+  const platform = trial
+    ? await prisma.platformSettings.findFirst({ select: { trialDays: true } })
+    : null;
+  const trialEnds = new Date();
+  trialEnds.setDate(trialEnds.getDate() + (platform?.trialDays ?? 7));
 
   if (!name || !plan || !adminEmail || !adminPassword) {
     return NextResponse.json({ error: 'Nome, plano, email e senha do admin são obrigatórios' }, { status: 400 });
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
         state: state || null,
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
-        status: 'ACTIVE',
+        status: trial ? 'TRIAL' : 'ACTIVE',
       },
     });
 
@@ -76,7 +82,10 @@ export async function POST(req: NextRequest) {
         schoolId: school.id,
         plan,
         billing: billing || 'MONTHLY',
-        status: 'ACTIVE',
+        // Trial de verdade: o status TRIAL + trialEndsAt existiam no schema,
+        // no filtro da listagem e no guard de acesso — mas nada os escrevia.
+        status: trial ? 'TRIAL' : 'ACTIVE',
+        ...(trial ? { trialEndsAt: trialEnds } : {}),
         priceMonthly: priceMap[plan] || 49700,
         discount,
       },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { detectProvider, normalizeEvent, processWebhookEvent } from '@/lib/payment-webhooks';
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
@@ -51,13 +52,28 @@ export async function PATCH(req: NextRequest) {
   const { eventId, action } = await req.json();
 
   if (action === 'retry' && eventId) {
-    // Reset status to RECEIVED so it can be reprocessed
-    await prisma.webhookEvent.update({
-      where: { id: eventId },
-      data: { status: 'RECEIVED', errorMessage: null, processedAt: null },
-    });
+    // Reprocessamento REAL: o retry antigo só marcava RECEIVED (que nada
+    // consome) e apagava a mensagem de erro — o evento morria em silêncio.
+    const event = await prisma.webhookEvent.findUnique({ where: { id: eventId } });
+    if (!event) return NextResponse.json({ error: 'Evento não encontrado' }, { status: 404 });
 
-    return NextResponse.json({ success: true });
+    let payload: any;
+    try { payload = JSON.parse(event.payload || '{}'); } catch {
+      return NextResponse.json({ error: 'Payload do evento é ilegível.' }, { status: 422 });
+    }
+
+    const provider = event.provider || detectProvider(payload);
+    const normalized = normalizeEvent(provider, payload);
+    try {
+      await processWebhookEvent(event.id, provider, normalized, payload);
+      return NextResponse.json({ success: true, reprocessed: true });
+    } catch (err: any) {
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { status: 'FAILED', errorMessage: err.message || 'Erro no reprocessamento' },
+      });
+      return NextResponse.json({ error: err.message || 'Falha ao reprocessar.' }, { status: 422 });
+    }
   }
 
   return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });

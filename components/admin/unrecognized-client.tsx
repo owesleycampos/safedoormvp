@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  CheckCircle2, Eye, ScanFace, Clock, Tablet, Camera, ZoomIn,
+  CheckCircle2, Eye, ScanFace, Clock, Tablet, Camera, ZoomIn, UserCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -38,6 +38,11 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
   const [detailOpen, setDetailOpen] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  // "Este rosto é o aluno X" — a captura vira foto de treino e sai da fila.
+  const [identifyLog, setIdentifyLog] = useState<LogItem | null>(null);
+  const [identifyStudents, setIdentifyStudents] = useState<any[]>([]);
+  const [identifyTarget, setIdentifyTarget] = useState('');
+  const [identifyBusy, setIdentifyBusy] = useState(false);
 
   const filtered = logs.filter((l) => {
     if (filter === 'pending') return !l.reviewed;
@@ -46,6 +51,40 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
   });
 
   const pendingCount = logs.filter(l => !l.reviewed).length;
+
+  async function openIdentify(log: LogItem) {
+    setIdentifyLog(log);
+    setIdentifyTarget('');
+    if (identifyStudents.length === 0) {
+      const res = await fetch('/api/students?limit=500');
+      if (res.ok) {
+        const data = await res.json();
+        setIdentifyStudents(data.students ?? []);
+      }
+    }
+  }
+
+  async function handleIdentify() {
+    if (!identifyLog || !identifyTarget) return;
+    setIdentifyBusy(true);
+    try {
+      const res = await fetch(`/api/unrecognized/${identifyLog.id}/identify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: identifyTarget }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ variant: 'success', title: 'Aluno identificado', description: data.message });
+        setLogs(prev => prev.map(l => l.id === identifyLog.id ? { ...l, reviewed: true, reviewedAt: new Date().toISOString() } : l));
+        setIdentifyLog(null);
+      } else {
+        toast({ variant: 'destructive', title: 'Erro', description: data.error });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally { setIdentifyBusy(false); }
+  }
 
   async function markReviewed(log: LogItem) {
     if (log.reviewed) return;
@@ -243,14 +282,23 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
                     <span className="text-[10px] text-muted-foreground">{formatRelativeTime(log.timestamp)}</span>
                   </div>
                   {!log.reviewed && (
-                    <button
-                      onClick={() => markReviewed(log)}
-                      disabled={markingId === log.id}
-                      className="w-full mt-1 flex items-center justify-center gap-1.5 h-7 rounded-md border border-border text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      Revisar
-                    </button>
+                    <div className="flex gap-1.5 mt-1">
+                      <button
+                        onClick={() => openIdentify(log)}
+                        className="flex-1 flex items-center justify-center gap-1.5 h-7 rounded-md bg-foreground text-background text-[11px] font-medium hover:opacity-90 transition-opacity"
+                      >
+                        <UserCheck className="h-3 w-3" />
+                        Identificar
+                      </button>
+                      <button
+                        onClick={() => markReviewed(log)}
+                        disabled={markingId === log.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 h-7 rounded-md border border-border text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Descartar
+                      </button>
+                    </div>
                   )}
                 </div>
               </Card>
@@ -340,6 +388,43 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
                   {formatDateTime(selectedLog.timestamp)} · {selectedLog.device.name}
                 </span>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Identificar aluno a partir da captura */}
+      <Dialog open={!!identifyLog} onOpenChange={(o) => { if (!o) setIdentifyLog(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Quem é este aluno?</DialogTitle>
+            <DialogDescription>
+              A captura entra nas fotos de treino do aluno e o registro sai da fila.
+            </DialogDescription>
+          </DialogHeader>
+          {identifyLog && (
+            <div className="space-y-3 mt-1">
+              <div className="h-40 rounded-md overflow-hidden border border-border bg-muted">
+                <img src={identifyLog.photoUrl} alt="Captura" className="h-full w-full object-contain" />
+              </div>
+              <select
+                value={identifyTarget}
+                onChange={(e) => setIdentifyTarget(e.target.value)}
+                className="input-base text-sm"
+              >
+                <option value="">Selecione o aluno...</option>
+                {identifyStudents.map((st: any) => (
+                  <option key={st.id} value={st.id}>{st.name}{st.class?.name ? ` — ${st.class.name}` : ''}</option>
+                ))}
+              </select>
+              <Button
+                onClick={handleIdentify}
+                disabled={!identifyTarget || identifyBusy}
+                loading={identifyBusy}
+                className="w-full"
+              >
+                Confirmar identificação
+              </Button>
             </div>
           )}
         </DialogContent>

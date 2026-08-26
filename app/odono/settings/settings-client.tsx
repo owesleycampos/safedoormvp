@@ -37,23 +37,37 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
   const [saved, setSaved] = useState(false);
 
   async function save() {
+    // Campos vazios viravam NaN → null → 500 no servidor, e o botão dizia
+    // "Salvo!" mesmo assim. Valida antes e só comemora com res.ok.
+    const nums = {
+      trialDays: parseInt(form.trialDays),
+      essencialPrice: Math.round(parseFloat(form.essencialPrice) * 100),
+      profissionalPrice: Math.round(parseFloat(form.profissionalPrice) * 100),
+      premiumPrice: Math.round(parseFloat(form.premiumPrice) * 100),
+      annualDiscount: parseFloat(form.annualDiscount) / 100,
+      maxStudentsEssencial: parseInt(form.maxStudentsEssencial),
+      maxStudentsProfissional: parseInt(form.maxStudentsProfissional),
+      maxStudentsPremium: parseInt(form.maxStudentsPremium),
+    };
+    if (Object.values(nums).some((v) => Number.isNaN(v))) {
+      alert('Preencha todos os campos com números válidos.');
+      return;
+    }
+    if (nums.trialDays < 0 || nums.trialDays > 90) { alert('Trial deve ter entre 0 e 90 dias.'); return; }
+    if (nums.annualDiscount < 0 || nums.annualDiscount > 0.9) { alert('Desconto anual deve estar entre 0% e 90%.'); return; }
+    if (nums.essencialPrice < 0 || nums.profissionalPrice < 0 || nums.premiumPrice < 0) { alert('Preços não podem ser negativos.'); return; }
     setSaving(true);
     try {
-      await fetch('/api/odono/settings', {
+      const res = await fetch('/api/odono/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: settings.id,
-          trialDays: parseInt(form.trialDays),
-          essencialPrice: Math.round(parseFloat(form.essencialPrice) * 100),
-          profissionalPrice: Math.round(parseFloat(form.profissionalPrice) * 100),
-          premiumPrice: Math.round(parseFloat(form.premiumPrice) * 100),
-          annualDiscount: parseFloat(form.annualDiscount) / 100,
-          maxStudentsEssencial: parseInt(form.maxStudentsEssencial),
-          maxStudentsProfissional: parseInt(form.maxStudentsProfissional),
-          maxStudentsPremium: parseInt(form.maxStudentsPremium),
-        }),
-      });
+        body: JSON.stringify({ id: settings.id, ...nums }),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const d = await res?.json().catch(() => null);
+        alert(d?.error || 'Falha ao salvar as configurações.');
+        return;
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       router.refresh();

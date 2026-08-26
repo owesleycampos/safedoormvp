@@ -62,6 +62,20 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
+  // Paridade com o webhook de pagamento: marcar pago na mão (boleto/PIX
+  // conferido pelo suporte) também reativa a assinatura e a escola —
+  // antes a escola continuava SUSPENSA mesmo com a fatura quitada.
+  if (status === 'PAID' && invoice.schoolId) {
+    await prisma.subscription.updateMany({
+      where: { schoolId: invoice.schoolId, status: 'PAST_DUE' },
+      data: { status: 'ACTIVE' },
+    });
+    await prisma.school.updateMany({
+      where: { id: invoice.schoolId, status: 'SUSPENDED' },
+      data: { status: 'ACTIVE' },
+    });
+  }
+
   await prisma.auditLog.create({
     data: {
       userId: (session.user as any)?.id,

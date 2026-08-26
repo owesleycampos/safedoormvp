@@ -24,6 +24,10 @@ export async function requireActiveSchool() {
     select: {
       status: true,
       subscription: { select: { trialEndsAt: true } },
+      // O fuso vem junto na mesma consulta: quase toda rota que valida a
+      // escola também precisa dele, e cada chamada a getSchoolTimezone era
+      // uma ida extra ao banco por request.
+      settings: { select: { timezone: true } },
     },
   });
 
@@ -39,5 +43,5 @@ export async function requireActiveSchool() {
     return { error: NextResponse.json({ error: 'Período de teste expirado' }, { status: 403 }) };
   }
 
-  return { session, schoolId };
+  return { session, schoolId, timezone: school.settings?.timezone || 'America/Sao_Paulo' };
 }

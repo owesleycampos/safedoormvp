@@ -92,7 +92,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   if (isEdit) {
     if (photos.length === 0) {
       pending.push({ tab: 'photos', label: 'Adicionar ao menos uma foto' });
-    } else if (!student?.azurePersonId && !student?.faceVector) {
+    } else if (!student?.azurePersonId) {
       pending.push({ tab: 'photos', label: 'Treinar a biometria com as fotos' });
     }
     if (!consent.at) {

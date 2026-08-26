@@ -9,16 +9,18 @@ async function getStudentsData(schoolId: string) {
   const [students, classes] = await Promise.all([
     prisma.student.findMany({
       where: { schoolId, isActive: true },
-      include: {
+      // Antes era um include cego: trazia os BYTES da biometria legada
+      // (faceVector) de todos os alunos e a árvore completa responsável→
+      // usuário — payload que a lista nunca exibia (a ficha carrega os
+      // responsáveis pela API dela). Só o que a tela consome:
+      select: {
+        id: true, name: true, isActive: true, photoUrl: true,
+        classId: true, birthDate: true, notes: true,
+        recognitionEnabled: true, azurePersonId: true,
+        biometricConsentAt: true, biometricConsentName: true,
         class: { select: { id: true, name: true, grade: true } },
-        photos: { where: { isProfile: true }, take: 1 },
-        parents: {
-          include: {
-            parent: {
-              include: { user: { select: { email: true, name: true } } },
-            },
-          },
-        },
+        photos: { where: { isProfile: true }, take: 1, select: { id: true, url: true } },
+        _count: { select: { photos: true, parents: true } },
       },
       orderBy: [{ class: { name: 'asc' } }, { name: 'asc' }],
     }),

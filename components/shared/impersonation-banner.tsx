@@ -13,7 +13,15 @@ export function ImpersonationBanner() {
 
   useEffect(() => {
     const m = document.cookie.match(/(?:^|; )hq-imp=([^;]+)/);
-    setName(m ? decodeURIComponent(m[1]) : null);
+    const found = m ? decodeURIComponent(m[1]) : null;
+    setName(found);
+    if (found) {
+      // Reserva a altura da faixa no fim da página e levanta a barra de abas
+      // fixa do responsável (regras em globals.css) — sem isso a faixa
+      // cobria as abas e as ações no rodapé das telas.
+      document.body.classList.add('impersonating');
+      return () => { document.body.classList.remove('impersonating'); };
+    }
   }, []);
 
   if (!name) return null;

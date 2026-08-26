@@ -95,7 +95,7 @@ export function SchoolDossierClient({ schoolId }: { schoolId: string }) {
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <ScanFace className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Reconhecimento — {recognition.monthKey}</h3>
+          <h3 className="text-sm font-semibold">Reconhecimento · {recognition.monthKey}</h3>
           {paused && <span className="text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">PAUSADO</span>}
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -114,7 +114,24 @@ export function SchoolDossierClient({ schoolId }: { schoolId: string }) {
         </p>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Perfil colhido no cadastro self-serve */}
+      {(school.ownerName || school.sizeStudents) && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold mb-4">Perfil da escola</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+            <Field label="Proprietário" value={school.ownerName} />
+            <Field label="Telefone" value={school.ownerPhone} />
+            <Field label="E-mail" value={school.contactEmail} />
+            <Field label="Tamanho" value={LABELS.size[school.sizeStudents]} />
+            <Field label="Faturamento" value={LABELS.revenue[school.revenueBand]} />
+            <Field label="Tempo de mercado" value={LABELS.years[school.yearsInMarket]} />
+            <Field label="Controle atual" value={LABELS.recog[school.usesRecognition]} />
+            <Field label="Onboarding" value={school.onboardingDoneAt ? 'Concluído' : 'Pendente'} />
+          </div>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-5">
         {/* Contas admin — abrir tela como */}
         <Card className="p-4">
           <h3 className="text-sm font-semibold mb-3">Administradores da escola</h3>
@@ -188,6 +205,22 @@ export function SchoolDossierClient({ schoolId }: { schoolId: string }) {
           ))}
         </div>
       </Card>
+    </div>
+  );
+}
+
+const LABELS: Record<string, Record<string, string>> = {
+  size: { ATE_100: 'Até 100 alunos', '101_300': '101 a 300', '301_600': '301 a 600', '600_MAIS': 'Mais de 600' },
+  revenue: { ATE_50K: 'Até R$ 50 mil/mês', '50_150K': 'R$ 50 a 150 mil', '150_500K': 'R$ 150 a 500 mil', '500K_MAIS': 'Acima de R$ 500 mil' },
+  years: { MENOS_1: 'Menos de 1 ano', '1_3': '1 a 3 anos', '3_10': '3 a 10 anos', '10_MAIS': 'Mais de 10 anos' },
+  recog: { NAO: 'Não usa nada', PLANILHA: 'Planilha ou caderno', CATRACA: 'Catraca ou cartão', OUTRO_APP: 'Outro aplicativo', SIM_FACIAL: 'Já usa facial' },
+};
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-medium">{value || '—'}</p>
     </div>
   );
 }

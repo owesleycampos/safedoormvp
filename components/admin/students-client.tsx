@@ -143,7 +143,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     const target = classes.find((c: any) => c.id === moveTarget);
     if (!(await confirmDialog({
       title: `Mover ${selectedIds.size} aluno${selectedIds.size !== 1 ? 's' : ''} para ${target?.name ?? 'a turma'}?`,
-      description: 'Responsáveis, biometria e histórico são mantidos — só a turma muda.',
+      description: 'Responsáveis, biometria e histórico são mantidos, só a turma muda.',
       confirmLabel: 'Mover',
     }))) return;
     setMoving(true);

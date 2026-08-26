@@ -30,7 +30,7 @@ export default async function DevicesPage() {
     <div className="flex flex-col flex-1 page-enter">
       <AdminHeader
         title="Dispositivos"
-        subtitle={`${devices.length} dispositivo${devices.length !== 1 ? 's' : ''} — ${online} online, ${offline} offline${error > 0 ? `, ${error} com erro` : ''}`}
+        subtitle={`${devices.length} dispositivo${devices.length !== 1 ? 's' : ''}, ${online} online, ${offline} offline${error > 0 ? `, ${error} com erro` : ''}`}
       />
       <div className="flex-1 p-4 md:p-6">
         <DevicesClient devices={devices as any} schoolId={schoolId} />

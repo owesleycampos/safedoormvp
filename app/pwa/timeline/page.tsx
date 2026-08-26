@@ -6,7 +6,7 @@ import { DEFAULT_TIMEZONE, addDaysStr, dayRangeForDateStr, localDateStr } from '
 
 export const metadata = { title: 'Histórico' };
 
-async function getTimeline(userId: string, studentId?: string) {
+async function getTimeline(userId: string, studentId?: string, fromStr?: string, toStr?: string) {
   const parent = await prisma.parent.findUnique({
     where: { userId },
     include: {
@@ -34,18 +34,25 @@ async function getTimeline(userId: string, studentId?: string) {
     : null;
   const tz = settings?.timezone || DEFAULT_TIMEZONE;
 
-  if (!targetStudentId) return { children, events: [], selectedStudentId: null, tz };
+  const _today = localDateStr(new Date(), tz);
+  if (!targetStudentId) return { children, events: [], selectedStudentId: null, tz, from: addDaysStr(_today, -6), to: _today };
 
   // Verify parent owns this student
   const owns = children.find((c) => c.id === targetStudentId);
-  if (!owns) return { children, events: [], selectedStudentId: null, tz };
+  if (!owns) return { children, events: [], selectedStudentId: null, tz, from: addDaysStr(localDateStr(new Date(), tz), -6), to: localDateStr(new Date(), tz) };
 
-  const sevenDaysAgo = dayRangeForDateStr(addDaysStr(localDateStr(new Date(), tz), -7), tz).start;
+  // Período: personalizado (from/to) ou os últimos 7 dias por padrão.
+  const isDate = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const todayStr = localDateStr(new Date(), tz);
+  const startStr = isDate(fromStr) ? fromStr! : addDaysStr(todayStr, -6);
+  const endStr = isDate(toStr) ? toStr! : todayStr;
+  const start = dayRangeForDateStr(startStr, tz).start;
+  const end = dayRangeForDateStr(endStr, tz).end;
 
   const events = await prisma.attendanceEvent.findMany({
     where: {
       studentId: targetStudentId,
-      timestamp: { gte: sevenDaysAgo },
+      timestamp: { gte: start, lt: end },
     },
     include: {
       student: { select: { name: true, photoUrl: true, school: { select: { name: true } } } },
@@ -54,23 +61,26 @@ async function getTimeline(userId: string, studentId?: string) {
     orderBy: { timestamp: 'desc' },
   });
 
-  return { children, events, selectedStudentId: targetStudentId, tz };
+  return { children, events, selectedStudentId: targetStudentId, tz, from: startStr, to: endStr };
 }
 
 export default async function TimelinePage({
   searchParams,
 }: {
-  searchParams: { studentId?: string };
+  searchParams: { studentId?: string; from?: string; to?: string };
 }) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
-  const { children, events, selectedStudentId, tz } = await getTimeline(userId, searchParams.studentId);
+  const { children, events, selectedStudentId, tz, from, to } = await getTimeline(userId, searchParams.studentId, searchParams.from, searchParams.to);
 
   return (
     <TimelineClient
       children={children}
       events={events}
       selectedStudentId={selectedStudentId}
+      tz={tz}
+      from={from}
+      to={to}
     />
   );
 }

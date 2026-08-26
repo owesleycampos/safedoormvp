@@ -12,6 +12,7 @@ import { ManualCheckinWizard } from '@/components/admin/manual-checkin-wizard';
 import { OnboardingChecklist } from '@/components/admin/onboarding-checklist';
 import { EventPhoto } from '@/components/shared/event-photo';
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils';
+import { PeriodPicker, type PeriodValue } from '@/components/shared/period-picker';
 import Link from 'next/link';
 
 interface TrendPoint { date: string; present: number; total: number }
@@ -164,7 +165,13 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
   const [classFilter, setClassFilter] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('dashboard_class_filter') || 'all' : 'all'
   );
-  const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
+  const [chartPeriod, setChartPeriod] = useState<PeriodValue>(() => {
+    const t = new Date();
+    const to = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    const f = new Date(t); f.setDate(f.getDate()-6);
+    const from = `${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`;
+    return { preset: '7d', from, to };
+  });
   const [data, setData] = useState<StatsData | null>(initialData);
 
   // KPIs always fetch "today", chart fetches the selected period
@@ -173,7 +180,12 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
       const params = new URLSearchParams();
       if (cid && cid !== 'all') params.set('classId', cid);
       params.set('period', 'today');
-      params.set('trendDays', chartPeriod === '7d' ? '7' : '30');
+      if (chartPeriod.preset === 'custom') {
+        params.set('trendFrom', chartPeriod.from);
+        params.set('trendTo', chartPeriod.to);
+      } else {
+        params.set('trendDays', chartPeriod.preset === '7d' ? '7' : chartPeriod.preset === '30d' ? '30' : '90');
+      }
       const res = await fetch(`/api/dashboard/stats?${params}`);
       if (res.ok) setData(await res.json());
     } catch { /* silent */ }
@@ -358,20 +370,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
                     <p className="text-xs text-muted-foreground mt-0.5">Média: {avgRate}% nos dias úteis</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  {(['7d', '30d'] as const).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setChartPeriod(p)}
-                      className={cn(
-                        'h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors',
-                        chartPeriod === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      {p === '7d' ? '7 dias' : '30 dias'}
-                    </button>
-                  ))}
-                </div>
+                <PeriodPicker value={chartPeriod} onChange={setChartPeriod} />
               </div>
               {data.trend && data.trend.some(t => t.total > 0) ? (
                 <LineChart data={data.trend} />

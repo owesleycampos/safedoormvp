@@ -170,9 +170,9 @@ export function CameraClient() {
         // subia um frame a cada 2s sem registrar nada.
         failStreakRef.current += 1;
         if (failStreakRef.current === 3) {
-          const msg = res.status === 401 ? 'Sessão expirada — recarregue a página e entre de novo.'
-            : res.status === 403 ? 'Acesso bloqueado — verifique a situação da escola.'
-            : res.status === 429 ? 'Cota mensal de reconhecimentos atingida — use o registro manual.'
+          const msg = res.status === 401 ? 'Sessão expirada. Recarregue a página e entre de novo.'
+            : res.status === 403 ? 'Acesso bloqueado. Verifique a situação da escola.'
+            : res.status === 429 ? 'Cota mensal de reconhecimentos atingida. Use o registro manual.'
             : 'O servidor de reconhecimento está retornando erro.';
           toast({ variant: 'destructive', title: 'Reconhecimento interrompido', description: msg });
         }

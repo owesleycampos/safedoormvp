@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -151,13 +152,17 @@ function LoginForm() {
           incluíam um login de ADMIN funcional exposto ao mundo, numa conta
           que carrega dados reais. Quem demonstra o produto sabe as senhas. */}
 
-      {/* O caminho de conta do responsável é o LINK DA TURMA: criar conta
-          solta aqui gerava um usuário órfão (sem escola, sem filhos) que não
-          conseguia fazer nada — puro suporte. */}
-      <p className="text-center text-xs text-muted-foreground">
-        Responsável sem acesso? Peça o link da turma na secretaria da escola —
-        a conta é criada por ele.
-      </p>
+      {/* Cadastro é para ESCOLAS (self-serve, cria trial). O responsável
+          entra pelo link da turma, nunca por aqui. */}
+      <div className="space-y-2 text-center">
+        <p className="text-sm text-muted-foreground">
+          É uma escola?{' '}
+          <Link href="/auth/cadastro" className="text-foreground font-medium hover:underline">Criar conta</Link>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          É responsável? Peça o link da turma na secretaria da escola.
+        </p>
+      </div>
     </div>
   );
 }

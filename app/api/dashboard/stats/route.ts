@@ -45,13 +45,21 @@ export async function GET(req: NextRequest) {
 
   const studentWhere = { schoolId, isActive: true, ...(classId ? { classId } : {}) };
 
-  // Trend window — independent from the KPI period, ends at the KPI end
+  // Trend window — independent from the KPI period. Período personalizado
+  // (calendário) manda trendFrom/trendTo; senão cai nos presets em dias.
+  const trendFromParam = searchParams.get('trendFrom');
+  const trendToParam = searchParams.get('trendTo');
   const trendDays = trendDaysParam ? parseInt(trendDaysParam, 10) : 7;
-  const trendStartStr = addDaysStr(rangeEndStr, -(trendDays - 1));
+  const trendEndStr = isDate(trendToParam) ? trendToParam : rangeEndStr;
+  const trendStartStr = isDate(trendFromParam)
+    ? trendFromParam
+    : addDaysStr(trendEndStr, -(trendDays - 1));
   const trendStart = dayRangeForDateStr(trendStartStr, tz).start;
   // Entry-event fetch must cover BOTH the trend window and the KPI range so
   // avg-stay pairing never misses entries outside the trend window.
+  const trendEnd = dayRangeForDateStr(trendEndStr, tz).end;
   const entryFetchStart = trendStart < rangeStart ? trendStart : rangeStart;
+  const entryFetchEnd = trendEnd > rangeEnd ? trendEnd : rangeEnd;
 
   // Disparada junto do Promise.all: era a única consulta serial da rota e
   // adicionava uma viagem inteira ao banco no endpoint mais consultado.
@@ -107,7 +115,7 @@ export async function GET(req: NextRequest) {
     prisma.attendanceEvent.findMany({
       where: {
         student: studentWhere,
-        timestamp: { gte: entryFetchStart, lt: rangeEnd },
+        timestamp: { gte: entryFetchStart, lt: entryFetchEnd },
         eventType: 'ENTRY',
       },
       select: { studentId: true, timestamp: true },
@@ -133,7 +141,7 @@ export async function GET(req: NextRequest) {
     if (!entriesByDay.has(day)) entriesByDay.set(day, new Set());
     entriesByDay.get(day)!.add(e.studentId);
   }
-  for (let d = trendStartStr; d <= rangeEndStr; d = addDaysStr(d, 1)) {
+  for (let d = trendStartStr; d <= trendEndStr; d = addDaysStr(d, 1)) {
     if (isWeekendDateStr(d)) {
       trend.push({ date: d, present: 0, total: 0 });
       continue;

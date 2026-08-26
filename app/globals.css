@@ -252,3 +252,8 @@
     .check-circle, .check-mark { animation-duration: 0.01s; animation-delay: 0s; }
   }
 }
+
+  /* Impersonação: a faixa fixa do dono reserva 52px no rodapé e levanta a
+     barra de abas do responsável para não ficar coberta. */
+  body.impersonating { padding-bottom: 52px; }
+  body.impersonating .tab-bar { bottom: 52px; }

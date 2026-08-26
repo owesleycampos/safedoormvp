@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { LogIn, LogOut, Clock, ChevronLeft, CalendarDays } from 'lucide-react';
+import { LogIn, LogOut, Clock, ChevronLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EventPhoto } from '@/components/shared/event-photo';
+import { PeriodPicker, type PeriodValue } from '@/components/shared/period-picker';
 import { Badge } from '@/components/ui/badge';
 import { cn, getInitials, formatTime } from '@/lib/utils';
 
@@ -12,6 +13,8 @@ interface TimelineClientProps {
   events: any[];
   selectedStudentId: string | null;
   tz?: string;
+  from?: string;
+  to?: string;
 }
 
 function groupEventsByDay(events: any[], tz: string) {
@@ -27,8 +30,19 @@ function groupEventsByDay(events: any[], tz: string) {
   return groups;
 }
 
-export function TimelineClient({ children, events, selectedStudentId, tz = 'America/Sao_Paulo' }: TimelineClientProps) {
+export function TimelineClient({ children, events, selectedStudentId, tz = 'America/Sao_Paulo', from, to }: TimelineClientProps) {
   const router = useRouter();
+  const period: PeriodValue = {
+    preset: 'custom',
+    from: from || '',
+    to: to || '',
+  };
+  function applyPeriod(v: PeriodValue) {
+    const sp = new URLSearchParams();
+    if (selectedStudentId) sp.set('studentId', selectedStudentId);
+    sp.set('from', v.from); sp.set('to', v.to);
+    router.push(`/pwa/timeline?${sp.toString()}`);
+  }
   const selected = children.find((c) => c.id === selectedStudentId);
   const grouped = groupEventsByDay(events, tz);
   const today = new Date().toLocaleDateString('pt-BR', {
@@ -91,10 +105,7 @@ export function TimelineClient({ children, events, selectedStudentId, tz = 'Amer
             <p className="text-sm font-semibold">{selected.name}</p>
             <p className="text-xs text-muted-foreground">{selected.class?.name}</p>
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-            <CalendarDays className="h-3.5 w-3.5" />
-            <span>7 dias</span>
-          </div>
+          <PeriodPicker value={period} onChange={applyPeriod} />
         </div>
       )}
 
@@ -187,7 +198,7 @@ function EventCard({ event }: { event: any }) {
           >
             <img
               src={event.photoUrl}
-              alt="Foto do evento — toque para ampliar"
+              alt="Foto do evento, toque para ampliar"
               className="h-full w-full object-cover"
             />
           </EventPhoto>

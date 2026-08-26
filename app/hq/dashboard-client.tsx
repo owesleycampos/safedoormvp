@@ -65,13 +65,13 @@ function formatDate(iso: string) {
 
 const statusColors: Record<string, string> = {
   ACTIVE: 'text-success bg-success/10',
-  TRIAL: 'text-blue-400 bg-blue-400/10',
-  SUSPENDED: 'text-red-400 bg-red-400/10',
-  CANCELLED: 'text-zinc-400 bg-zinc-400/10',
-  PAST_DUE: 'text-amber-400 bg-amber-400/10',
-  LIMIT_NEAR: 'text-amber-400 bg-amber-400/10',
-  LIMIT_REACHED: 'text-red-400 bg-red-400/10',
-  DISABLED: 'text-zinc-400 bg-zinc-400/10',
+  TRIAL: 'text-muted-foreground bg-muted',
+  SUSPENDED: 'text-destructive bg-destructive/10',
+  CANCELLED: 'text-muted-foreground bg-muted',
+  PAST_DUE: 'text-warning bg-warning/10',
+  LIMIT_NEAR: 'text-warning bg-warning/10',
+  LIMIT_REACHED: 'text-destructive bg-destructive/10',
+  DISABLED: 'text-muted-foreground bg-muted',
 };
 
 const statusLabels: Record<string, string> = {
@@ -96,7 +96,7 @@ const actionLabels: Record<string, string> = {
 
 export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
   return (
-    <div className="p-4 lg:p-6 space-y-6">
+    <div className="p-5 lg:p-8 space-y-8 max-w-[1200px] mx-auto w-full">
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold">Dashboard</h1>
@@ -104,7 +104,7 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="MRR"
           value={formatCurrency(data.mrr)}
@@ -136,22 +136,22 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
       </div>
 
       {/* Secondary metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <CreditCard className="h-4 w-4" />
             Assinaturas Ativas
           </div>
           <p className="text-2xl font-bold">{data.activeSubscriptions}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <AlertTriangle className="h-4 w-4" />
             Escolas Suspensas
           </div>
-          <p className="text-2xl font-bold text-red-400">{data.suspendedSchools}</p>
+          <p className="text-2xl font-semibold tracking-tight text-destructive">{data.suspendedSchools}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4 col-span-2 lg:col-span-1">
+        <div className="rounded-xl border border-border bg-card p-5 col-span-2 lg:col-span-1">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <Activity className="h-4 w-4" />
             Total de Registros
@@ -161,7 +161,7 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
       </div>
 
       {/* Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent Schools */}
         <div className="rounded-lg border border-border bg-card">
           <div className="p-4 border-b border-border">
@@ -228,7 +228,7 @@ export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
                   <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-amber-400' : 'bg-success'
+                        pct > 80 ? 'bg-destructive' : pct > 60 ? 'bg-warning' : 'bg-foreground'
                       }`}
                       style={{ width: `${Math.min(pct, 100)}%` }}
                     />
@@ -296,16 +296,17 @@ function KPICard({
   sub?: string;
   trend?: number;
 }) {
+  // Painel do dono monocromático: o dado é o destaque, não a cor do ícone.
   const colorMap: Record<string, string> = {
-    emerald: 'text-success bg-success/10',
-    blue: 'text-blue-400 bg-blue-400/10',
-    violet: 'text-violet-400 bg-violet-400/10',
-    amber: 'text-amber-400 bg-amber-400/10',
+    emerald: 'text-muted-foreground bg-muted',
+    blue: 'text-muted-foreground bg-muted',
+    violet: 'text-muted-foreground bg-muted',
+    amber: 'text-muted-foreground bg-muted',
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center justify-between mb-4">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
@@ -313,11 +314,11 @@ function KPICard({
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="text-xl lg:text-2xl font-bold">{value}</p>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       {trend !== undefined && (
         <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${
-          trend >= 0 ? 'text-success' : 'text-red-400'
+          trend >= 0 ? 'text-muted-foreground' : 'text-destructive'
         }`}>
           {trend >= 0 ? (
             <ArrowUpRight className="h-3 w-3" />
@@ -334,7 +335,7 @@ function KPICard({
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-      statusColors[status] || 'text-zinc-400 bg-zinc-400/10'
+      statusColors[status] || 'text-muted-foreground bg-muted'
     }`}>
       {statusLabels[status] || status}
     </span>

@@ -76,7 +76,9 @@ export async function POST(req: NextRequest) {
   res.cookies.set(RETURN_COOKIE, originalToken, {
     httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
   });
-  res.cookies.set(MARKER_COOKIE, encodeURIComponent(target.name || target.email || 'usuário'), {
+  // Sem encodeURIComponent aqui: o next/server já codifica o valor do
+  // cookie, e codificar de novo deixava "Maria%20Silva" na faixa.
+  res.cookies.set(MARKER_COOKIE, target.name || target.email || 'usuário', {
     httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
   });
   return res;

@@ -432,7 +432,7 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
                       if (!inviteDialog) return;
                       if (!(await confirmDialog({
                         title: 'Gerar um novo link?',
-                        description: 'O link atual PARA DE FUNCIONAR — quem já o recebeu não conseguirá mais usar. Só faça isso se o link vazou.',
+                        description: 'O link atual para de funcionar. Quem já o recebeu não conseguirá mais usar; só faça isso se o link vazou.',
                         confirmLabel: 'Gerar novo link', destructive: true,
                       }))) return;
                       handleGenerateInvite(inviteDialog.classId, inviteDialog.className, true);

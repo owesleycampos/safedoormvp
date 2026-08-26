@@ -97,6 +97,14 @@ model School {
   awsAccountId      String?
   awsAccount        AwsAccount?           @relation(fields: [awsAccountId], references: [id])
   notes             String?               @db.Text
+  // Perfil colhido no cadastro (self-serve) e visível no dossiê do dono.
+  ownerName         String?
+  ownerPhone        String?
+  sizeStudents      String? // faixa: "ATE_100" | "101_300" | "301_600" | "600_MAIS"
+  revenueBand       String? // faixa de faturamento mensal
+  yearsInMarket     String? // "MENOS_1" | "1_3" | "3_10" | "10_MAIS"
+  usesRecognition   String? // "NAO" | "PLANILHA" | "CATRACA" | "OUTRO_APP" | "SIM_FACIAL"
+  onboardingDoneAt  DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 }

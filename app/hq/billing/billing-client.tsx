@@ -114,7 +114,7 @@ export function BillingClient({ data }: { data: BillingData }) {
     }).catch(() => null);
     if (!res || !res.ok) {
       const d = await res?.json().catch(() => null);
-      alert(d?.error || 'Falha ao marcar como paga — nada foi alterado.');
+      alert(d?.error || 'Falha ao marcar como paga. Nada foi alterado.');
       return;
     }
     router.refresh();

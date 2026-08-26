@@ -94,6 +94,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       logoUrl: school.logoUrl, createdAt: school.createdAt,
       timezone: tz,
       recognitionPaused: school.settings?.recognitionPaused ?? false,
+      ownerName: school.ownerName, ownerPhone: school.ownerPhone,
+      sizeStudents: school.sizeStudents, revenueBand: school.revenueBand,
+      yearsInMarket: school.yearsInMarket, usesRecognition: school.usesRecognition,
+      onboardingDoneAt: school.onboardingDoneAt,
     },
     subscription: school.subscription && {
       plan: school.subscription.plan, status: school.subscription.status,

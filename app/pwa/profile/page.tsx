@@ -13,19 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { toast } from '@/components/ui/toaster';
+import { subscribeToPush } from '@/lib/push-client';
 import { getInitials } from '@/lib/utils';
-
-// Convert VAPID public key (base64url) → Uint8Array for pushManager.subscribe()
-function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray.buffer as ArrayBuffer;
-}
 
 export default function ProfilePage() {
   const { data: session } = useSession();
@@ -86,66 +75,15 @@ export default function ProfilePage() {
 
     try {
       if (enable) {
-        // 1. Request browser permission
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          toast({
-            variant: 'warning',
-            title: 'Permissão negada',
-            description: 'Habilite notificações nas configurações do navegador.',
-          });
-          return;
-        }
-
-        // 2. Wait for service worker (disabled in dev by next-pwa config)
-        let registration: ServiceWorkerRegistration;
-        try {
-          registration = await navigator.serviceWorker.ready;
-        } catch {
-          toast({
-            variant: 'warning',
-            title: 'Notificações indisponíveis neste aparelho',
-            description: 'Notificações push só funcionam em produção ou com HTTPS.',
-          });
-          return;
-        }
-
-        // 3. Subscribe with VAPID public key
-        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        if (!vapidKey) {
-          toast({
-            variant: 'warning',
-            title: 'Notificações indisponíveis no momento',
-            description: 'Tente novamente mais tarde.',
-          });
-          return;
-        }
-
-        const sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        });
-
-        const subJSON = sub.toJSON() as any;
-
-        // 4. Save to server
-        const res = await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: subJSON.endpoint,
-            keys: subJSON.keys,
-          }),
-        });
-
-        if (res.ok) {
+        // Fluxo compartilhado com a tela Meus Filhos: timeout na espera do
+        // service worker, conversão correta da chave e mensagens humanas.
+        const result = await subscribeToPush();
+        if (result.ok) {
           setPushEnabled(true);
           toast({ variant: 'success', title: 'Notificações ativadas!', description: 'Você receberá alertas de entrada e saída.' });
         } else {
-          await sub.unsubscribe();
-          toast({ variant: 'destructive', title: 'Erro ao salvar subscrição.' });
+          toast({ variant: 'warning', title: result.reason, description: result.hint });
         }
-
       } else {
         // Unsubscribe
         const registration = await navigator.serviceWorker.ready;

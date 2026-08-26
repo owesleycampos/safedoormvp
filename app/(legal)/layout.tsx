@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Logo } from '@/components/shared/logo';
+import { BackButton } from './back-button';
 
 /**
  * Páginas legais (Termos e Privacidade). Elas eram exigidas no aceite LGPD
@@ -10,8 +11,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
-        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center">
+        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/"><Logo size="xs" showText /></Link>
+          <BackButton />
         </div>
       </header>
       <main className="max-w-2xl mx-auto px-6 py-10">

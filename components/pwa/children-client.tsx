@@ -10,6 +10,8 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { cn, getInitials, formatTime, formatRelativeTime } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { subscribeToPush } from '@/lib/push-client';
+import { toast } from '@/components/ui/toaster';
 
 interface ChildrenClientProps {
   children: any[];
@@ -27,22 +29,15 @@ export function ChildrenClient({ children }: ChildrenClientProps) {
   }, []);
 
   async function enablePush() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     setRequestingPush(true);
     try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return;
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-      });
-      await fetch('/api/notifications/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub),
-      });
-      setPushEnabled(true);
+      const result = await subscribeToPush();
+      if (result.ok) {
+        setPushEnabled(true);
+        toast({ variant: 'success', title: 'Notificações ativadas!' });
+      } else {
+        toast({ variant: 'warning', title: result.reason, description: result.hint });
+      }
     } finally {
       setRequestingPush(false);
     }

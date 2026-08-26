@@ -8,6 +8,11 @@ const withPWA = require('next-pwa')({
   // and the push / notificationclick handlers in sw-custom.js never run —
   // the server sends the notification and nothing shows on the phone.
   importScripts: ['/sw-custom.js'],
+  // O next-pwa inclui /_next/app-build-manifest.json no precache, mas a
+  // Vercel não serve esse arquivo (404). Um único 404 ABORTA a instalação
+  // do service worker: o "Ativar Notificações" travava para sempre em
+  // serviceWorker.ready e nenhum push era exibido, em qualquer aparelho.
+  buildExcludes: [/app-build-manifest\.json$/],
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,

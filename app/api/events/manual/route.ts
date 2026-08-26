@@ -68,12 +68,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
-  const schoolId = (session.user as any)?.schoolId as string;
+  // Mesmo guard do POST: escola suspensa/cancelada não pode apagar histórico.
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
+  const { session, schoolId } = auth;
   const { eventId } = await req.json();
 
   if (!eventId) return NextResponse.json({ error: 'eventId obrigatório.' }, { status: 400 });

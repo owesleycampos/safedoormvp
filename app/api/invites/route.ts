@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 /**
  * POST /api/invites — generate a class invite link
- * Body: { classId: string }
+ * Body: { classId: string, regenerate?: boolean } — regenerate invalida o link anterior
  *
  * GET /api/invites — list invites for the school
  */
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const schoolId = (session.user as any)?.schoolId as string;
   const userId = (session.user as any)?.id as string;
-  const { classId } = await req.json();
+  const { classId, regenerate } = await req.json();
 
   if (!classId) {
     return NextResponse.json({ error: 'classId obrigatório.' }, { status: 400 });
@@ -33,26 +33,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Turma não encontrada.' }, { status: 404 });
   }
 
-  // Deactivate previous invites for this class
-  await prisma.classInvite.updateMany({
-    where: { classId, schoolId, isActive: true },
-    data: { isActive: false },
-  });
+  // Reutiliza o convite ativo se ainda vale: reabrir o dialog para copiar
+  // o link de novo NÃO pode invalidar o que 30 responsáveis já receberam
+  // no WhatsApp. Só regenera com pedido explícito ({ regenerate: true }).
+  let invite = regenerate
+    ? null
+    : await prisma.classInvite.findFirst({
+        where: { classId, schoolId, isActive: true, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+      });
 
-  // Generate new invite
-  const token = crypto.randomBytes(16).toString('base64url');
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
+  if (!invite) {
+    await prisma.classInvite.updateMany({
+      where: { classId, schoolId, isActive: true },
+      data: { isActive: false },
+    });
 
-  const invite = await prisma.classInvite.create({
-    data: {
-      token,
-      classId,
-      schoolId,
-      createdBy: userId,
-      expiresAt,
-    },
-  });
+    const token = crypto.randomBytes(16).toString('base64url');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    invite = await prisma.classInvite.create({
+      data: {
+        token,
+        classId,
+        schoolId,
+        createdBy: userId,
+        expiresAt,
+      },
+    });
+  }
 
   const [school, missingBirthDate] = await Promise.all([
     prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } }),

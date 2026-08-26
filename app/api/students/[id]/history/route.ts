@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
+import { addDaysStr, dayRangeForDateStr, localDateStr, isWeekendDateStr } from '@/lib/timezone';
 
 /**
  * GET /api/students/[id]/history?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -20,12 +20,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
-  const schoolId = (session.user as any)?.schoolId as string;
+  // Era o único relatório fazendo conta de dia no fuso do SERVIDOR (UTC na
+  // Vercel): saída às 21h30 de SP caía no dia seguinte e virava "falta"
+  // fantasma. Agora tudo roda no fuso da escola, como os demais relatórios.
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
+  const { schoolId, timezone: tz } = auth;
   const studentId = params.id;
 
   // ── Validate student belongs to this school ───────────────────
@@ -45,15 +45,13 @@ export async function GET(
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
 
-  const now = new Date();
-  const fromDate = fromParam
-    ? new Date(`${fromParam}T00:00:00`)
-    : new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-  fromDate.setHours(0, 0, 0, 0);
+  const isDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const todayStr = localDateStr(new Date(), tz);
+  const fromStr = isDate(fromParam) ? fromParam : addDaysStr(todayStr, -30);
+  const toStr = isDate(toParam) ? toParam : todayStr;
 
-  const toDate = toParam
-    ? new Date(`${toParam}T23:59:59.999`)
-    : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const fromDate = dayRangeForDateStr(fromStr, tz).start;
+  const toDate = dayRangeForDateStr(toStr, tz).end;
 
   // ── Fetch attendance events ───────────────────────────────────
   const events = await prisma.attendanceEvent.findMany({
@@ -78,7 +76,7 @@ export async function GET(
   // Group events by date string
   const eventsByDate = new Map<string, typeof events>();
   for (const event of events) {
-    const dateKey = event.timestamp.toISOString().slice(0, 10);
+    const dateKey = localDateStr(event.timestamp, tz);
     if (!eventsByDate.has(dateKey)) {
       eventsByDate.set(dateKey, []);
     }
@@ -87,17 +85,11 @@ export async function GET(
 
   // Generate all weekdays (Mon-Fri) in range for absent detection
   const allWeekdays: string[] = [];
-  const cursor = new Date(fromDate);
-  while (cursor <= toDate) {
-    const day = cursor.getDay();
-    if (day >= 1 && day <= 5) {
-      allWeekdays.push(cursor.toISOString().slice(0, 10));
-    }
-    cursor.setDate(cursor.getDate() + 1);
+  for (let d = fromStr; d <= toStr; d = addDaysStr(d, 1)) {
+    if (!isWeekendDateStr(d)) allWeekdays.push(d);
   }
 
   // Exclude future dates
-  const todayStr = now.toISOString().slice(0, 10);
   const relevantDays = allWeekdays.filter((d) => d <= todayStr);
 
   type DaySummary = {

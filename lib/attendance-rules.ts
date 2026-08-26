@@ -95,37 +95,3 @@ export function computeStatus(
  * Determine attendance status for a student's event, converting the UTC
  * timestamp to the school's timezone before comparing against the schedule.
  */
-export async function determineAttendanceStatus(
-  studentId: string,
-  eventType: 'ENTRY' | 'EXIT',
-  timestamp: Date
-): Promise<AttendanceStatus> {
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    select: {
-      class: { select: { shift: true } },
-      school: {
-        select: {
-          settings: {
-            select: {
-              entryStartTime: true,
-              entryEndTime: true,
-              exitStartTime: true,
-              exitEndTime: true,
-              shiftSchedules: true,
-              timezone: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!student) return null;
-
-  const settings = student.school?.settings ?? null;
-  const schedule = resolveSchedule(student.class?.shift, settings);
-  const tz = settings?.timezone || DEFAULT_TIMEZONE;
-
-  return computeStatus(schedule, eventType, localMinutes(timestamp, tz));
-}

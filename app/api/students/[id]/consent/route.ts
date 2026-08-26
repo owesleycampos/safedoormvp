@@ -80,7 +80,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       biometricConsentName: null,
       azurePersonId: null,
       rekognitionFaceIds: null,
-      faceVector: null,
       recognitionEnabled: false,
     },
   });

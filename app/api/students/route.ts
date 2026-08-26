@@ -4,10 +4,15 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
+  // ADMIN apenas: a lista traz e-mails de responsáveis e flags biométricas.
+  // E schoolId precisa existir — com ele undefined o Prisma DERRUBA o filtro
+  // de escola em vez de falhar, expondo o sistema inteiro.
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') || '';
   const classId = searchParams.get('classId');

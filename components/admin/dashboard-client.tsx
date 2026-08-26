@@ -462,6 +462,9 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
       </div>
 
       <ManualCheckinWizard open={manualOpen} onOpenChange={setManualOpen} />
+      {/* Guia de primeiros passos — construído, testado e nunca montado:
+          escola nova caía num dashboard vazio sem trilha do que fazer. */}
+      <OnboardingChecklist />
     </>
   );
 }

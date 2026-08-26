@@ -204,7 +204,7 @@ export async function registerAttendanceEvent(
       ? settings?.notifyOnEntry ?? true
       : settings?.notifyOnExit ?? true;
     if (!wantsPush) return;
-    const payload = formatAttendanceNotification(student.name, eventType, eventTime, school.name, notes);
+    const payload = formatAttendanceNotification(student.name, eventType, eventTime, school.name, notes, studentId, tz);
     // AWAITED de propósito: em serverless (Vercel) a função congela assim
     // que a resposta sai — um envio fire-and-forget era suspenso antes de
     // acontecer e nenhum push chegava em produção. O custo é ~200-500ms na

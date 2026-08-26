@@ -73,16 +73,16 @@ model User {
 // ============================================================
 
 model School {
-  id                String               @id @default(cuid())
+  id                String                @id @default(cuid())
   name              String
-  cnpj              String?              @unique
+  cnpj              String?               @unique
   address           String?
   city              String?
   state             String?
   contactEmail      String?
   contactPhone      String?
   logoUrl           String?
-  status            String               @default("ACTIVE") // "ACTIVE" | "SUSPENDED" | "TRIAL" | "CANCELLED"
+  status            String                @default("ACTIVE") // "ACTIVE" | "SUSPENDED" | "TRIAL" | "CANCELLED"
   admins            User[]
   classes           Class[]
   students          Student[]
@@ -95,10 +95,10 @@ model School {
   subscription      Subscription?
   invoices          Invoice[]
   awsAccountId      String?
-  awsAccount        AwsAccount?          @relation(fields: [awsAccountId], references: [id])
-  notes             String?              @db.Text
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  awsAccount        AwsAccount?           @relation(fields: [awsAccountId], references: [id])
+  notes             String?               @db.Text
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 }
 
 model SchoolSettings {
@@ -127,7 +127,7 @@ model Class {
   id        String          @id @default(cuid())
   name      String
   grade     String?
-  shift     String?         // "MANHA" | "TARDE" | "NOITE" (turno)
+  shift     String? // "MANHA" | "TARDE" | "NOITE" (turno)
   schoolId  String
   school    School          @relation(fields: [schoolId], references: [id])
   students  Student[]
@@ -163,7 +163,7 @@ model ClassInvite {
 model Subject {
   id        String            @id @default(cuid())
   name      String
-  color     String?           // hex color e.g. "#3B82F6"
+  color     String? // hex color e.g. "#3B82F6"
   schoolId  String
   school    School            @relation(fields: [schoolId], references: [id])
   schedules ClassSchedule[]
@@ -184,10 +184,10 @@ model ClassSchedule {
   class       Class    @relation(fields: [classId], references: [id])
   subjectId   String
   subject     Subject  @relation(fields: [subjectId], references: [id])
-  dayOfWeek   Int      // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
-  period      Int      // 1, 2, 3... (aula/período do dia)
-  startTime   String   // "08:00"
-  endTime     String   // "08:50"
+  dayOfWeek   Int // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+  period      Int // 1, 2, 3... (aula/período do dia)
+  startTime   String // "08:00"
+  endTime     String // "08:50"
   teacherName String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -201,32 +201,29 @@ model ClassSchedule {
 // ============================================================
 
 model Student {
-  id                String            @id @default(cuid())
-  name              String
-  birthDate         DateTime?
-  photoUrl          String?           // profile photo URL (one of the StudentPhotos)
-  faceVector        Bytes?            // Legacy: browser face-api.js embedding (128 × float32)
-  faceVectorVersion Int               @default(1)
-  azurePersonId     String?           // AWS Rekognition enrollment marker (stores studentId)
-  rekognitionFaceIds String?          @db.Text // JSON array of Rekognition FaceIds for O(1) re-enroll cleanup
+  id                   String            @id @default(cuid())
+  name                 String
+  birthDate            DateTime?
+  photoUrl             String? // profile photo URL (one of the StudentPhotos)
+  azurePersonId        String? // AWS Rekognition enrollment marker (stores studentId)
+  rekognitionFaceIds   String?           @db.Text // JSON array of Rekognition FaceIds for O(1) re-enroll cleanup
   // LGPD: biometria de criança é dado sensível. Registra QUEM autorizou o uso
   // das fotos para reconhecimento facial e quando (pelo convite ou em papel,
   // lançado pela secretaria). Sem registro, a UI sinaliza pendência.
   biometricConsentAt   DateTime?
-  biometricConsentName String?        // nome de quem autorizou (responsável)
-  isActive          Boolean           @default(true)
-  recognitionEnabled Boolean          @default(true)
-  notes             String?           @db.Text
-  accessCode        String?           @unique // 6-char code for parent self-linking (e.g. "A3X9K2")
-  classId           String
-  schoolId          String
-  school            School            @relation(fields: [schoolId], references: [id])
-  class             Class             @relation(fields: [classId], references: [id])
-  parents           StudentParent[]
-  photos            StudentPhoto[]
-  attendance        AttendanceEvent[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  biometricConsentName String? // nome de quem autorizou (responsável)
+  isActive             Boolean           @default(true)
+  recognitionEnabled   Boolean           @default(true)
+  notes                String?           @db.Text
+  classId              String
+  schoolId             String
+  school               School            @relation(fields: [schoolId], references: [id])
+  class                Class             @relation(fields: [classId], references: [id])
+  parents              StudentParent[]
+  photos               StudentPhoto[]
+  attendance           AttendanceEvent[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@index([schoolId, classId])
 }
@@ -237,7 +234,7 @@ model StudentPhoto {
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   url       String
   isProfile Boolean  @default(false)
-  label     String?  // "Frente", "Perfil esquerdo", "Perfil direito", etc.
+  label     String? // "Frente", "Perfil esquerdo", "Perfil direito", etc.
   createdAt DateTime @default(now())
 }
 
@@ -246,16 +243,16 @@ model StudentPhoto {
 // ============================================================
 
 model Parent {
-  id                String            @id @default(cuid())
-  userId            String            @unique
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String             @id @default(cuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   name              String
   phone             String?
-  cpf               String?           @unique
+  cpf               String?            @unique
   students          StudentParent[]
   pushSubscriptions PushSubscription[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model StudentParent {
@@ -283,7 +280,7 @@ model AttendanceEvent {
   subject    Subject? @relation(fields: [subjectId], references: [id])
   period     Int?
   timestamp  DateTime @default(now())
-  eventType  String   // "ENTRY" | "EXIT"
+  eventType  String // "ENTRY" | "EXIT"
   // Calendar day ("YYYY-MM-DD") in the school's timezone. Backfilled lazily:
   // legacy rows have null (Postgres allows multiple nulls in a unique index).
   dayKey     String?
@@ -299,6 +296,7 @@ model AttendanceEvent {
   @@index([studentId, timestamp])
   @@index([deviceId, timestamp])
   @@index([subjectId])
+  @@index([timestamp])
 }
 
 // ============================================================
@@ -306,21 +304,23 @@ model AttendanceEvent {
 // ============================================================
 
 model Device {
-  id               String               @id @default(cuid())
+  id               String                @id @default(cuid())
   schoolId         String
-  school           School               @relation(fields: [schoolId], references: [id])
+  school           School                @relation(fields: [schoolId], references: [id])
   name             String
   description      String?
-  type             String               @default("TABLET") // "TABLET" | "CAMERA_AGENT"
-  status           String               @default("OFFLINE") // "ONLINE" | "OFFLINE" | "ERROR"
-  apiKey           String               @unique @default(cuid())
+  type             String                @default("TABLET") // "TABLET" | "CAMERA_AGENT"
+  status           String                @default("OFFLINE") // "ONLINE" | "OFFLINE" | "ERROR"
+  apiKey           String                @unique @default(cuid())
   lastSeen         DateTime?
   lastIpAddress    String?
   firmwareVersion  String?
   attendanceEvents AttendanceEvent[]
   unrecognizedLogs UnrecognizedFaceLog[]
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([schoolId, status])
 }
 
 // ============================================================
@@ -328,19 +328,21 @@ model Device {
 // ============================================================
 
 model UnrecognizedFaceLog {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   schoolId        String
-  school          School   @relation(fields: [schoolId], references: [id])
+  school          School    @relation(fields: [schoolId], references: [id])
   deviceId        String
-  device          Device   @relation(fields: [deviceId], references: [id])
-  timestamp       DateTime @default(now())
+  device          Device    @relation(fields: [deviceId], references: [id])
+  timestamp       DateTime  @default(now())
   photoUrl        String
   confidenceScore Float?
-  reviewed        Boolean  @default(false)
+  reviewed        Boolean   @default(false)
   reviewedAt      DateTime?
   reviewedById    String?
   notes           String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+
+  @@index([schoolId, timestamp])
 }
 
 // ============================================================
@@ -353,9 +355,9 @@ model UnrecognizedFaceLog {
 model AbsenceAlert {
   id        String   @id @default(cuid())
   studentId String
-  dayKey    String   // "YYYY-MM-DD" no fuso da escola
+  dayKey    String // "YYYY-MM-DD" no fuso da escola
   sentAt    DateTime @default(now())
-  channels  String?  // canais que receberam (ex: "push", "push,whatsapp")
+  channels  String? // canais que receberam (ex: "push", "push,whatsapp")
 
   @@unique([studentId, dayKey])
   @@index([dayKey])
@@ -377,6 +379,8 @@ model PushSubscription {
   userAgent String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([schoolId])
 }
 
 // ============================================================
@@ -395,6 +399,7 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([entityType, entityId])
+  @@index([action, entityId])
 }
 
 // ============================================================
@@ -402,35 +407,35 @@ model AuditLog {
 // ============================================================
 
 model Subscription {
-  id          String    @id @default(cuid())
-  schoolId    String    @unique
-  school      School    @relation(fields: [schoolId], references: [id])
-  plan        String    // "ESSENCIAL" | "PROFISSIONAL" | "PREMIUM"
-  billing     String    @default("MONTHLY") // "MONTHLY" | "ANNUAL"
-  status      String    @default("ACTIVE") // "ACTIVE" | "PAST_DUE" | "CANCELLED" | "TRIAL"
-  priceMonthly Int      // valor mensal em centavos (e.g. 49700 = R$497)
-  discount    Float     @default(0) // desconto percentual (e.g. 0.20 = 20%)
-  trialEndsAt DateTime?
-  startsAt    DateTime  @default(now())
-  endsAt      DateTime?
-  cancelledAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  schoolId     String    @unique
+  school       School    @relation(fields: [schoolId], references: [id])
+  plan         String // "ESSENCIAL" | "PROFISSIONAL" | "PREMIUM"
+  billing      String    @default("MONTHLY") // "MONTHLY" | "ANNUAL"
+  status       String    @default("ACTIVE") // "ACTIVE" | "PAST_DUE" | "CANCELLED" | "TRIAL"
+  priceMonthly Int // valor mensal em centavos (e.g. 49700 = R$497)
+  discount     Float     @default(0) // desconto percentual (e.g. 0.20 = 20%)
+  trialEndsAt  DateTime?
+  startsAt     DateTime  @default(now())
+  endsAt       DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model Invoice {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   schoolId      String
-  school        School   @relation(fields: [schoolId], references: [id])
-  amount        Int      // valor em centavos
-  status        String   @default("PENDING") // "PENDING" | "PAID" | "OVERDUE" | "CANCELLED"
+  school        School    @relation(fields: [schoolId], references: [id])
+  amount        Int // valor em centavos
+  status        String    @default("PENDING") // "PENDING" | "PAID" | "OVERDUE" | "CANCELLED"
   dueDate       DateTime
   paidAt        DateTime?
-  paymentMethod String?  // "PIX" | "BOLETO" | "CARTAO"
-  reference     String?  // referência externa (gateway ID, etc.)
+  paymentMethod String? // "PIX" | "BOLETO" | "CARTAO"
+  reference     String? // referência externa (gateway ID, etc.)
   description   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([schoolId, status])
   @@index([dueDate])
@@ -441,22 +446,22 @@ model Invoice {
 // ============================================================
 
 model AwsAccount {
-  id              String   @id @default(cuid())
-  label           String   // "Principal", "Contingência 1", etc.
-  accountId       String   @unique // AWS Account ID
-  region          String   @default("us-east-1")
-  accessKeyId     String?  // encrypted or env-referenced
-  status          String   @default("ACTIVE") // "ACTIVE" | "LIMIT_NEAR" | "LIMIT_REACHED" | "DISABLED"
-  maxCollections  Int      @default(100)
-  usedCollections Int      @default(0)
-  maxFacesPerCol  Int      @default(10000)
-  monthlyBudget   Float?   // orçamento mensal USD
-  currentSpend    Float    @default(0)
+  id              String    @id @default(cuid())
+  label           String // "Principal", "Contingência 1", etc.
+  accountId       String    @unique // AWS Account ID
+  region          String    @default("us-east-1")
+  accessKeyId     String? // encrypted or env-referenced
+  status          String    @default("ACTIVE") // "ACTIVE" | "LIMIT_NEAR" | "LIMIT_REACHED" | "DISABLED"
+  maxCollections  Int       @default(100)
+  usedCollections Int       @default(0)
+  maxFacesPerCol  Int       @default(10000)
+  monthlyBudget   Float? // orçamento mensal USD
+  currentSpend    Float     @default(0)
   lastSyncAt      DateTime?
   schools         School[]
-  notes           String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 // ============================================================
@@ -464,21 +469,21 @@ model AwsAccount {
 // ============================================================
 
 model PlatformSettings {
-  id                 String   @id @default(cuid())
-  defaultPlan        String   @default("ESSENCIAL")
-  trialDays          Int      @default(7)
-  essencialPrice     Int      @default(49700)  // centavos
-  profissionalPrice  Int      @default(99700)  // centavos
-  premiumPrice       Int      @default(0)      // 0 = sob consulta
-  annualDiscount     Float    @default(0.20)   // 20%
-  maxStudentsEssencial    Int @default(200)
-  maxStudentsProfissional Int @default(500)
-  maxStudentsPremium      Int @default(0) // 0 = ilimitado
+  id                      String   @id @default(cuid())
+  defaultPlan             String   @default("ESSENCIAL")
+  trialDays               Int      @default(7)
+  essencialPrice          Int      @default(49700) // centavos
+  profissionalPrice       Int      @default(99700) // centavos
+  premiumPrice            Int      @default(0) // 0 = sob consulta
+  annualDiscount          Float    @default(0.20) // 20%
+  maxStudentsEssencial    Int      @default(200)
+  maxStudentsProfissional Int      @default(500)
+  maxStudentsPremium      Int      @default(0) // 0 = ilimitado
   // Webhook configuration
-  webhookSecret      String?  // secret to validate incoming webhooks
-  paymentProvider    String   @default("MANUAL") // "MANUAL" | "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME"
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  webhookSecret           String? // secret to validate incoming webhooks
+  paymentProvider         String   @default("MANUAL") // "MANUAL" | "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME"
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
 // ============================================================
@@ -486,18 +491,18 @@ model PlatformSettings {
 // ============================================================
 
 model WebhookEvent {
-  id              String   @id @default(cuid())
-  provider        String   // "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME" | "MANUAL"
-  externalId      String?  // ID do evento no gateway (evt_xxx, etc.)
-  eventType       String   // "payment.confirmed" | "payment.overdue" | "subscription.cancelled" etc.
-  status          String   @default("RECEIVED") // "RECEIVED" | "PROCESSED" | "FAILED" | "IGNORED"
-  payload         String   @db.Text // JSON completo do webhook
-  schoolId        String?  // escola associada (se identificada)
-  subscriptionId  String?  // assinatura associada (se identificada)
-  invoiceId       String?  // fatura associada (se identificada)
-  errorMessage    String?  // mensagem de erro se processamento falhou
-  processedAt     DateTime?
-  createdAt       DateTime @default(now())
+  id             String    @id @default(cuid())
+  provider       String // "STRIPE" | "ASAAS" | "MERCADOPAGO" | "PAGARME" | "MANUAL"
+  externalId     String? // ID do evento no gateway (evt_xxx, etc.)
+  eventType      String // "payment.confirmed" | "payment.overdue" | "subscription.cancelled" etc.
+  status         String    @default("RECEIVED") // "RECEIVED" | "PROCESSED" | "FAILED" | "IGNORED"
+  payload        String    @db.Text // JSON completo do webhook
+  schoolId       String? // escola associada (se identificada)
+  subscriptionId String? // assinatura associada (se identificada)
+  invoiceId      String? // fatura associada (se identificada)
+  errorMessage   String? // mensagem de erro se processamento falhou
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([provider, eventType])
   @@index([status])

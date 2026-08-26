@@ -7,11 +7,17 @@ import { put } from '@vercel/blob';
 const MAX_PHOTOS = 10;
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  // Mesmo escopo do POST: fotos de treino biométrico só para o admin da
+  // escola do aluno — antes qualquer sessão listava a galeria de qualquer id.
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+  const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
 
   const photos = await prisma.studentPhoto.findMany({
-    where: { studentId: params.id },
+    where: { studentId: params.id, student: { schoolId } },
     orderBy: [{ isProfile: 'desc' }, { createdAt: 'asc' }],
   });
 

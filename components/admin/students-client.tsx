@@ -189,7 +189,17 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
       });
       const data = await res.json();
       if (res.ok) {
-        toast({ variant: 'success', title: data.message });
+        // Linhas que falharam não podem sumir em silêncio: o admin precisa
+        // saber QUAIS alunos ficaram de fora para corrigir a planilha.
+        if (data.errors?.length) {
+          toast({
+            variant: 'destructive',
+            title: data.message,
+            description: `Linhas com problema: ${data.errors.join(' · ')}`,
+          });
+        } else {
+          toast({ variant: 'success', title: data.message });
+        }
         router.refresh();
       } else {
         toast({ variant: 'destructive', title: 'Erro', description: data.error });
@@ -209,7 +219,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
     byClass[cls].push(s);
   });
 
-  const withBiometry = students.filter((s) => s.azurePersonId || s.faceVector).length;
+  const withBiometry = students.filter((s) => s.azurePersonId).length;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto w-full space-y-6">
@@ -415,11 +425,11 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                       <div className="hidden md:flex items-center gap-2">
                         <span className={cn(
                           'text-[11px] font-medium px-2 py-0.5 rounded-md',
-                          (student.azurePersonId || student.faceVector)
+                          student.azurePersonId
                             ? 'bg-foreground/[0.06] text-foreground'
                             : 'bg-muted text-muted-foreground'
                         )}>
-                          {(student.azurePersonId || student.faceVector) ? 'Biometria OK' : 'Sem biometria'}
+                          {student.azurePersonId ? 'Biometria OK' : 'Sem biometria'}
                         </span>
                       </div>
 

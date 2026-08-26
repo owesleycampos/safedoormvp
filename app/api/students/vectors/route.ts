@@ -32,8 +32,6 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         photoUrl: true,
-        faceVector: true,
-        faceVectorVersion: true,
         class: { select: { name: true } },
       },
     }),
@@ -50,14 +48,15 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  // Send faceVector as base64 for the Python agent to decode
+  // O embedding local (faceVector) morreu com a migração para o Rekognition;
+  // as chaves seguem no payload, sempre nulas, para não quebrar agentes antigos.
   const data = students.map((s) => ({
     id: s.id,
     name: s.name,
     photoUrl: s.photoUrl,
     className: s.class?.name,
-    faceVectorVersion: s.faceVectorVersion,
-    faceVectorB64: s.faceVector ? s.faceVector.toString('base64') : null,
+    faceVectorVersion: 0,
+    faceVectorB64: null,
   }));
 
   return NextResponse.json({

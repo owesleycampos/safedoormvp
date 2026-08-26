@@ -108,12 +108,16 @@ export function formatAttendanceNotification(
   eventType: 'ENTRY' | 'EXIT',
   timestamp: Date,
   schoolName: string,
-  notes?: string | null
+  notes?: string | null,
+  studentId?: string,
+  timeZone?: string
 ): NotificationPayload {
+  // O horário sai no fuso DA ESCOLA (o mesmo que o painel mostra) — o
+  // hardcode antigo errava em 1-2h para escolas fora do fuso de Brasília.
   const time = timestamp.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'America/Sao_Paulo',
+    timeZone: timeZone || 'America/Sao_Paulo',
   });
 
   const isEntry = eventType === 'ENTRY';
@@ -146,6 +150,9 @@ export function formatAttendanceNotification(
       type: 'attendance',
       eventType,
       studentName,
+      // O service worker roteia o toque para /pwa/timeline?studentId=… —
+      // sem o id, todo toque caía na lista de filhos em vez do evento.
+      studentId,
       timestamp: timestamp.toISOString(),
       isLate,
     },

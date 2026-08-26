@@ -5,9 +5,11 @@ import { prisma } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
 
   const classes = await prisma.class.findMany({
     where: { schoolId },

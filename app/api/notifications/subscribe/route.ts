@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const parent = await prisma.parent.findUnique({ where: { userId } });
+  const schoolId = (session.user as any)?.schoolId || null;
 
   await prisma.pushSubscription.upsert({
     where: { endpoint },
@@ -24,11 +25,15 @@ export async function POST(req: NextRequest) {
       p256dh: keys.p256dh,
       auth: keys.auth,
       parentId: parent?.id || null,
+      // Sem schoolId os avisos escola-inteira (resumo diário) pulavam
+      // toda inscrição criada pela interface real.
+      schoolId,
       userAgent: req.headers.get('user-agent') || undefined,
     },
     update: {
       p256dh: keys.p256dh,
       auth: keys.auth,
+      ...(schoolId ? { schoolId } : {}),
     },
   });
 
@@ -40,7 +45,13 @@ export async function DELETE(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const { endpoint } = await req.json();
-  await prisma.pushSubscription.deleteMany({ where: { endpoint } }).catch(() => {});
+  // Só as próprias inscrições: sem o filtro de dono, qualquer sessão
+  // apagava a inscrição de qualquer pessoa conhecendo o endpoint.
+  const userId = (session.user as any)?.id;
+  const parent = await prisma.parent.findUnique({ where: { userId }, select: { id: true } });
+  await prisma.pushSubscription.deleteMany({
+    where: { endpoint, ...(parent ? { parentId: parent.id } : { parentId: null }) },
+  }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

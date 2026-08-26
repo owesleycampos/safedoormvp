@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { EventPhoto } from '@/components/shared/event-photo';
 import { cn, getInitials } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,9 +27,11 @@ interface StudentRow {
   classId: string;
   status: 'present' | 'absent' | 'left' | 'entry_only' | 'exit_only';
   entryTime: string | null;
+  entryPhotoUrl?: string | null;
   entryManual: boolean;
   entryNotes: string | null;
   exitTime: string | null;
+  exitPhotoUrl?: string | null;
   exitManual: boolean;
   exitNotes: string | null;
   entryEventId: string | null;
@@ -314,6 +318,16 @@ export default function DailyTab() {
       toast({ variant: 'warning', title: 'Todos já estão presentes' });
       return;
     }
+    // Um clique aqui fabrica registro de frequência (dado com peso legal) —
+    // nomear o alcance antes de gravar é o mínimo.
+    const scope = classFilter === 'all'
+      ? 'de TODAS as turmas'
+      : `da turma ${data?.students.find(st => st.classId === classFilter)?.className ?? 'selecionada'}`;
+    if (!(await confirmDialog({
+      title: `Marcar ${absentStudents.length} aluno${absentStudents.length !== 1 ? 's' : ''} como presente?`,
+      description: `Será registrada uma entrada manual para cada ausente ${scope}. Cada registro pode ser anulado individualmente depois.`,
+      confirmLabel: 'Registrar presenças',
+    }))) return;
     setBatchBusy(true);
     let count = 0;
     try {
@@ -339,6 +353,11 @@ export default function DailyTab() {
     setBusyStudent(studentId);
     try {
       if (action === 'DELETE_ENTRY' && entryEventId) {
+        if (!(await confirmDialog({
+          title: 'Anular a entrada?',
+          description: 'O registro de entrada de hoje será apagado do histórico.',
+          confirmLabel: 'Anular entrada', destructive: true,
+        }))) return;
         const res = await fetch('/api/events/manual', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
@@ -351,6 +370,11 @@ export default function DailyTab() {
       if (action === 'DELETE_EXIT') {
         const student = data?.students.find(s => s.id === studentId);
         if (student?.exitEventId) {
+          if (!(await confirmDialog({
+            title: 'Anular a saída?',
+            description: 'O registro de saída de hoje será apagado do histórico.',
+            confirmLabel: 'Anular saída', destructive: true,
+          }))) return;
           const res = await fetch('/api/events/manual', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
@@ -523,10 +547,24 @@ export default function DailyTab() {
                   key={s.id}
                   className={cn('flex items-center gap-3 px-3 md:px-4 py-2.5 border-l-4 transition-colors', cfg.border)}
                 >
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    {s.photoUrl && <AvatarImage src={s.photoUrl} alt={s.name} />}
-                    <AvatarFallback className="text-[10px] bg-secondary">{getInitials(s.name)}</AvatarFallback>
-                  </Avatar>
+                  {/* Foto do MOMENTO da passagem quando existe (prova visual,
+                      clicável para ampliar); a de perfil é o fallback. */}
+                  {(s.entryPhotoUrl || s.exitPhotoUrl) ? (
+                    <EventPhoto
+                      src={(s.exitPhotoUrl || s.entryPhotoUrl)!}
+                      className="flex-shrink-0 rounded-full transition-shadow hover:ring-2 hover:ring-ring/40"
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={(s.exitPhotoUrl || s.entryPhotoUrl)!} alt={s.name} />
+                        <AvatarFallback className="text-[10px] bg-secondary">{getInitials(s.name)}</AvatarFallback>
+                      </Avatar>
+                    </EventPhoto>
+                  ) : (
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      {s.photoUrl && <AvatarImage src={s.photoUrl} alt={s.name} />}
+                      <AvatarFallback className="text-[10px] bg-secondary">{getInitials(s.name)}</AvatarFallback>
+                    </Avatar>
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{s.name}</p>

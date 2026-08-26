@@ -31,6 +31,13 @@ export default function ProfilePage() {
   // ── Detect push support & current state ────────────────────────────
   useEffect(() => {
     setForm({ name: user?.name || '', phone: '' });
+    // Carrega o telefone salvo — senão salvar qualquer edição apagava ele.
+    fetch('/api/parent/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (p) setForm((f) => ({ name: p.name || f.name, phone: p.phone || '' }));
+      })
+      .catch(() => {});
 
     const supported =
       typeof window !== 'undefined' &&
@@ -91,7 +98,7 @@ export default function ProfilePage() {
         const sub = await registration.pushManager.getSubscription();
 
         if (sub) {
-          await fetch('/api/push/subscribe', {
+          await fetch('/api/notifications/subscribe', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ endpoint: sub.endpoint }),

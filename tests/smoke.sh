@@ -344,6 +344,17 @@ check "nenhum evento de presença foi criado" "$EVENTOS_ANTES" \
   "$(sql0 'SELECT count(*) FROM "AttendanceEvent"')"
 rm -f "$JARP"
 
+echo "── Escopo multi-tenant: responsável não lê o roster ──"
+
+check "PARENT em /api/students → 401" "401" \
+  "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' "$BASE/api/students?limit=500")"
+check "PARENT em /api/classes → 401" "401" \
+  "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' "$BASE/api/classes")"
+check "PARENT em ficha de aluno → 401" "401" \
+  "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' "$BASE/api/students/$JOAO")"
+check "PARENT em fotos de aluno → 401" "401" \
+  "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' "$BASE/api/students/$JOAO/photos")"
+
 echo "── Import em massa com responsáveis ──"
 
 sql0 "DELETE FROM \"User\" WHERE email IN ('massa1@teste.com','massa2@teste.com');" >/dev/null 2>&1

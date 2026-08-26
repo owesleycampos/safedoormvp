@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toaster';
-import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { confirmDialog, promptDialog } from '@/components/ui/confirm-dialog';
 import { getInitials, cn } from '@/lib/utils';
 
 interface StudentPhoto {
@@ -256,10 +256,17 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   }
 
   async function handleDeletePhoto(photoId: string) {
+    if (!(await confirmDialog({
+      title: 'Remover esta foto?',
+      description: 'A foto de treino do reconhecimento será apagada permanentemente.',
+      confirmLabel: 'Remover foto', destructive: true,
+    }))) return;
     const res = await fetch(`/api/students/${student.id}/photos/${photoId}`, { method: 'DELETE' });
     if (res.ok) {
       setPhotos((prev) => prev.filter((p) => p.id !== photoId));
       toast({ variant: 'success', title: 'Foto removida.' });
+    } else {
+      toast({ variant: 'destructive', title: 'Não foi possível remover a foto.' });
     }
   }
 
@@ -410,14 +417,20 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   /** Secretaria registra consentimento colhido em papel (termo assinado). */
   async function handleRecordConsent() {
     if (!isEdit) return;
-    const authorizedBy = window.prompt('Nome do responsável que assinou o termo de autorização:');
-    if (!authorizedBy?.trim()) return;
+    const authorizedBy = await promptDialog({
+      title: 'Registrar consentimento',
+      description: 'Consentimento colhido em papel (termo assinado pelo responsável).',
+      inputLabel: 'Nome do responsável que assinou o termo',
+      inputPlaceholder: 'Ex.: Maria Silva Santos',
+      confirmLabel: 'Registrar',
+    });
+    if (!authorizedBy) return;
     setConsentBusy(true);
     try {
       const res = await fetch(`/api/students/${student.id}/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authorizedBy: authorizedBy.trim() }),
+        body: JSON.stringify({ authorizedBy }),
       });
       const data = await res.json();
       if (!res.ok) { toast({ variant: 'destructive', title: 'Erro', description: data.error }); return; }
@@ -448,6 +461,13 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
 
   async function handleUnlinkParent(parentId: string) {
     if (!isEdit) return;
+    // Mesma confirmação da tela de responsáveis: desvincular corta os
+    // avisos de entrada/saída de quem acompanhava o aluno.
+    if (!(await confirmDialog({
+      title: 'Desvincular responsável?',
+      description: 'O responsável deixa de acompanhar este aluno e de receber os avisos de entrada e saída.',
+      confirmLabel: 'Desvincular', destructive: true,
+    }))) return;
     const res = await fetch(`/api/students/${student.id}/parents`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },

@@ -57,8 +57,11 @@ export async function POST(
     );
   }
 
+  // Comparação direta de strings YYYY-MM-DD: o re-parse antigo usava o fuso
+  // do servidor e só coincidia com o valor gravado porque a Vercel roda em
+  // UTC — em qualquer outro runtime toda data de nascimento "errava".
   const studentBD = student.birthDate.toISOString().slice(0, 10);
-  const inputBD = new Date(birthDate + 'T00:00:00').toISOString().slice(0, 10);
+  const inputBD = String(birthDate).slice(0, 10);
   if (studentBD !== inputBD) {
     return NextResponse.json(
       { error: 'Data de nascimento incorreta. Confira com a escola e tente novamente.' },

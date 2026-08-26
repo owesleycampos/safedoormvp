@@ -15,11 +15,14 @@ async function verifyAdminAndStudent(req: NextRequest, id: string) {
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  // Mesmo guard dos irmãos PUT/PATCH/DELETE: sem ele, qualquer sessão de
+  // qualquer escola (inclusive de responsável) lia a ficha completa do
+  // aluno — dados biométricos, e-mails dos responsáveis e presença.
+  const auth = await verifyAdminAndStudent(req, params.id);
+  if (!auth) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const student = await prisma.student.findUnique({
-    where: { id: params.id },
+  const student = await prisma.student.findFirst({
+    where: { id: params.id, schoolId: auth.schoolId },
     include: {
       class: true,
       photos: { orderBy: [{ isProfile: 'desc' }, { createdAt: 'asc' }] },

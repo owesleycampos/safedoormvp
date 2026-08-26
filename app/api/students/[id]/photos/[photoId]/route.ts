@@ -1,57 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { del } from '@vercel/blob';
 import { prisma } from '@/lib/db';
-import fs from 'fs/promises';
-import path from 'path';
+import { requireActiveSchool } from '@/lib/require-active-school';
+
+/**
+ * Escopo obrigatório: a foto precisa pertencer ao aluno E o aluno à escola
+ * da sessão. Sem isso, um admin de outra escola conseguia trocar/apagar
+ * fotos de treino biométrico de qualquer aluno do sistema.
+ */
+async function findScopedPhoto(schoolId: string, studentId: string, photoId: string) {
+  return prisma.studentPhoto.findFirst({
+    where: { id: photoId, studentId, student: { schoolId } },
+  });
+}
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string; photoId: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  // Unset current profile photo
-  await prisma.studentPhoto.updateMany({
-    where: { studentId: params.id, isProfile: true },
-    data: { isProfile: false },
-  });
+  const photo = await findScopedPhoto(auth.schoolId, params.id, params.photoId);
+  if (!photo) return NextResponse.json({ error: 'Foto não encontrada' }, { status: 404 });
 
-  // Set new profile photo
-  const photo = await prisma.studentPhoto.update({
-    where: { id: params.photoId },
-    data: { isProfile: true },
-  });
+  // Transação: sem ela, uma falha no meio deixava student.photoUrl
+  // apontando para uma foto que não é mais a de perfil.
+  await prisma.$transaction([
+    prisma.studentPhoto.updateMany({
+      where: { studentId: params.id, isProfile: true },
+      data: { isProfile: false },
+    }),
+    prisma.studentPhoto.update({
+      where: { id: params.photoId },
+      data: { isProfile: true },
+    }),
+    prisma.student.update({
+      where: { id: params.id },
+      data: { photoUrl: photo.url },
+    }),
+  ]);
 
-  // Update student.photoUrl
-  await prisma.student.update({
-    where: { id: params.id },
-    data: { photoUrl: photo.url },
-  });
-
-  return NextResponse.json({ photo });
+  return NextResponse.json({ photo: { ...photo, isProfile: true } });
 }
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; photoId: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
 
-  const photo = await prisma.studentPhoto.findUnique({ where: { id: params.photoId } });
+  const photo = await findScopedPhoto(auth.schoolId, params.id, params.photoId);
   if (!photo) return NextResponse.json({ error: 'Foto não encontrada' }, { status: 404 });
 
-  // Delete file from disk
-  try {
-    const filepath = path.join(process.cwd(), 'public', photo.url);
-    await fs.unlink(filepath);
-  } catch (_) { /* file might not exist */ }
+  // O arquivo vive no Vercel Blob — o fs.unlink antigo tentava apagar um
+  // caminho local que nunca existiu e o blob ficava órfão para sempre.
+  if (photo.url.includes('blob.vercel-storage.com')) {
+    try { await del(photo.url); } catch { /* blob já ausente não bloqueia */ }
+  }
 
   await prisma.studentPhoto.delete({ where: { id: params.photoId } });
 
@@ -62,8 +69,10 @@ export async function DELETE(
       orderBy: { createdAt: 'asc' },
     });
     if (next) {
-      await prisma.studentPhoto.update({ where: { id: next.id }, data: { isProfile: true } });
-      await prisma.student.update({ where: { id: params.id }, data: { photoUrl: next.url } });
+      await prisma.$transaction([
+        prisma.studentPhoto.update({ where: { id: next.id }, data: { isProfile: true } }),
+        prisma.student.update({ where: { id: params.id }, data: { photoUrl: next.url } }),
+      ]);
     } else {
       await prisma.student.update({ where: { id: params.id }, data: { photoUrl: null } });
     }

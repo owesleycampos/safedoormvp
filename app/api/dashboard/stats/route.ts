@@ -53,6 +53,17 @@ export async function GET(req: NextRequest) {
   // avg-stay pairing never misses entries outside the trend window.
   const entryFetchStart = trendStart < rangeStart ? trendStart : rangeStart;
 
+  // Disparada junto do Promise.all: era a única consulta serial da rota e
+  // adicionava uma viagem inteira ao banco no endpoint mais consultado.
+  const rangeExitsPromise = prisma.attendanceEvent.findMany({
+    where: {
+      student: studentWhere,
+      timestamp: { gte: rangeStart, lt: rangeEnd },
+      eventType: 'EXIT',
+    },
+    select: { studentId: true, timestamp: true },
+  });
+
   const [totalStudents, presentInRange, recentEvents, unrecognizedCount, offlineDevices, classes, entryEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
@@ -69,7 +80,11 @@ export async function GET(req: NextRequest) {
         student: studentWhere,
         timestamp: { gte: rangeStart, lt: rangeEnd },
       },
-      include: {
+      select: {
+        id: true,
+        eventType: true,
+        timestamp: true,
+        photoUrl: true,
         student: {
           select: {
             name: true,
@@ -127,14 +142,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Average stay time in range (students who have both entry and exit that day)
-  const rangeExits = await prisma.attendanceEvent.findMany({
-    where: {
-      student: studentWhere,
-      timestamp: { gte: rangeStart, lt: rangeEnd },
-      eventType: 'EXIT',
-    },
-    select: { studentId: true, timestamp: true },
-  });
+  const rangeExits = await rangeExitsPromise;
 
   const entryMap = new Map<string, Date>();
   for (const e of entryEvents) {

@@ -8,6 +8,22 @@ import { prisma } from '@/lib/db';
  * A tela de perfil sempre chamou esta rota; ela nunca existiu, então
  * "Editar perfil" caía em "Erro ao salvar." em 100% das tentativas.
  */
+export async function GET() {
+  // A tela de perfil precisa do telefone salvo — sem este GET o campo
+  // abria vazio e o PATCH mandava '' , apagando o WhatsApp do responsável.
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== 'PARENT') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+  const userId = (session.user as any)?.id as string;
+  const parent = await prisma.parent.findUnique({
+    where: { userId },
+    select: { name: true, phone: true },
+  });
+  if (!parent) return NextResponse.json({ error: 'Perfil não encontrado.' }, { status: 404 });
+  return NextResponse.json(parent);
+}
+
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user as any)?.role !== 'PARENT') {

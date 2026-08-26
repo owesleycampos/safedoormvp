@@ -11,14 +11,15 @@ interface TimelineClientProps {
   children: any[];
   events: any[];
   selectedStudentId: string | null;
+  tz?: string;
 }
 
-function groupEventsByDay(events: any[]) {
+function groupEventsByDay(events: any[], tz: string) {
   const groups: Record<string, any[]> = {};
   for (const event of events) {
     const day = new Date(event.timestamp).toLocaleDateString('pt-BR', {
       weekday: 'long', day: 'numeric', month: 'long',
-      timeZone: 'America/Sao_Paulo',
+      timeZone: tz,
     });
     if (!groups[day]) groups[day] = [];
     groups[day].push(event);
@@ -26,12 +27,12 @@ function groupEventsByDay(events: any[]) {
   return groups;
 }
 
-export function TimelineClient({ children, events, selectedStudentId }: TimelineClientProps) {
+export function TimelineClient({ children, events, selectedStudentId, tz = 'America/Sao_Paulo' }: TimelineClientProps) {
   const router = useRouter();
   const selected = children.find((c) => c.id === selectedStudentId);
-  const grouped = groupEventsByDay(events);
+  const grouped = groupEventsByDay(events, tz);
   const today = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Sao_Paulo',
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: tz,
   });
 
   function selectStudent(id: string) {

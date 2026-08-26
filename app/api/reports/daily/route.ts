@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       isManual: true,
       confidence: true,
       notes: true,
+      photoUrl: true,
     },
     orderBy: { timestamp: 'asc' },
   });
@@ -64,10 +65,12 @@ export async function GET(req: NextRequest) {
     entryManual: boolean;
     entryEventId: string | null;
     entryNotes: string | null;
+    entryPhotoUrl: string | null;
     exit: Date | null;
     exitManual: boolean;
     exitEventId: string | null;
     exitNotes: string | null;
+    exitPhotoUrl: string | null;
     confidence: number | null;
   }>();
 
@@ -75,7 +78,9 @@ export async function GET(req: NextRequest) {
     if (!eventMap.has(ev.studentId)) {
       eventMap.set(ev.studentId, {
         entry: null, entryManual: false, entryEventId: null, entryNotes: null,
+        entryPhotoUrl: null,
         exit: null, exitManual: false, exitEventId: null, exitNotes: null,
+        exitPhotoUrl: null,
         confidence: null,
       });
     }
@@ -85,6 +90,7 @@ export async function GET(req: NextRequest) {
       record.entryManual = ev.isManual;
       record.entryEventId = ev.id;
       record.entryNotes = ev.notes;
+      record.entryPhotoUrl = ev.photoUrl;
       record.confidence = ev.confidence;
     }
     if (ev.eventType === 'EXIT') {
@@ -93,6 +99,7 @@ export async function GET(req: NextRequest) {
       record.exitManual = ev.isManual;
       record.exitEventId = ev.id;
       record.exitNotes = ev.notes;
+      record.exitPhotoUrl = ev.photoUrl;
     }
   }
 
@@ -122,10 +129,12 @@ export async function GET(req: NextRequest) {
       entryManual: ev?.entryManual ?? false,
       entryEventId: ev?.entryEventId ?? null,
       entryNotes: ev?.entryNotes ?? null,
+      entryPhotoUrl: ev?.entryPhotoUrl ?? null,
       exitTime: ev?.exit?.toISOString() ?? null,
       exitManual: ev?.exitManual ?? false,
       exitEventId: ev?.exitEventId ?? null,
       exitNotes: ev?.exitNotes ?? null,
+      exitPhotoUrl: ev?.exitPhotoUrl ?? null,
       confidence: ev?.confidence ?? null,
     };
   });

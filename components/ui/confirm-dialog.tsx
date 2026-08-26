@@ -20,6 +20,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -30,10 +31,14 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  /** Quando presente, o diálogo mostra um campo de texto obrigatório e
+   *  resolve com o valor digitado (null se cancelado). */
+  inputLabel?: string;
+  inputPlaceholder?: string;
 }
 
 interface PendingConfirm extends ConfirmOptions {
-  resolve: (confirmed: boolean) => void;
+  resolve: (result: boolean | string | null) => void;
 }
 
 let enqueue: ((p: PendingConfirm) => void) | null = null;
@@ -43,20 +48,34 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
   if (!enqueue) {
     return Promise.resolve(window.confirm(options.title));
   }
-  return new Promise((resolve) => enqueue!({ ...options, resolve }));
+  return new Promise((resolve) => enqueue!({ ...options, resolve: (r) => resolve(!!r) }));
+}
+
+/** Variante com campo de texto (substitui o window.prompt cru do navegador).
+ *  Resolve com a string digitada, ou null se cancelado/vazio. */
+export function promptDialog(options: ConfirmOptions & { inputLabel: string }): Promise<string | null> {
+  if (!enqueue) {
+    return Promise.resolve(window.prompt(options.title));
+  }
+  return new Promise((resolve) =>
+    enqueue!({ ...options, resolve: (r) => resolve(typeof r === 'string' && r.trim() ? r.trim() : null) })
+  );
 }
 
 /** Montado uma vez no layout; renderiza a confirmação ativa. */
 export function ConfirmDialogHost() {
   const [current, setCurrent] = useState<PendingConfirm | null>(null);
+  const [inputValue, setInputValue] = useState('');
 
   useEffect(() => {
-    enqueue = (p) => setCurrent(p);
+    enqueue = (p) => { setInputValue(''); setCurrent(p); };
     return () => { enqueue = null; };
   }, []);
 
   function close(confirmed: boolean) {
-    current?.resolve(confirmed);
+    if (!current) return;
+    if (current.inputLabel) current.resolve(confirmed ? inputValue : null);
+    else current.resolve(confirmed);
     setCurrent(null);
   }
 
@@ -80,6 +99,18 @@ export function ConfirmDialogHost() {
                 </div>
               </div>
             </DialogHeader>
+            {current.inputLabel && (
+              <div className="space-y-1.5 mt-1">
+                <label className="text-xs font-medium text-muted-foreground">{current.inputLabel}</label>
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={current.inputPlaceholder}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter' && inputValue.trim()) close(true); }}
+                />
+              </div>
+            )}
             <DialogFooter className="gap-2 mt-2">
               <Button variant="outline" onClick={() => close(false)}>
                 {current.cancelLabel ?? 'Cancelar'}
@@ -87,7 +118,8 @@ export function ConfirmDialogHost() {
               <Button
                 variant={current.destructive ? 'destructive' : 'default'}
                 onClick={() => close(true)}
-                autoFocus
+                autoFocus={!current.inputLabel}
+                disabled={!!current.inputLabel && !inputValue.trim()}
               >
                 {current.confirmLabel ?? 'Confirmar'}
               </Button>

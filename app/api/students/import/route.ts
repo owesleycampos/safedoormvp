@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
   });
 }
 
-function parseCsv(text: string): Array<{ name: string; birthDate?: string }> {
+function parseCsv(text: string): ImportRow[] {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -199,16 +199,40 @@ function parseCsv(text: string): Array<{ name: string; birthDate?: string }> {
 
   if (lines.length === 0) return [];
 
+  const split = (line: string) =>
+    (line.includes(';') ? line.split(';') : line.split(',')).map((c) =>
+      c.trim().replace(/^["']|["']$/g, '')
+    );
+
   // Detect if first line is header
   const firstLine = lines[0].toLowerCase();
   const hasHeader = firstLine.includes('nome') || firstLine.includes('name') || firstLine.includes('aluno');
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
+  // O caminho CSV cru declarava os campos de responsável e jogava todos
+  // fora — só nome e data sobreviviam. Mapeia pelo cabeçalho, com o mesmo
+  // vocabulário que o dialog de import auto-detecta.
+  let col = { birth: 1, pName: -1, pEmail: -1, pPhone: -1 };
+  if (hasHeader) {
+    const headers = split(lines[0]).map((h) => h.toLowerCase());
+    const find = (...terms: string[]) =>
+      headers.findIndex((h) => terms.some((t) => h.includes(t)));
+    const birth = find('nascimento', 'birth', 'data');
+    if (birth >= 0) col.birth = birth;
+    col.pEmail = find('email', 'e-mail');
+    col.pName = find('responsavel', 'responsável', 'mae', 'mãe', 'pai');
+    col.pPhone = find('telefone', 'celular', 'whatsapp', 'fone');
+  }
+
   return dataLines.map((line) => {
-    // Support both comma and semicolon separators
-    const parts = line.includes(';') ? line.split(';') : line.split(',');
-    const name = parts[0]?.trim().replace(/^["']|["']$/g, '') || '';
-    const birthDate = parts[1]?.trim().replace(/^["']|["']$/g, '') || undefined;
-    return { name, birthDate };
+    const parts = split(line);
+    const pick = (i: number) => (i >= 0 ? parts[i] || undefined : undefined);
+    return {
+      name: parts[0] || '',
+      birthDate: pick(col.birth),
+      parentName: pick(col.pName),
+      parentEmail: pick(col.pEmail),
+      parentPhone: pick(col.pPhone),
+    };
   });
 }

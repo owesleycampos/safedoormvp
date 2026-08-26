@@ -111,8 +111,6 @@ export async function POST(
       data: {
         azurePersonId: studentId,        // marks as enrolled; ExternalImageId = studentId in Rekognition
         rekognitionFaceIds: JSON.stringify(newFaceIds),
-        faceVector: null,                // legacy field no longer needed
-        faceVectorVersion: { increment: 1 },
         recognitionEnabled: true,
       },
     });

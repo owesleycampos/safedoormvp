@@ -205,13 +205,18 @@ export async function registerAttendanceEvent(
       : settings?.notifyOnExit ?? true;
     if (!wantsPush) return;
     const payload = formatAttendanceNotification(student.name, eventType, eventTime, school.name, notes);
-    notifyParentsOfStudent(studentId, payload)
-      .then((sent) => {
-        if (sent > 0) {
-          return prisma.attendanceEvent.update({ where: { id: eventId }, data: { notified: true } });
-        }
-      })
-      .catch(console.error);
+    // AWAITED de propósito: em serverless (Vercel) a função congela assim
+    // que a resposta sai — um envio fire-and-forget era suspenso antes de
+    // acontecer e nenhum push chegava em produção. O custo é ~200-500ms na
+    // resposta do registro; a notificação é o produto, vale cada ms.
+    try {
+      const sent = await notifyParentsOfStudent(studentId, payload);
+      if (sent > 0) {
+        await prisma.attendanceEvent.update({ where: { id: eventId }, data: { notified: true } });
+      }
+    } catch (err) {
+      console.error('notify failed:', err);
+    }
   };
 
   const audit = async (action: string, eventId: string) => {

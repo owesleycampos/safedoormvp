@@ -47,6 +47,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [nameCol, setNameCol] = useState(0);
   const [birthCol, setBirthCol] = useState(-1);
+  const [pNameCol, setPNameCol] = useState(-1);
+  const [pEmailCol, setPEmailCol] = useState(-1);
+  const [pPhoneCol, setPPhoneCol] = useState(-1);
   const [orphanAlertOpen, setOrphanAlertOpen] = useState(true);
 
   const orphanStudents = students.filter((s) => (s._count?.parents ?? 0) === 0);
@@ -151,11 +154,16 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         const bi = first.findIndex(h => ['nascimento', 'birth', 'data_nascimento', 'data de nascimento', 'birthdate', 'dt_nasc'].includes(h));
         setNameCol(ni >= 0 ? ni : 0);
         setBirthCol(bi >= 0 ? bi : -1);
+        // Responsável em massa: detecta as colunas se a planilha as tiver
+        setPNameCol(first.findIndex(h => ['responsavel', 'responsável', 'nome_responsavel', 'nome do responsavel', 'nome do responsável', 'mae', 'mãe', 'pai'].includes(h)));
+        setPEmailCol(first.findIndex(h => ['email', 'e-mail', 'email_responsavel', 'e-mail do responsavel', 'e-mail do responsável'].includes(h)));
+        setPPhoneCol(first.findIndex(h => ['telefone', 'celular', 'whatsapp', 'fone', 'telefone_responsavel'].includes(h)));
       } else {
         setCsvHeaders(parsed[0].map((_, i) => `Coluna ${i + 1}`));
         setCsvRows(parsed);
         setNameCol(0);
         setBirthCol(parsed[0].length > 1 ? 1 : -1);
+        setPNameCol(-1); setPEmailCol(-1); setPPhoneCol(-1);
       }
       setImportDialog(true);
     };
@@ -169,6 +177,9 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
         .map(row => ({
           name: row[nameCol] || '',
           birthDate: birthCol >= 0 ? row[birthCol] : undefined,
+          parentName: pNameCol >= 0 ? row[pNameCol] : undefined,
+          parentEmail: pEmailCol >= 0 ? row[pEmailCol] : undefined,
+          parentPhone: pPhoneCol >= 0 ? row[pPhoneCol] : undefined,
         }))
         .filter(s => s.name.trim());
       const res = await fetch('/api/students/import', {
@@ -503,6 +514,38 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
               </div>
             </div>
 
+            {/* Onboarding em massa: com o e-mail na planilha, a conta do
+                responsável nasce sem senha e já vinculada — o link da turma
+                vira só o "primeiro acesso" (definir a senha). */}
+            <div className="rounded-md bg-secondary/40 p-3 space-y-3">
+              <div>
+                <p className="text-xs font-medium">Responsáveis em massa (opcional)</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Com o e-mail, cada responsável já sai cadastrado e vinculado ao aluno —
+                  no primeiro acesso pelo link da turma ele só cria a senha.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  ['E-mail', pEmailCol, setPEmailCol],
+                  ['Nome', pNameCol, setPNameCol],
+                  ['WhatsApp', pPhoneCol, setPPhoneCol],
+                ] as const).map(([label, val, set]) => (
+                  <div key={label} className="space-y-1.5">
+                    <Label className="text-xs">{label}</Label>
+                    <select
+                      value={val}
+                      onChange={(e) => set(Number(e.target.value))}
+                      className="w-full h-9 rounded-md border border-input bg-secondary/50 px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                    >
+                      <option value={-1}>Não importar</option>
+                      {csvHeaders.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground">Pré-visualização</p>
               <div className="rounded-md border border-border overflow-hidden">
@@ -511,6 +554,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                     <tr className="bg-secondary/30">
                       <th className="text-left px-3 py-2 font-medium">Nome</th>
                       {birthCol >= 0 && <th className="text-left px-3 py-2 font-medium">Data Nasc.</th>}
+                      {pEmailCol >= 0 && <th className="text-left px-3 py-2 font-medium">Responsável</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -518,6 +562,7 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
                       <tr key={i}>
                         <td className="px-3 py-2">{row[nameCol] || <span className="text-muted-foreground italic">vazio</span>}</td>
                         {birthCol >= 0 && <td className="px-3 py-2">{row[birthCol] || '—'}</td>}
+                        {pEmailCol >= 0 && <td className="px-3 py-2">{row[pEmailCol] || '—'}</td>}
                       </tr>
                     ))}
                   </tbody>

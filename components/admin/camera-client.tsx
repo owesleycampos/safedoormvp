@@ -75,12 +75,18 @@ export function CameraClient() {
       .catch(() => {});
   }, []);
 
-  const registerAttendance = useCallback((match: FaceMatch) => {
+  const registerAttendance = useCallback((match: FaceMatch, frame?: Blob | null) => {
     const currentMode = modeRef.current;
+    // O frame do momento vai junto: vira a foto do evento no feed do admin
+    // e no histórico do responsável — a prova de que era mesmo a criança.
+    const form = new FormData();
+    form.append('studentId', match.studentId!);
+    form.append('type', currentMode);
+    form.append('confidence', String(match.confidence));
+    if (frame) form.append('photo', frame, 'momento.jpg');
     fetch('/api/attendance/recognize', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId: match.studentId, type: currentMode, confidence: match.confidence }),
+      body: form,
     })
       .then(async (r) => {
         const data = await r.json();
@@ -141,7 +147,7 @@ export function CameraClient() {
         const lastTime = cooldownRef.current.get(cooldownKey) ?? 0;
         if (Date.now() - lastTime > CLIENT_COOLDOWN_MS) {
           cooldownRef.current.set(cooldownKey, Date.now());
-          registerAttendance(match);
+          registerAttendance(match, blob);
         }
       }
     } catch (err) { console.error('[scan] error:', err); }

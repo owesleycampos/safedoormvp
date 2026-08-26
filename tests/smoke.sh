@@ -344,6 +344,31 @@ check "nenhum evento de presença foi criado" "$EVENTOS_ANTES" \
   "$(sql0 'SELECT count(*) FROM "AttendanceEvent"')"
 rm -f "$JARP"
 
+echo "── Import em massa com responsáveis ──"
+
+sql0 "DELETE FROM \"User\" WHERE email IN ('massa1@teste.com','massa2@teste.com');" >/dev/null 2>&1
+sql0 "DELETE FROM \"Student\" WHERE name IN ('Aluno Massa Um','Aluno Massa Dois');" >/dev/null 2>&1
+CLS_A=$(sql0 "SELECT \"classId\" FROM \"Student\" WHERE id='$JOAO'")
+
+BODY_IMP=$(printf '{"classId":"%s","students":[{"name":"Aluno Massa Um","birthDate":"2016-02-10","parentName":"Mae Massa","parentEmail":"massa1@teste.com","parentPhone":"11922221111"},{"name":"Aluno Massa Dois","parentEmail":"massa2@teste.com"},{"name":"João Silva","parentEmail":"massa1@teste.com"}]}' "$CLS_A")
+check "import cria alunos e vincula responsáveis → 200" "200" \
+  "$(api POST /api/students/import "$BODY_IMP")"
+check "2 criados, 1 já existente reaproveitado" "2|1" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/p.json'));print(str(d['created'])+'|'+str(d['skipped']))")"
+check "3 vínculos de responsável feitos" "3" "$(jfield parentsLinked)"
+check "conta em massa nasce SEM senha (primeiro acesso define)" "t" \
+  "$(sql0 "SELECT \"passwordHash\" IS NULL FROM \"User\" WHERE email='massa1@teste.com'")"
+check "mesmo responsável em 2 alunos = 1 conta só" "2" \
+  "$(sql0 "SELECT count(*) FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='massa1@teste.com'")"
+
+# repetir o mesmo import é idempotente (skipDuplicates nos vínculos)
+api POST /api/students/import "$BODY_IMP" >/dev/null
+check "reimportar não duplica vínculos" "2" \
+  "$(sql0 "SELECT count(*) FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='massa1@teste.com'")"
+
+sql0 "DELETE FROM \"Student\" WHERE name IN ('Aluno Massa Um','Aluno Massa Dois');" >/dev/null 2>&1
+sql0 "DELETE FROM \"User\" WHERE email IN ('massa1@teste.com','massa2@teste.com');" >/dev/null 2>&1
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

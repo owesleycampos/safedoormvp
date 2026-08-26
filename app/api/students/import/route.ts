@@ -3,6 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
+interface ImportRow {
+  name: string;
+  birthDate?: string;
+  parentName?: string;
+  parentEmail?: string;
+  parentPhone?: string;
+}
+
 /**
  * POST /api/students/import
  *
@@ -22,7 +30,7 @@ export async function POST(req: NextRequest) {
   const contentType = req.headers.get('content-type') || '';
 
   let classId: string;
-  let studentRows: Array<{ name: string; birthDate?: string }>;
+  let studentRows: ImportRow[];
 
   if (contentType.includes('multipart/form-data')) {
     // CSV file upload
@@ -62,39 +70,92 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Máximo de 200 alunos por importação.' }, { status: 400 });
   }
 
-  // Check for existing names to avoid duplicates
+  // Mapa nome→id para deduplicar E para vincular responsáveis também a
+  // alunos que já existiam (o caso "onboarding em massa" de uma turma que
+  // já foi importada sem responsáveis).
   const existingStudents = await prisma.student.findMany({
     where: { schoolId, classId, isActive: true },
-    select: { name: true },
+    select: { id: true, name: true },
   });
-  const existingNames = new Set(existingStudents.map((s) => s.name.toLowerCase().trim()));
+  const byName = new Map(existingStudents.map((s) => [s.name.toLowerCase().trim(), s.id]));
 
   let created = 0;
   let skipped = 0;
+  let parentsCreated = 0;
+  let parentsLinked = 0;
   const errors: string[] = [];
 
   for (const row of studentRows) {
     const name = row.name?.trim();
     if (!name) { skipped++; continue; }
+    const key = name.toLowerCase();
 
-    if (existingNames.has(name.toLowerCase())) {
+    let studentId = byName.get(key) ?? null;
+    if (studentId) {
       skipped++;
-      continue;
+    } else {
+      try {
+        const st = await prisma.student.create({
+          data: {
+            name,
+            classId,
+            schoolId,
+            birthDate: row.birthDate ? new Date(row.birthDate) : null,
+          },
+          select: { id: true },
+        });
+        studentId = st.id;
+        byName.set(key, st.id);
+        created++;
+      } catch (err: any) {
+        errors.push(`${name}: ${err.message}`);
+        continue;
+      }
     }
 
-    try {
-      await prisma.student.create({
-        data: {
-          name,
-          classId,
-          schoolId,
-          birthDate: row.birthDate ? new Date(row.birthDate) : null,
-        },
-      });
-      existingNames.add(name.toLowerCase());
-      created++;
-    } catch (err: any) {
-      errors.push(`${name}: ${err.message}`);
+    // ── Responsável em massa ─────────────────────────────────────────
+    // Com e-mail na planilha, a conta nasce SEM senha e já vinculada: o
+    // link de convite da turma vira só o "primeiro acesso" (definir a
+    // senha), sem o responsável precisar procurar o filho na lista.
+    const email = row.parentEmail?.trim().toLowerCase();
+    if (studentId && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      try {
+        let user = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, role: true, parent: { select: { id: true } } },
+        });
+        let parentId = user?.parent?.id ?? null;
+        if (user && !user.parent && user.role !== 'PARENT') {
+          errors.push(`${name}: e-mail ${email} pertence a outro tipo de usuário`);
+        } else if (!user) {
+          const parent = await prisma.parent.create({
+            data: {
+              name: row.parentName?.trim() || 'Responsável',
+              phone: row.parentPhone?.trim() || null,
+              user: { create: { email, name: row.parentName?.trim() || null, role: 'PARENT' } },
+            },
+            select: { id: true },
+          });
+          parentId = parent.id;
+          parentsCreated++;
+        } else if (user && !parentId) {
+          const parent = await prisma.parent.create({
+            data: { userId: user.id, name: row.parentName?.trim() || 'Responsável', phone: row.parentPhone?.trim() || null },
+            select: { id: true },
+          });
+          parentId = parent.id;
+        }
+        if (parentId) {
+          const isFirst = (await prisma.studentParent.count({ where: { studentId } })) === 0;
+          await prisma.studentParent.createMany({
+            data: [{ studentId, parentId, relationship: 'Responsável', isPrimary: isFirst }],
+            skipDuplicates: true,
+          });
+          parentsLinked++;
+        }
+      } catch (err: any) {
+        errors.push(`${name} (responsável): ${err.message}`);
+      }
     }
   }
 
@@ -114,13 +175,19 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  const parts = [`${created} aluno${created !== 1 ? 's' : ''} importado${created !== 1 ? 's' : ''}`];
+  if (parentsLinked > 0) parts.push(`${parentsLinked} responsável${parentsLinked !== 1 ? 'is' : ''} vinculado${parentsLinked !== 1 ? 's' : ''}`);
+  if (skipped > 0) parts.push(`${skipped} já existente${skipped !== 1 ? 's' : ''}`);
+
   return NextResponse.json({
     success: true,
     created,
     skipped,
+    parentsCreated,
+    parentsLinked,
     total: studentRows.length,
     errors: errors.slice(0, 5),
-    message: `${created} aluno${created !== 1 ? 's' : ''} importado${created !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} ignorado${skipped !== 1 ? 's' : ''} — já existentes ou vazios)` : ''}.`,
+    message: parts.join(', ') + '.',
   });
 }
 

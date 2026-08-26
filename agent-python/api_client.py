@@ -13,6 +13,8 @@ from config import config
 
 logger = structlog.get_logger()
 
+AGENT_VERSION = '2.0.0'  # bump a cada release do agente
+
 RETRY_DELAYS = [1, 2, 4, 8]  # seconds
 
 
@@ -21,6 +23,7 @@ class ApiClient:
         self.base_url = config.api_base_url.rstrip('/')
         self.device_headers = {
             'x-device-api-key': config.device_api_key,
+            'x-agent-version': AGENT_VERSION,
             'Content-Type': 'application/json',
         }
         # Events authenticate with the per-device key (tenant-scoped on the

@@ -10,7 +10,7 @@
  */
 import {
   LayoutDashboard, Video, ScanFace, GraduationCap,
-  Users, UserCheck, ClipboardList, CalendarDays,
+  Users, UserCheck, ClipboardList,
   Smartphone, Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -34,7 +34,10 @@ export const ADMIN_NAV: NavItem[] = [
   { href: '/admin/classes',      icon: Users,           label: 'Turmas' },
   { href: '/admin/parents',      icon: UserCheck,       label: 'Responsáveis' },
   { href: '/admin/attendance',   icon: ClipboardList,   label: 'Frequência',        primary: true },
-  { href: '/admin/subjects',     icon: CalendarDays,    label: 'Grade Escolar' },
+  // Grade Escolar congelada: presença por aula é um sub-produto que a câmera
+  // no portão não consegue alimentar (subjectId/period nunca são gravados) e
+  // nenhum relatório consome. A rota /admin/subjects continua acessível por
+  // URL para quem já a usava; volta à navegação quando houver leitor real.
 ];
 
 /** Setup and configuration, separated by a divider in the sidebar. */

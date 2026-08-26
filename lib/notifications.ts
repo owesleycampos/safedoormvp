@@ -48,7 +48,7 @@ export async function notifyParentsOfStudent(
   for (const sp of studentParents) {
     for (const sub of sp.parent.pushSubscriptions) {
       sendPromises.push(
-        sendPushNotification(
+        sendPushToSubscription(
           {
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
@@ -66,8 +66,10 @@ export async function notifyParentsOfStudent(
 
 /**
  * Send a single push notification. Returns true if accepted.
+ * Exported for direct sends fora do fluxo aluno→responsáveis (ex.: o resumo
+ * diário da direção, que vai para as inscrições da ESCOLA).
  */
-async function sendPushNotification(
+export async function sendPushToSubscription(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: NotificationPayload,
   subscriptionId: string

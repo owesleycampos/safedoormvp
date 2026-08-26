@@ -22,6 +22,7 @@ interface StatsData {
   lateCount?: number;
   recentEvents: any[];
   unrecognizedCount: number;
+  offlineDevices?: number;
   classes: { id: string; name: string }[];
   trend?: TrendPoint[];
 }
@@ -202,6 +203,14 @@ export function DashboardClient({ data: initialData }: { data: StatsData }) {
 
   // Alerts — actionable items
   const alerts: { text: string; href: string; urgent: boolean }[] = [];
+  if ((data.offlineDevices ?? 0) > 0) {
+    // Tablet mudo = portaria sem registro. É o alerta mais urgente do painel.
+    alerts.push({
+      text: `${data.offlineDevices} dispositivo${data.offlineDevices! > 1 ? 's' : ''} da portaria offline — verificar energia e internet`,
+      href: '/admin/devices',
+      urgent: true,
+    });
+  }
   if (data.unrecognizedCount > 0) {
     alerts.push({
       text: `${data.unrecognizedCount} rosto${data.unrecognizedCount > 1 ? 's' : ''} não identificado${data.unrecognizedCount > 1 ? 's' : ''} — revisar`,

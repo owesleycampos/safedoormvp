@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toaster';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { getInitials, cn } from '@/lib/utils';
 
 interface StudentPhoto {
@@ -83,14 +84,21 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteWarning, setInviteWarning] = useState<string[]>([]);
+  const [consent, setConsent] = useState<{ at: string | null; name: string | null }>({ at: null, name: null });
+  const [consentBusy, setConsentBusy] = useState(false);
 
-  /** O que falta para o aluno estar pronto: foto, biometria, responsável. */
+  /** O que falta para o aluno estar pronto: foto, consentimento, biometria, responsável. */
   const pending: Array<{ tab: 'photos' | 'parents'; label: string }> = [];
   if (isEdit) {
     if (photos.length === 0) {
       pending.push({ tab: 'photos', label: 'Adicionar ao menos uma foto' });
     } else if (!student?.azurePersonId && !student?.faceVector) {
       pending.push({ tab: 'photos', label: 'Treinar a biometria com as fotos' });
+    }
+    if (!consent.at) {
+      // LGPD: biometria de criança exige autorização do responsável — pelo
+      // convite (checkbox) ou registrada em papel pela secretaria.
+      pending.push({ tab: 'photos', label: 'Registrar o consentimento biométrico do responsável' });
     }
     if (parentLinks.length === 0) {
       pending.push({ tab: 'parents', label: 'Vincular um responsável para receber os avisos' });
@@ -121,6 +129,10 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
       if (isEdit) {
         loadPhotos(student.id);
         loadParents(student.id);
+        setConsent({
+          at: student?.biometricConsentAt ?? null,
+          name: student?.biometricConsentName ?? null,
+        });
       } else {
         setPhotos([]);
         setParentLinks([]);
@@ -393,6 +405,45 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
   function inviteMessage() {
     const school = 'Porta Segura';
     return `Olá! A escola disponibilizou o link abaixo para você acompanhar a entrada e saída de ${student?.name ?? 'seu filho(a)'} em tempo real.\n\n${inviteLink}\n\nAbra o link, escolha o aluno e confirme a data de nascimento. — ${school}`;
+  }
+
+  /** Secretaria registra consentimento colhido em papel (termo assinado). */
+  async function handleRecordConsent() {
+    if (!isEdit) return;
+    const authorizedBy = window.prompt('Nome do responsável que assinou o termo de autorização:');
+    if (!authorizedBy?.trim()) return;
+    setConsentBusy(true);
+    try {
+      const res = await fetch(`/api/students/${student.id}/consent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorizedBy: authorizedBy.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ variant: 'destructive', title: 'Erro', description: data.error }); return; }
+      setConsent({ at: data.biometricConsentAt, name: data.biometricConsentName });
+      toast({ variant: 'success', title: 'Consentimento registrado' });
+    } finally { setConsentBusy(false); }
+  }
+
+  /** Revoga o consentimento e apaga a biometria (faces no Rekognition). */
+  async function handleRevokeBiometrics() {
+    if (!isEdit) return;
+    const ok = await confirmDialog({
+      title: `Excluir a biometria de ${student.name}?`,
+      description: 'As faces cadastradas no reconhecimento serão apagadas e o reconhecimento desligado. As fotos e o histórico de presença permanecem. Esta é a ação de revogação prevista na LGPD.',
+      confirmLabel: 'Excluir biometria', destructive: true,
+    });
+    if (!ok) return;
+    setConsentBusy(true);
+    try {
+      const res = await fetch(`/api/students/${student.id}/consent`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { toast({ variant: 'destructive', title: 'Erro', description: data.error }); return; }
+      setConsent({ at: null, name: null });
+      setEnrollStatus('idle');
+      toast({ variant: 'success', title: 'Biometria excluída', description: `${data.facesDeleted} face(s) removida(s) do reconhecimento.` });
+    } finally { setConsentBusy(false); }
   }
 
   async function handleUnlinkParent(parentId: string) {
@@ -765,6 +816,31 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                       </div>
                     )}
 
+                    {/* LGPD: estado do consentimento ao lado da ação que o exige */}
+                    {consent.at ? (
+                      <div className="flex items-center justify-between gap-2 rounded-md bg-secondary/40 p-2.5">
+                        <p className="text-[11px] text-muted-foreground">
+                          Uso da biometria autorizado por <strong className="text-foreground">{consent.name}</strong>
+                          {' '}em {new Date(consent.at).toLocaleDateString('pt-BR')}.
+                        </p>
+                        <Button type="button" size="sm" variant="outline" className="h-7 text-xs shrink-0"
+                          onClick={handleRevokeBiometrics} loading={consentBusy}>
+                          Excluir biometria
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 rounded-md bg-warn/[0.07] border border-warn/20 p-2.5">
+                        <p className="text-[11px] text-foreground">
+                          Sem consentimento biométrico registrado. O responsável autoriza pelo
+                          link de convite, ou registre aqui um termo assinado em papel.
+                        </p>
+                        <Button type="button" size="sm" variant="outline" className="h-7 text-xs shrink-0"
+                          onClick={handleRecordConsent} loading={consentBusy}>
+                          Registrar
+                        </Button>
+                      </div>
+                    )}
+
                     <Button
                       size="sm"
                       variant={enrollStatus === 'success' ? 'outline' : 'default'}
@@ -772,6 +848,7 @@ export function StudentDialog({ open, onOpenChange, student, classes, onSaved, d
                       loading={enrolling}
                       disabled={enrolling}
                       className="w-full gap-2"
+                      title={!consent.at ? 'Recomendado registrar o consentimento antes de treinar.' : undefined}
                     >
                       <Cpu className="h-3.5 w-3.5" />
                       {enrollStatus === 'success' ? 'Retreinar Biometria' : 'Treinar Biometria'}

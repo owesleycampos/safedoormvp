@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   // avg-stay pairing never misses entries outside the trend window.
   const entryFetchStart = trendStart < rangeStart ? trendStart : rangeStart;
 
-  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, classes, entryEvents, lateEvents] = await Promise.all([
+  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, offlineDevices, classes, entryEvents, lateEvents] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
       where: {
@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
       take: 20,
     }),
     prisma.unrecognizedFaceLog.count({ where: { schoolId, reviewed: false } }),
+    prisma.device.count({ where: { schoolId, status: 'OFFLINE' } }),
     prisma.class.findMany({
       where: { schoolId },
       select: { id: true, name: true },
@@ -166,6 +167,7 @@ export async function GET(req: NextRequest) {
     lateCount: lateEvents.length,
     recentEvents,
     unrecognizedCount,
+    offlineDevices,
     classes,
     trend,
     avgStayMinutes: stayCount > 0 ? Math.round(totalMinutes / stayCount) : null,

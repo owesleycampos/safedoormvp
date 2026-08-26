@@ -85,6 +85,7 @@ export default function VincularPage() {
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [autoSignedIn, setAutoSignedIn] = useState(false);
+  const [biometricConsent, setBiometricConsent] = useState(false);
   const [result, setResult] = useState<ClaimResult | null>(null);
 
   // ── Fetch invite data ──
@@ -134,6 +135,7 @@ export default function VincularPage() {
         parentName,
         phone,
       };
+      if (biometricConsent) (body as Record<string, any>).biometricConsent = true;
       if (needsAccount || email) {
         body.email = email;
         body.password = password;
@@ -364,6 +366,26 @@ export default function VincularPage() {
                 onChange={(e) => setBirthDate(e.target.value)}
               />
             </div>
+
+            {/* LGPD: biometria de criança é dado sensível — o consentimento
+                é colhido aqui, de quem acabou de provar o vínculo. Opcional:
+                sem ele o acompanhamento funciona, mas a escola não pode
+                treinar o reconhecimento facial deste aluno. */}
+            <label className="flex items-start gap-2.5 rounded-md border border-border p-3 cursor-pointer hover:bg-accent/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={biometricConsent}
+                onChange={(e) => setBiometricConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-foreground"
+              />
+              <span className="text-xs text-muted-foreground">
+                Autorizo o uso das fotos do aluno para o reconhecimento facial na
+                portaria da escola, conforme a{' '}
+                <a href="/privacy" target="_blank" className="underline underline-offset-2 hover:text-foreground">
+                  Política de Privacidade
+                </a>. Posso revogar esta autorização a qualquer momento junto à escola.
+              </span>
+            </label>
 
             {result?.error && (
               <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">

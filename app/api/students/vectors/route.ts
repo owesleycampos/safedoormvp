@@ -13,10 +13,16 @@ export async function GET(req: NextRequest) {
   const device = await prisma.device.findUnique({ where: { apiKey } });
   if (!device) return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
 
-  // Update device status
+  // Update device status (+ versão do agente, para o painel saber quais
+  // tablets estão rodando código antigo)
+  const agentVersion = req.headers.get('x-agent-version');
   await prisma.device.update({
     where: { id: device.id },
-    data: { lastSeen: new Date(), status: 'ONLINE' },
+    data: {
+      lastSeen: new Date(),
+      status: 'ONLINE',
+      ...(agentVersion ? { firmwareVersion: agentVersion } : {}),
+    },
   }).catch(() => {});
 
   const [students, settings] = await Promise.all([

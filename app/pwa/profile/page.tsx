@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '' });
 
@@ -106,6 +107,32 @@ export default function ProfilePage() {
       toast({ variant: 'destructive', title: 'Erro', description: err.message || 'Falha ao configurar notificações.' });
     } finally {
       setPushLoading(false);
+    }
+  }
+
+  /**
+   * Teste de notificação: envia um push só para os aparelhos DESTE
+   * responsável. Não grava nada em presença nem envolve aluno — o pai
+   * confirma o canal sem sujar nenhum dado real.
+   */
+  async function handleTestNotification() {
+    setTestLoading(true);
+    try {
+      const res = await fetch('/api/notifications/test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.sent > 0) {
+        toast({
+          variant: 'success',
+          title: 'Notificação de teste enviada!',
+          description: `Confira a barra de notificações (${data.sent} aparelho${data.sent > 1 ? 's' : ''}).`,
+        });
+      } else {
+        toast({ variant: 'warning', title: 'Não foi possível enviar', description: data.error || 'Tente novamente.' });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro de conexão' });
+    } finally {
+      setTestLoading(false);
     }
   }
 
@@ -216,6 +243,18 @@ export default function ProfilePage() {
             <p className="text-xs text-muted-foreground mt-2 px-1">
               Ative as notificações para receber alertas em tempo real quando seu filho entrar ou sair da escola.
             </p>
+          )}
+
+          {pushEnabled && (
+            <button
+              type="button"
+              onClick={handleTestNotification}
+              disabled={testLoading}
+              className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium hover:bg-accent/40 active:scale-[0.99] transition-all disabled:opacity-50"
+            >
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              {testLoading ? 'Enviando…' : 'Enviar notificação de teste'}
+            </button>
           )}
         </div>
 

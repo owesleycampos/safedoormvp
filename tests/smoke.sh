@@ -324,6 +324,26 @@ check "consentimento e biometria limpos, reconhecimento off" "true|false" \
 sql0 "DELETE FROM \"StudentParent\" WHERE \"studentId\"='$MARIA' AND \"parentId\"='$PARENT1';" >/dev/null
 sql0 "UPDATE \"Student\" SET \"recognitionEnabled\"=true WHERE id='$JOAO';" >/dev/null
 
+echo "── Notificação de teste (não toca em presença) ──"
+
+check "sem sessão → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/notifications/test")"
+check "admin (não é responsável) → 401" "401" \
+  "$(curl -s -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/api/notifications/test")"
+
+# como responsável sem inscrição → 409 explicando; e NADA gravado em presença
+JARP=$(mktemp)
+CSRFP=$(curl -s -c "$JARP" "$BASE/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+curl -s -b "$JARP" -c "$JARP" -X POST "$BASE/api/auth/callback/credentials" \
+  -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFP" \
+  --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
+EVENTOS_ANTES=$(sql0 'SELECT count(*) FROM "AttendanceEvent"')
+check "responsável sem aparelho inscrito → 409" "409" \
+  "$(curl -s -b "$JARP" -o /dev/null -w '%{http_code}' -X POST "$BASE/api/notifications/test")"
+check "nenhum evento de presença foi criado" "$EVENTOS_ANTES" \
+  "$(sql0 'SELECT count(*) FROM "AttendanceEvent"')"
+rm -f "$JARP"
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

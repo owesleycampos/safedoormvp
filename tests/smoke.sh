@@ -11,7 +11,7 @@ sql0() { docker exec safedoor-test-db psql -U postgres -d safedoor_test -tAc "$1
 # Limpa os dados transacionais para a suíte ser repetível. Sem isto, uma
 # segunda execução vê os eventos da primeira e o dedup responde 200 (updated)
 # onde o teste espera 201 (created) — falha do teste, não do sistema.
-sql0 'TRUNCATE "AttendanceEvent", "Invoice", "WebhookEvent", "AuditLog" CASCADE;' >/dev/null
+sql0 'TRUNCATE "AttendanceEvent", "AbsenceAlert", "Invoice", "WebhookEvent", "AuditLog" CASCADE;' >/dev/null
 sql0 "UPDATE \"Subscription\" SET status='ACTIVE';" >/dev/null 2>&1
 JOAO=$(sql0 "SELECT id FROM \"Student\" WHERE name LIKE 'João%'")
 MARIA=$(sql0 "SELECT id FROM \"Student\" WHERE name LIKE 'Maria%'")
@@ -280,6 +280,49 @@ else
   check "evento carrega a foto no banco" "1" \
     "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"photoUrl\" LIKE 'https://%'")"
 fi
+
+echo "── Crons: aviso de ausência, digest e saúde de dispositivos ──"
+
+CRON="x-cron-secret: cron-test-secret"
+SIM="2026-08-26T12:00:00Z"   # 09:00 BRT de uma quarta — turnos da manhã já fechados
+
+check "cron sem segredo → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/cron/absence-alerts")"
+check "device-health com segredo → 200" "200" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "$CRON" "$BASE/api/cron/device-health")"
+
+# Cenário: João presente no dia simulado; Maria ausente e COM responsável
+PARENT1=$(sql0 "SELECT id FROM \"Parent\" LIMIT 1")
+sql0 "INSERT INTO \"StudentParent\" (\"studentId\",\"parentId\",relationship,\"isPrimary\") VALUES ('$MARIA','$PARENT1','Responsável',false) ON CONFLICT DO NOTHING;" >/dev/null
+BODY_SIM=$(printf '{"studentId":"%s","eventType":"ENTRY","confidence":0.97,"timestamp":"2026-08-26T07:20:00-03:00"}' "$JOAO")
+curl -s -o /dev/null -X POST "$BASE/api/events/checkin-checkout" -H "Content-Type: application/json" -H "x-device-api-key: $KEY_A" -d "$BODY_SIM"
+
+check "ausência (dryRun): Maria é candidata" "Maria Souza" \
+  "$(curl -s -H "$CRON" "$BASE/api/cron/absence-alerts?dryRun=1&now=$SIM" | python3 -c 'import json,sys;c=json.load(sys.stdin)["candidates"];print(c[0]["name"] if c else "ninguem")')"
+check "ausência: envia 1 aviso" "1" \
+  "$(curl -s -H "$CRON" "$BASE/api/cron/absence-alerts?now=$SIM" | python3 -c 'import json,sys;print(json.load(sys.stdin)["sent"])')"
+check "ausência: idempotente (2ª rodada envia 0)" "0" \
+  "$(curl -s -H "$CRON" "$BASE/api/cron/absence-alerts?now=$SIM" | python3 -c 'import json,sys;print(json.load(sys.stdin)["sent"])')"
+check "alerta registrado com o dia local correto" "2026-08-26" \
+  "$(sql0 "SELECT \"dayKey\" FROM \"AbsenceAlert\" WHERE \"studentId\"='$MARIA'")"
+
+check "digest (dryRun): contabiliza presentes e ausentes" "1|1" \
+  "$(curl -s -H "$CRON" "$BASE/api/cron/daily-digest?dryRun=1&now=$SIM" | python3 -c 'import json,sys
+d=json.load(sys.stdin)["digests"]
+print(str(d[0]["present"])+"|"+str(d[0]["absent"]) if d else "vazio")')"
+
+# Consentimento biométrico (LGPD)
+BODY_CONS='{"authorizedBy":"Maria Silva Santos"}'
+check "registrar consentimento em papel → 200" "200" \
+  "$(api POST "/api/students/$JOAO/consent" "$BODY_CONS")"
+check "consentimento gravado" "t" \
+  "$(sql0 "SELECT \"biometricConsentAt\" IS NOT NULL FROM \"Student\" WHERE id='$JOAO'")"
+check "revogar e excluir biometria → 200" "200" "$(api DELETE "/api/students/$JOAO/consent")"
+check "consentimento e biometria limpos, reconhecimento off" "true|false" \
+  "$(sql0 "SELECT (\"biometricConsentAt\" IS NULL)||'|'||\"recognitionEnabled\" FROM \"Student\" WHERE id='$JOAO'")"
+
+sql0 "DELETE FROM \"StudentParent\" WHERE \"studentId\"='$MARIA' AND \"parentId\"='$PARENT1';" >/dev/null
+sql0 "UPDATE \"Student\" SET \"recognitionEnabled\"=true WHERE id='$JOAO';" >/dev/null
 
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"

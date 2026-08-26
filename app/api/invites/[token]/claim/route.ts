@@ -22,7 +22,7 @@ export async function POST(
   }
 
   const body = await req.json();
-  const { studentId, birthDate, parentName, phone, email, password } = body;
+  const { studentId, birthDate, parentName, phone, email, password, biometricConsent } = body;
 
   if (!studentId || !birthDate || !parentName) {
     return NextResponse.json({ error: 'Dados incompletos.' }, { status: 400 });
@@ -175,6 +175,16 @@ export async function POST(
       message: `${student.name} já está vinculado(a) à sua conta.`,
       student: { name: student.name, className: student.class?.name },
     });
+  }
+
+  // LGPD: o convite é o momento natural de colher o consentimento para o
+  // uso das fotos no reconhecimento facial — quem autoriza é exatamente o
+  // responsável que acabou de provar o vínculo pela data de nascimento.
+  if (biometricConsent === true) {
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { biometricConsentAt: new Date(), biometricConsentName: parentName },
+    }).catch(() => {});
   }
 
   // Create link

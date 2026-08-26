@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
-  LayoutDashboard, School, CreditCard, Cloud,
+  LayoutDashboard, School, CreditCard,
   ScrollText, Settings, LogOut, ChevronRight, Shield, Webhook,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
@@ -19,7 +19,8 @@ const nav = [
   { href: '/odono',            icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/odono/schools',     icon: School,          label: 'Escolas' },
   { href: '/odono/billing',     icon: CreditCard,      label: 'Faturamento' },
-  { href: '/odono/aws',         icon: Cloud,           label: 'AWS Contas' },
+  // 'AWS Contas' congelada: gestão de contingência multi-conta para uma
+  // escala inexistente, com medidores sem fonte de dados ($0.00 fixo).
   { href: '/odono/webhooks',    icon: Webhook,         label: 'Webhooks' },
   { href: '/odono/logs',        icon: ScrollText,      label: 'Logs' },
 ];

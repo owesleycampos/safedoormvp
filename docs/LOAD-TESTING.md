@@ -101,9 +101,41 @@ Suba os VUs no script (`options.stages`) para achar o ponto de ruptura.
 
 ### 6. Limpe o staging
 
+Algumas FKs (SchoolSettings, Class, Student, Device) não têm `onDelete: Cascade`,
+então apague os dependentes antes da escola:
+
 ```sql
 -- no banco de staging
-DELETE FROM "School" WHERE name LIKE 'LOADTEST %';  -- cascata remove o resto
+DO $$
+DECLARE ids text[];
+BEGIN
+  SELECT array_agg(id) INTO ids FROM "School" WHERE name LIKE 'LOADTEST %';
+  IF ids IS NULL THEN RETURN; END IF;
+  DELETE FROM "AttendanceEvent" WHERE "studentId" IN (SELECT id FROM "Student" WHERE "schoolId" = ANY(ids));
+  DELETE FROM "Student"          WHERE "schoolId" = ANY(ids);
+  DELETE FROM "Device"           WHERE "schoolId" = ANY(ids);
+  DELETE FROM "Class"            WHERE "schoolId" = ANY(ids);
+  DELETE FROM "SchoolSettings"   WHERE "schoolId" = ANY(ids);
+  DELETE FROM "Subscription"     WHERE "schoolId" = ANY(ids);
+  DELETE FROM "RecognitionUsage" WHERE "schoolId" = ANY(ids);
+  DELETE FROM "CronRun"          WHERE "schoolId" = ANY(ids);
+  DELETE FROM "School"           WHERE id = ANY(ids);
+END $$;
+```
+
+### Validar o harness localmente antes do staging
+
+Prova a carga HTTP sustentada contra o dev server (sem k6), útil para caçar 5xx
+antes de gastar com staging:
+
+```bash
+# 1) dev server na 3010 (ver seção do dev server)
+# 2) semeia poucas escolas no banco de TESTE e gera fixtures
+DATABASE_URL="postgresql://postgres:testpass@localhost:5544/safedoor_test" \
+SCHOOLS=5 STUDENTS_PER_SCHOOL=10 npx tsx tests/load/seed-load.ts
+# 3) dispara carga em degraus (conc 10→25→50→100) e mede p50/p95/p99 + 5xx
+BASE=http://localhost:3010 npx tsx tests/load/local-load.ts
+# 4) limpe (mesmo bloco DO da seção 6, no banco de teste)
 ```
 
 ---

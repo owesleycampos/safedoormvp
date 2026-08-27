@@ -92,17 +92,33 @@ export async function POST(req: NextRequest) {
 
   const collectionId = schoolId;
 
+  // ── Chamada à AWS ────────────────────────────────────────────────────────
+  // O release do slot vale SÓ para falha da AWS (não houve cobrança). Se a AWS
+  // responde mas o trabalho POSTERIOR no banco falha, a chamada já foi cobrada
+  // — devolver o slot aí faria a contagem "vazar pra baixo" e a escola furar o
+  // teto. Por isso a busca fica no seu próprio try; o banco vem depois, fora
+  // dele.
+  let faceMatches: Awaited<ReturnType<typeof rekognition.searchFacesByImage>>['matches'];
+  let box: Awaited<ReturnType<typeof rekognition.searchFacesByImage>>['box'];
   try {
-    // ── Search for matching faces ──────────────────────────────────────────
-    const { matches: faceMatches, box } = await rekognition.searchFacesByImage(
-      collectionId, imageBytes, faceMatchThreshold
+    const res = await rekognition.searchFacesByImage(collectionId, imageBytes, faceMatchThreshold);
+    faceMatches = res.matches;
+    box = res.box;
+  } catch (err: any) {
+    console.error('[recognize] AWS Rekognition error:', err);
+    await releaseRecognition(schoolId, auth.timezone);
+    return NextResponse.json(
+      { error: err.message || 'Erro ao reconhecer via AWS Rekognition.' },
+      { status: 500 }
     );
+  }
 
-    if (faceMatches.length === 0) {
-      return NextResponse.json({ matches: [], faceCount: 0 });
-    }
+  if (faceMatches.length === 0) {
+    return NextResponse.json({ matches: [], faceCount: 0 });
+  }
 
-    // ── Look up best match in DB ───────────────────────────────────────────
+  // ── Look up best match in DB (AWS já cobrou: NUNCA devolve o slot aqui) ────
+  try {
     const bestMatch = faceMatches[0];
     const student = await prisma.student.findFirst({
       where: {
@@ -135,15 +151,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ matches: [], faceCount: 0 });
   } catch (err: any) {
-    console.error('[recognize] AWS Rekognition error:', err);
-    // A chamada falhou → não houve cobrança da AWS. Devolve o slot reservado
-    // para o erro não corroer a cota mensal da escola (a câmera reenvia frames
-    // a cada 2s; uma sequência de falhas trancava o reconhecimento sem um
-    // único match cobrado).
-    await releaseRecognition(schoolId, auth.timezone);
-    return NextResponse.json(
-      { error: err.message || 'Erro ao reconhecer via AWS Rekognition.' },
-      { status: 500 }
-    );
+    console.error('[recognize] DB lookup error (slot NÃO devolvido, AWS já cobrou):', err);
+    return NextResponse.json({ error: 'Erro ao consultar o aluno.' }, { status: 500 });
   }
 }

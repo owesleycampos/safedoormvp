@@ -134,7 +134,7 @@ async function getChildren(userId: string) {
       weeklyPercentage,
       perfectMonth,
     };
-  }) || [];
+  });
 }
 
 export default async function ChildrenPage() {

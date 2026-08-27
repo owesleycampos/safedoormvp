@@ -68,29 +68,36 @@ export async function GET(req: NextRequest) {
     if (isWeekendDateStr(day.dateStr)) continue;
     const nowMin = localMinutes(now, tz);
 
-    // Turmas cujo turno já passou do limite + tolerância neste momento
-    const dueClassIds = school.classes
-      .filter((c) => {
-        const schedule = resolveSchedule(c.shift, school.settings ?? null);
-        if (!schedule) return false;
-        return nowMin >= timeToMinutes(schedule.entryLimit) + TOLERANCE_MIN;
-      })
-      .map((c) => c.id);
-    if (dueClassIds.length === 0) continue;
+    // Turmas cujo turno já passou do limite + tolerância, AGRUPADAS por turno.
+    // O gate de "o turno funcionou hoje" precisa ser POR TURNO: senão, num dia
+    // em que só a manhã teve aula, as entradas da manhã satisfaziam um gate de
+    // escola inteira e todo aluno da tarde recebia falso "ainda não chegou".
+    const dueByShift = new Map<string, string[]>();
+    for (const c of school.classes) {
+      const schedule = resolveSchedule(c.shift, school.settings ?? null);
+      if (!schedule) continue;
+      if (nowMin < timeToMinutes(schedule.entryLimit) + TOLERANCE_MIN) continue;
+      const key = c.shift || 'GERAL';
+      const arr = dueByShift.get(key) || [];
+      arr.push(c.id);
+      dueByShift.set(key, arr);
+    }
+    if (dueByShift.size === 0) continue;
 
-    // Ausência só faz sentido num dia em que o TURNO devido funcionou: se
-    // ninguém das turmas devidas entrou (feriado só da manhã, p.ex.), não
-    // alarma. Guardar por escola-inteira gerava falso "não chegou" para a
-    // manhã num dia em que só a tarde teve aula.
-    const anyEntryDueShift = await prisma.attendanceEvent.findFirst({
-      where: {
-        student: { schoolId: school.id, classId: { in: dueClassIds } },
-        eventType: 'ENTRY',
-        timestamp: { gte: day.start, lt: day.end },
-      },
-      select: { id: true },
-    });
-    if (!anyEntryDueShift) continue;
+    // Só os turnos que de fato operaram hoje (pelo menos uma entrada no turno).
+    const dueClassIds: string[] = [];
+    for (const [, classIds] of Array.from(dueByShift.entries())) {
+      const anyEntry = await prisma.attendanceEvent.findFirst({
+        where: {
+          student: { schoolId: school.id, classId: { in: classIds } },
+          eventType: 'ENTRY',
+          timestamp: { gte: day.start, lt: day.end },
+        },
+        select: { id: true },
+      });
+      if (anyEntry) dueClassIds.push(...classIds);
+    }
+    if (dueClassIds.length === 0) continue;
 
     const absent = await prisma.student.findMany({
       where: {

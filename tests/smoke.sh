@@ -433,6 +433,10 @@ curl -s -b "$JARF" -c "$JARF" -X POST "$BASE/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF" \
   --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
 SP_ST=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
+# Matrícula anterior à janela de entradas: a frequência tem PISO na matrícula
+# (aluno não é cobrado por dias antes de existir na escola). Sem isto o fixture
+# ficava irreal — aluno "matriculado hoje" com presença backdatada.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP_ST';" >/dev/null
 sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('freq-sm2','$SP_ST','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
 FREQ=$(curl -s -b "$JARF" "$BASE/api/parent/frequency?studentId=$SP_ST")
 echo "$FREQ" > /tmp/freq.json
@@ -522,6 +526,8 @@ curl -s -b "$JARF2" -c "$JARF2" -X POST "$BASE/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF2" \
   --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
 SP2=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
+# Matrícula anterior à janela (piso da frequência). Ver bloco anterior.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP2';" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr.json
 check "sem dia letivo → rate null (não 0%/alarme falso)" "true" \
   "$(python3 -c "import json;d=json.load(open('/tmp/fr.json'));print('true' if d['year']['rate'] is None and d['year']['schoolDays']==0 else 'false')")"
@@ -534,6 +540,16 @@ check "dias letivos = dias com entrada da escola (2)" "2" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['schoolDays'])")"
 check "aluno presente em 1 dos 2 dias letivos = 50%" "50" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['rate'])")"
+
+# PISO na matrícula: matriculado em 25/08 (09:00 BRT) não é cobrado pelo dia
+# letivo de 24/08. O horário é meio-dia UTC de propósito: meia-noite UTC cairia
+# em 24/08 no fuso de SP e o piso (data LOCAL) não isolaria o dia.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-08-25 12:00:00+00' WHERE id='$SP2';" >/dev/null
+curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr3.json
+check "piso na matrícula: 24/08 (pré-matrícula) não conta → 1 dia letivo" "1" \
+  "$(python3 -c "import json;print(json.load(open('/tmp/fr3.json'))['year']['schoolDays'])")"
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP2';" >/dev/null
+
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('fr-a','fr-b');" >/dev/null
 
 # PUT de aluno com classId de OUTRA escola → 400 (não corrompe)

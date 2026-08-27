@@ -24,7 +24,7 @@ async function getChildren(userId: string) {
           student: {
             include: {
               class: { select: { name: true } },
-              school: { select: { name: true, settings: { select: { timezone: true } } } },
+              school: { select: { id: true, name: true, settings: { select: { timezone: true } } } },
               attendance: {
                 where: {
                   timestamp: { gte: fetchStart },
@@ -38,10 +38,40 @@ async function getChildren(userId: string) {
     },
   });
 
-  return parent?.students.map((sp) => {
+  if (!parent) return [];
+
+  // Dias em que a ESCOLA operou (qualquer aluno entrou), por escola. É a mesma
+  // definição de "dia letivo" da tela de frequência: usar seg–sex fixo fazia um
+  // feriado no meio da semana derrubar o % da semana e tirar a "Presença
+  // Exemplar" de uma criança com frequência de fato perfeita.
+  const schoolIds = Array.from(new Set(parent.students.map((sp) => sp.student.school?.id).filter(Boolean))) as string[];
+  const schoolEntries = schoolIds.length
+    ? await prisma.attendanceEvent.findMany({
+        where: {
+          student: { schoolId: { in: schoolIds } },
+          eventType: 'ENTRY',
+          timestamp: { gte: fetchStart },
+        },
+        select: { timestamp: true, student: { select: { schoolId: true } } },
+      })
+    : [];
+  const schoolDaysBySchool = new Map<string, Set<string>>();
+  for (const e of schoolEntries) {
+    const sid = e.student.schoolId;
+    const tzS = parent.students.find((sp) => sp.student.school?.id === sid)?.student.school?.settings?.timezone || DEFAULT_TIMEZONE;
+    const set = schoolDaysBySchool.get(sid) || new Set<string>();
+    set.add(localDateStr(e.timestamp, tzS));
+    schoolDaysBySchool.set(sid, set);
+  }
+
+  return parent.students.map((sp) => {
     const tz = sp.student.school?.settings?.timezone || DEFAULT_TIMEZONE;
     const todayStr = localDateStr(now, tz);
     const today = dayRangeForDateStr(todayStr, tz);
+    const schoolDays = schoolDaysBySchool.get(sp.student.school?.id || '') || new Set<string>();
+    // Um dia é "letivo" para o card se a escola operou nele. Fallback: dia útil
+    // (para uma escola nova sem histórico ainda).
+    const isSchoolDay = (d: string) => (schoolDays.size > 0 ? schoolDays.has(d) : !isWeekendDateStr(d));
 
     const allEvents = sp.student.attendance;
     const todayEvents = allEvents.filter(
@@ -63,6 +93,8 @@ async function getChildren(userId: string) {
     const weeklyAttendance = weekDays.map((label, i) => {
       const dateStr = addDaysStr(mondayStr, i);
       if (dateStr > todayStr) return { label, present: null }; // dia futuro
+      // Dia em que a escola não operou (feriado): neutro, não conta como falta.
+      if (!isSchoolDay(dateStr)) return { label, present: null };
       return { label, present: attendedDays.has(dateStr) };
     });
 
@@ -86,7 +118,7 @@ async function getChildren(userId: string) {
     const monthPrefix = todayStr.slice(0, 7);
     const schoolDaysThisMonth: string[] = [];
     for (let d = `${monthPrefix}-01`; d <= todayStr; d = addDaysStr(d, 1)) {
-      if (isWeekendDateStr(d)) continue;
+      if (!isSchoolDay(d)) continue; // dias em que a escola realmente operou
       if (d === todayStr && !attendedDays.has(d)) continue;
       schoolDaysThisMonth.push(d);
     }

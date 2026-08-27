@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import * as rekognition from '@/lib/rekognition';
 import { requireActiveSchool } from '@/lib/require-active-school';
-import { getRecognitionGate, reserveRecognition } from '@/lib/recognition-usage';
+import { getRecognitionGate, reserveRecognition, releaseRecognition } from '@/lib/recognition-usage';
+import { validateImageUpload } from '@/lib/upload-guard';
 
 /**
  * GET /api/camera/recognize
@@ -62,15 +63,19 @@ export async function POST(req: NextRequest) {
   }
   const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(gate.minConfidence * 100)));
 
-  // ── Parse image from FormData ──────────────────────────────────────────────
+  // ── Parse + valida a imagem ANTES de reservar ─────────────────────────────
+  // Sem isso, a rota da câmera (ao contrário das outras) aceitava qualquer
+  // arrayBuffer sem limite de tamanho nem checagem de tipo — um POST de
+  // centenas de MB derrubava a função e ainda gastava um slot de AWS.
   let imageBytes: Buffer;
   try {
     const formData = await req.formData();
-    const file = formData.get('image') as File | null;
-    if (!file) {
-      return NextResponse.json({ error: 'Campo "image" não encontrado no FormData.' }, { status: 400 });
+    const file = formData.get('image');
+    const validated = await validateImageUpload(file);
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: validated.status });
     }
-    imageBytes = Buffer.from(await file.arrayBuffer());
+    imageBytes = validated.bytes;
   } catch {
     return NextResponse.json({ error: 'Erro ao processar imagem.' }, { status: 400 });
   }
@@ -131,6 +136,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ matches: [], faceCount: 0 });
   } catch (err: any) {
     console.error('[recognize] AWS Rekognition error:', err);
+    // A chamada falhou → não houve cobrança da AWS. Devolve o slot reservado
+    // para o erro não corroer a cota mensal da escola (a câmera reenvia frames
+    // a cada 2s; uma sequência de falhas trancava o reconhecimento sem um
+    // único match cobrado).
+    await releaseRecognition(schoolId, auth.timezone);
     return NextResponse.json(
       { error: err.message || 'Erro ao reconhecer via AWS Rekognition.' },
       { status: 500 }

@@ -95,3 +95,17 @@ export async function reserveRecognition(schoolId: string, cap: number, tz?: str
   });
   return true;
 }
+
+/**
+ * Devolve UMA reserva quando a chamada à AWS NÃO chegou a acontecer (erro de
+ * rede, imagem inválida, exceção) — nesse caso não houve cobrança, então o slot
+ * reservado antes da chamada tem que voltar. Nunca desce abaixo de 0. Não deve
+ * ser chamada em "nenhum rosto encontrado": aí a AWS foi chamada e cobrada.
+ */
+export async function releaseRecognition(schoolId: string, tz?: string | null): Promise<void> {
+  const monthKey = monthKeyFor(tz);
+  await prisma.recognitionUsage.updateMany({
+    where: { schoolId, monthKey, count: { gt: 0 } },
+    data: { count: { decrement: 1 } },
+  }).catch(() => {});
+}

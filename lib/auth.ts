@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
+import { isImpersonationExpired } from '@/lib/impersonation';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
@@ -71,9 +72,18 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token && session.user) {
+        // Impersonação tem prazo ABSOLUTO (impExp). Como a sessão JWT é
+        // rolante e o NextAuth reescreve o cookie com o maxAge global (7 dias)
+        // a cada request, o teto de 1h só vale se for verificado aqui:
+        // passado o prazo, a sessão impersonada deixa de autorizar (id/role em
+        // branco → os guards devolvem 401) e o dono volta pelo banner.
+        if (isImpersonationExpired(token as any, Date.now())) {
+          return session;
+        }
         (session.user as any).id = token.sub;
         (session.user as any).role = token.role;
         (session.user as any).schoolId = token.schoolId;
+        (session.user as any).impersonatedBy = (token as any).impersonatedBy ?? null;
       }
       return session;
     },

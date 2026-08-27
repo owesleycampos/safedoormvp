@@ -16,8 +16,6 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
     "@aws-sdk/client-rekognition": "^3.1023.0",
-    "@neondatabase/serverless": "^0.9.5",
-    "@prisma/adapter-neon": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-avatar": "^1.1.1",
     "@radix-ui/react-dialog": "^1.1.2",
@@ -48,7 +46,6 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.0.3",
     "web-push": "^3.6.7",
-    "ws": "^8.21.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -58,7 +55,6 @@
     "@types/react-dom": "^18.3.1",
     "@types/uuid": "^10.0.0",
     "@types/web-push": "^3.6.3",
-    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.16",

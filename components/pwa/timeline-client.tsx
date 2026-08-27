@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 import { LogIn, LogOut, Clock, ChevronLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -102,12 +104,19 @@ export function TimelineClient({ children, events, selectedStudentId, tz = 'Amer
             <AvatarFallback className="text-sm font-semibold bg-secondary">{getInitials(selected.name)}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">{selected.name}</p>
-            <p className="text-xs text-muted-foreground">{selected.class?.name}</p>
+            <p className="text-sm font-semibold truncate">{selected.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{selected.class?.name}</p>
           </div>
-          <PeriodPicker value={period} onChange={applyPeriod} />
         </div>
       )}
+
+      {/* Frequência por período (bimestre, semestre, ano) */}
+      {selectedStudentId && <FrequencySummary studentId={selectedStudentId} />}
+
+      {/* Seletor de período — linha própria, largura total */}
+      <div className="px-4 mt-4">
+        <PeriodPicker value={period} onChange={applyPeriod} />
+      </div>
 
       {/* Events */}
       <div className="flex-1 px-4 py-4 pb-6">
@@ -204,6 +213,60 @@ function EventCard({ event }: { event: any }) {
           </EventPhoto>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Média de frequência do aluno por bimestre, semestre e ano letivo. */
+function FrequencySummary({ studentId }: { studentId: string }) {
+  const [data, setData] = useState<any>(null);
+  useEffect(() => {
+    setData(null);
+    fetch(`/api/parent/frequency?studentId=${studentId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setData)
+      .catch(() => {});
+  }, [studentId]);
+
+  const items = data
+    ? [
+        { key: 'bimester', title: 'Bimestre' },
+        { key: 'semester', title: 'Semestre' },
+        { key: 'year', title: 'Ano' },
+      ]
+    : [];
+
+  return (
+    <div className="mx-4 mt-3 rounded-md border border-border bg-card p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+        Frequência
+      </p>
+      {!data ? (
+        <div className="grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {items.map((it) => {
+            const d = data[it.key];
+            const rate = d?.rate ?? 0;
+            // Abaixo de 75% é o limite legal (LDB) — sinaliza discretamente.
+            const low = rate < 75;
+            return (
+              <div key={it.key}>
+                <p className={cn('text-xl font-semibold tabular-nums', low && 'text-warning')}>{rate}%</p>
+                <p className="text-[11px] font-medium">{it.title}</p>
+                <p className="text-[10px] text-muted-foreground">{d?.present ?? 0}/{d?.schoolDays ?? 0} dias</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {data?.year?.label && (
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Presença em dias letivos (seg a sex). {data.year.label}.
+        </p>
+      )}
     </div>
   );
 }

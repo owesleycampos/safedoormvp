@@ -424,6 +424,26 @@ check "reimportar não duplica vínculos" "2" \
 sql0 "DELETE FROM \"Student\" WHERE name IN ('Aluno Massa Um','Aluno Massa Dois');" >/dev/null 2>&1
 sql0 "DELETE FROM \"User\" WHERE email IN ('massa1@teste.com','massa2@teste.com');" >/dev/null 2>&1
 
+echo "── Frequência do responsável (bimestre/semestre/ano) ──"
+
+# sessão de responsável (mae) já criada como $JARP em bloco anterior? recria por garantia
+JARF=$(mktemp)
+CSRFF=$(curl -s -c "$JARF" "$BASE/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+curl -s -b "$JARF" -c "$JARF" -X POST "$BASE/api/auth/callback/credentials" \
+  -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF" \
+  --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
+SP_ST=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('freq-sm2','$SP_ST','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+FREQ=$(curl -s -b "$JARF" "$BASE/api/parent/frequency?studentId=$SP_ST")
+echo "$FREQ" > /tmp/freq.json
+check "frequência retorna bimestre/semestre/ano" "true" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('true' if all(k in d for k in ['bimester','semester','year']) else 'false')")"
+check "presença conta dias úteis com entrada (>=2)" "ok" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('ok' if d['bimester']['present']>=2 else 'nao')")"
+check "responsável não vê aluno de fora → 404" "404" \
+  "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

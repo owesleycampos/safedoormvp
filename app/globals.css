@@ -257,3 +257,8 @@
      barra de abas do responsável para não ficar coberta. */
   body.impersonating { padding-bottom: 52px; }
   body.impersonating .tab-bar { bottom: 52px; }
+
+  /* Esconde a barra de rolagem em controles que rolam na horizontal
+     (seletor de período no celular), sem perder a rolagem por gesto. */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }

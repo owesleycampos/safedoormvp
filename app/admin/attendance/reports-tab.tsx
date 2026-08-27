@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { PeriodPicker, type PeriodValue } from '@/components/shared/period-picker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StudentRow {
@@ -235,9 +236,11 @@ export default function ReportsTab() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [preset, setPreset] = useState<Preset>('7d');
-  const [customFrom, setCustomFrom] = useState(toDateStr(addDays(today, -29)));
-  const [customTo, setCustomTo] = useState(toDateStr(today));
+  const [period, setPeriod] = useState<PeriodValue>(() => ({
+    preset: '7d',
+    from: toDateStr(addDays(today, -6)),
+    to: toDateStr(today),
+  }));
   const [classFilter, setClassFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -258,11 +261,8 @@ export default function ReportsTab() {
       .catch(() => {});
   }, []);
 
-  const { from, to } = useMemo(() => {
-    if (preset === '7d') return { from: toDateStr(addDays(today, -6)), to: toDateStr(today) };
-    if (preset === '30d') return { from: toDateStr(addDays(today, -29)), to: toDateStr(today) };
-    return { from: customFrom, to: customTo };
-  }, [preset, customFrom, customTo]);
+  const from = period.from;
+  const to = period.to;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -385,23 +385,8 @@ export default function ReportsTab() {
       {/* Toolbar */}
       <Card className="p-3 md:p-4">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Period pills */}
-          <div className="flex items-center gap-1">
-            {(['7d', '30d', 'custom'] as Preset[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPreset(p)}
-                className={cn(
-                  'h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors',
-                  preset === p
-                    ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : 'Personalizado'}
-              </button>
-            ))}
-          </div>
+          {/* Seletor de período unificado (mesmo do dashboard) */}
+          <PeriodPicker value={period} onChange={setPeriod} />
 
           <div className="flex-1" />
 
@@ -445,30 +430,6 @@ export default function ReportsTab() {
             />
           </div>
         </div>
-
-        {preset === 'custom' && (
-          <div className="pt-3 mt-3 border-t border-border flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">De</label>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">Até</label>
-              <input
-                type="date"
-                value={customTo}
-                min={customFrom}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-          </div>
-        )}
       </Card>
 
       {/* ── Frequency Table ──────────────────────────────────────────────────── */}

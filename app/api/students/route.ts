@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { checkStudentCap } from '@/lib/plan-limits';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 export async function GET(req: NextRequest) {
   // ADMIN apenas: a lista traz e-mails de responsáveis e flags biométricas.
@@ -50,13 +51,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
-  const schoolId = (session.user as any)?.schoolId;
-  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
+  // requireActiveSchool: escola suspensa/trial-expirada não cria alunos
+  // (bypass de cobrança pela rota legada).
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
+  const { schoolId } = auth;
 
   const capError = await checkStudentCap(schoolId, 1);
   if (capError) return NextResponse.json({ error: capError }, { status: 403 });
@@ -99,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.auditLog.create({
       data: {
-        userId: (session.user as any)?.id,
+        userId: (auth.session.user as any)?.id,
         action: 'STUDENT_CREATED',
         entityType: 'Student',
         entityId: student.id,

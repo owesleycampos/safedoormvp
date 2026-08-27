@@ -40,13 +40,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Não foi possível concluir o cadastro com estes dados.' }, { status: 409 });
   }
 
-  const platform = await prisma.platformSettings.findFirst({ select: { trialDays: true } });
+  const platform = await prisma.platformSettings.findFirst({
+    select: { trialDays: true, essencialPrice: true },
+  });
   const trialEnds = new Date();
   trialEnds.setDate(trialEnds.getDate() + (platform?.trialDays ?? 7));
+  const essencialPrice = platform?.essencialPrice ?? 49700;
 
   const passwordHash = await bcrypt.hash(String(password), 12);
 
-  const school = await prisma.school.create({
+  let school;
+  try {
+  school = await prisma.school.create({
     data: {
       name: String(schoolName).trim(),
       city: city || null,
@@ -75,13 +80,21 @@ export async function POST(req: NextRequest) {
         create: {
           plan: 'ESSENCIAL',
           status: 'TRIAL',
-          priceMonthly: 49700,
+          priceMonthly: essencialPrice,
           trialEndsAt: trialEnds,
         },
       },
     },
     select: { id: true },
   });
+  } catch (err: any) {
+    // Corrida de e-mail duplicado: dois cadastros simultâneos passam o
+    // findUnique e o segundo bate na unique — vira 409 amigável, não 500.
+    if (err?.code === 'P2002') {
+      return NextResponse.json({ error: 'Não foi possível concluir o cadastro com estes dados.' }, { status: 409 });
+    }
+    throw err;
+  }
 
   await prisma.auditLog.create({
     data: {

@@ -164,7 +164,8 @@ function ChildCard({ child, index }: { child: any; index: number }) {
   const isPresent = lastEvent?.eventType === 'ENTRY';
   const hasLeft  = lastEvent?.eventType === 'EXIT';
   const weeklyAttendance = child.weeklyAttendance as { label: string; present: boolean | null }[] | undefined;
-  const weeklyPercentage = child.weeklyPercentage as number | undefined;
+  const weeklyPercentage = child.weeklyPercentage as number | null | undefined;
+  const hasWeekly = weeklyPercentage != null;
   const perfectMonth = child.perfectMonth as boolean | undefined;
 
   return (
@@ -239,7 +240,7 @@ function ChildCard({ child, index }: { child: any; index: number }) {
                     Esta semana
                   </span>
                   <span className="text-[10px] font-semibold text-muted-foreground">
-                    {weeklyPercentage}%
+                    {hasWeekly ? `${weeklyPercentage}%` : '—'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">

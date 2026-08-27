@@ -524,10 +524,10 @@ model WebhookEvent {
   processedAt    DateTime?
   createdAt      DateTime  @default(now())
 
+  @@unique([provider, externalId, eventType])
   @@index([provider, eventType])
   @@index([status])
   @@index([schoolId])
-  @@index([externalId])
 }
 
 // ============================================================
@@ -546,4 +546,21 @@ model RecognitionUsage {
 
   @@unique([schoolId, monthKey])
   @@index([monthKey])
+}
+
+// ============================================================
+// CRON RUN (trava de idempotência para jobs diários)
+// ============================================================
+
+// Um job cria a linha (job, dayKey) ANTES de agir; a unique garante que uma
+// segunda execução sobreposta (retry da Vercel, run lento) falhe com P2002
+// e não repita o envio. Substitui o check-then-create no AuditLog.
+model CronRun {
+  id        String   @id @default(cuid())
+  job       String // ex.: "daily-digest"
+  dayKey    String // "YYYY-MM-DD" no fuso da escola
+  schoolId  String?
+  createdAt DateTime @default(now())
+
+  @@unique([job, dayKey, schoolId])
 }

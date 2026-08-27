@@ -72,14 +72,10 @@ export async function GET(req: NextRequest) {
       .map((c) => c.id);
     if (dueClassIds.length === 0) continue;
 
-    // Idempotência por escola+dia
     const digestKey = `${school.id}:${day.dateStr}`;
-    const already = await prisma.auditLog.findFirst({
-      where: { action: 'DIGEST_SENT', entityId: digestKey },
-      select: { id: true },
-    });
-    if (already) continue;
 
+    // Só as ENTRADAS das turmas devidas (não a escola inteira) — senão o
+    // resumo da manhã contava alunos da tarde como "presentes".
     const [students, entries] = await Promise.all([
       prisma.student.findMany({
         where: { schoolId: school.id, isActive: true, classId: { in: dueClassIds } },
@@ -87,7 +83,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.attendanceEvent.findMany({
         where: {
-          student: { schoolId: school.id },
+          student: { schoolId: school.id, classId: { in: dueClassIds } },
           eventType: 'ENTRY',
           timestamp: { gte: day.start, lt: day.end },
         },
@@ -99,6 +95,16 @@ export async function GET(req: NextRequest) {
 
     const presentIds = new Set(entries.map((e) => e.studentId));
     const absentees = students.filter((s) => !presentIds.has(s.id));
+
+    // Idempotência ATÔMICA: reivindica a trava ANTES de enviar. Uma segunda
+    // execução sobreposta falha aqui (P2002) e não reenvia o digest.
+    if (!dryRun) {
+      try {
+        await prisma.cronRun.create({ data: { job: 'daily-digest', dayKey: day.dateStr, schoolId: school.id } });
+      } catch {
+        continue; // já enviado (ou em andamento) para esta escola/dia
+      }
+    }
 
     const names = absentees.slice(0, 8).map((s) => s.name.split(' ').slice(0, 2).join(' '));
     const more = absentees.length > 8 ? ` e mais ${absentees.length - 8}` : '';

@@ -76,24 +76,40 @@ export async function POST(req: NextRequest) {
   // Normalize event
   const normalized = normalizeEvent(provider, payload);
 
-  // Idempotency: a replayed webhook (gateway retry, manual replay) must not
-  // process twice — e.g. marking two invoices as paid for one payment.
+  // Idempotência ATÔMICA: reivindica a linha pela unique (provider,
+  // externalId, eventType) ANTES de processar. Um retry do gateway que
+  // chega enquanto o primeiro ainda processa colide com P2002 aqui, em vez
+  // de passar pelo check-then-create e criar faturas PAID duplicadas.
   if (normalized.externalId) {
-    const duplicate = await prisma.webhookEvent.findFirst({
-      where: {
-        provider,
-        externalId: normalized.externalId,
-        eventType: normalized.eventType,
-        status: 'PROCESSED',
-      },
-      select: { id: true },
-    });
-    if (duplicate) {
-      return NextResponse.json({ received: true, duplicate: true, eventId: duplicate.id });
+    try {
+      const claimed = await prisma.webhookEvent.create({
+        data: {
+          provider,
+          externalId: normalized.externalId,
+          eventType: normalized.eventType,
+          status: 'RECEIVED',
+          payload: rawBody,
+        },
+      });
+      try {
+        await processWebhookEvent(claimed.id, provider, normalized, payload);
+      } catch (err: any) {
+        await prisma.webhookEvent.update({
+          where: { id: claimed.id },
+          data: { status: 'FAILED', errorMessage: err.message || 'Processing error' },
+        });
+        return NextResponse.json({ error: 'Processing error', eventId: claimed.id }, { status: 500 });
+      }
+      return NextResponse.json({ received: true, eventId: claimed.id });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return NextResponse.json({ received: true, duplicate: true });
+      }
+      throw err;
     }
   }
 
-  // Log the raw webhook
+  // Sem externalId não há como deduplicar — segue o fluxo original.
   const event = await logWebhook(
     provider,
     normalized.externalId,

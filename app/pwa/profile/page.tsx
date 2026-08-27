@@ -29,13 +29,14 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ name: '', phone: '' });
 
   // ── Detect push support & current state ────────────────────────────
+  // Sem dependência de `user`: rodar de novo a cada refresh da sessão
+  // sobrescrevia o que o pai estava digitando no formulário.
   useEffect(() => {
-    setForm({ name: user?.name || '', phone: '' });
-    // Carrega o telefone salvo — senão salvar qualquer edição apagava ele.
+    // Carrega nome+telefone salvos uma vez. Se falhar, cai no nome da sessão.
     fetch('/api/parent/profile')
       .then((r) => (r.ok ? r.json() : null))
       .then((p) => {
-        if (p) setForm((f) => ({ name: p.name || f.name, phone: p.phone || '' }));
+        if (p) setForm({ name: p.name || '', phone: p.phone || '' });
       })
       .catch(() => {});
 
@@ -54,7 +55,8 @@ export default function ProfilePage() {
         .then((sub) => setPushEnabled(!!sub))
         .catch(() => {});
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Save profile ────────────────────────────────────────────────────
   async function handleSave() {

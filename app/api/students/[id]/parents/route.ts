@@ -83,14 +83,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 });
     }
 
-    // An existing account with this e-mail is reused instead of rejected —
-    // that is the whole point of "find or create".
+    // Reaproveita a conta pelo e-mail — mas SÓ se o responsável já é desta
+    // escola ou ainda não tem vínculo nenhum. Sem isso, um admin anexava
+    // (e passava a expor este aluno para) o responsável de OUTRA escola, e
+    // ainda dava para sondar quais e-mails existem.
     const existingUser = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, role: true, parent: { select: { id: true } } },
+      select: {
+        id: true, role: true,
+        parent: {
+          select: {
+            id: true,
+            students: { select: { student: { select: { schoolId: true } } } },
+          },
+        },
+      },
     });
 
     if (existingUser?.parent) {
+      const links = existingUser.parent.students;
+      const belongsHere = links.length === 0 || links.some((l) => l.student.schoolId === auth.schoolId);
+      if (!belongsHere) {
+        return NextResponse.json(
+          { error: 'Não foi possível vincular com este e-mail.' },
+          { status: 409 }
+        );
+      }
       parentId = existingUser.parent.id;
     } else if (existingUser) {
       return NextResponse.json(

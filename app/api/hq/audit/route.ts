@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
-  const limit = Math.min(200, parseInt(searchParams.get('limit') || '100'));
+  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100') || 100));
 
   const logs = await prisma.auditLog.findMany({
     where: action ? { action } : undefined,

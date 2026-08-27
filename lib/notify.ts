@@ -85,14 +85,14 @@ export async function notifyGuardians(
       where: { studentId },
       select: { parent: { select: { phone: true } } },
     });
-    let waSent = false;
-    for (const l of links) {
-      const digits = l.parent.phone?.replace(/\D/g, '');
-      if (digits && digits.length >= 10) {
-        waSent = (await sendWhatsApp(digits, `${message.title}\n${message.body}`)) || waSent;
-      }
-    }
-    if (waSent) channels.push('whatsapp');
+    // Envia em paralelo em vez de aguardar um a um (era serial dentro do
+    // loop do cron de ausência, por aluno ausente).
+    const sends = links
+      .map((l) => l.parent.phone?.replace(/\D/g, ''))
+      .filter((d): d is string => !!d && d.length >= 10)
+      .map((digits) => sendWhatsApp(digits, `${message.title}\n${message.body}`));
+    const results = await Promise.all(sends);
+    if (results.some(Boolean)) channels.push('whatsapp');
   }
 
   return { channels };

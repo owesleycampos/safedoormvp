@@ -78,17 +78,19 @@ export async function GET(req: NextRequest) {
       .map((c) => c.id);
     if (dueClassIds.length === 0) continue;
 
-    // Ausência só faz sentido num dia em que a escola está funcionando:
-    // se NINGUÉM entrou hoje (feriado, recesso), não alarma ninguém.
-    const anyEntryToday = await prisma.attendanceEvent.findFirst({
+    // Ausência só faz sentido num dia em que o TURNO devido funcionou: se
+    // ninguém das turmas devidas entrou (feriado só da manhã, p.ex.), não
+    // alarma. Guardar por escola-inteira gerava falso "não chegou" para a
+    // manhã num dia em que só a tarde teve aula.
+    const anyEntryDueShift = await prisma.attendanceEvent.findFirst({
       where: {
-        student: { schoolId: school.id },
+        student: { schoolId: school.id, classId: { in: dueClassIds } },
         eventType: 'ENTRY',
         timestamp: { gte: day.start, lt: day.end },
       },
       select: { id: true },
     });
-    if (!anyEntryToday) continue;
+    if (!anyEntryDueShift) continue;
 
     const absent = await prisma.student.findMany({
       where: {
@@ -127,6 +129,10 @@ export async function GET(req: NextRequest) {
         requireInteraction: true,
         data: { type: 'absence', studentId: s.id },
       });
+      // Mantém a trava sempre (idempotência: não re-alerta amanhã nem em
+      // execução paralela) e registra os canais entregues. channels vazio
+      // fica gravado como 'não entregue' — sem apagar a trava, para não
+      // re-tentar em loop quando o responsável simplesmente não tem push.
       await prisma.absenceAlert.update({
         where: { studentId_dayKey: { studentId: s.id, dayKey: day.dateStr } },
         data: { channels: channels.join(',') || null },

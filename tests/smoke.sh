@@ -444,6 +444,29 @@ check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
 
+echo "── Rodada 'faça tudo': trava do digest, webhook fail-closed, escola suspensa ──"
+
+# webhook fail-closed sem segredo → 401
+check "webhook sem segredo → 401 (fail-closed)" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/webhooks/payments" -H 'Content-Type: application/json' -d '{}')"
+
+# CronRun: segunda criação do mesmo (job,dia,escola) falha (idempotência atômica)
+sql0 "DELETE FROM \"CronRun\" WHERE job='teste-idem';" >/dev/null 2>&1
+R1=$(sql0 "INSERT INTO \"CronRun\" (id, job, \"dayKey\", \"schoolId\", \"createdAt\") VALUES ('cr1','teste-idem','2026-08-26','school-demo-001', now()) RETURNING id" 2>&1)
+R2=$(sql0 "INSERT INTO \"CronRun\" (id, job, \"dayKey\", \"schoolId\", \"createdAt\") VALUES ('cr2','teste-idem','2026-08-26','school-demo-001', now()) RETURNING id" 2>&1)
+check "trava de cron: 2ª execução do mesmo dia é bloqueada" "erro" \
+  "$(echo "$R2" | grep -qi 'duplicate\|unique\|violat' && echo erro || echo passou)"
+sql0 "DELETE FROM \"CronRun\" WHERE job='teste-idem';" >/dev/null 2>&1
+
+# escola suspensa não cria aluno (requireActiveSchool nas rotas legadas)
+ESC_ADM=$(sql0 "SELECT \"schoolId\" FROM \"User\" WHERE email='admin@teste.com'")
+ORIG_STATUS=$(sql0 "SELECT status FROM \"School\" WHERE id='$ESC_ADM'")
+sql0 "UPDATE \"School\" SET status='SUSPENDED' WHERE id='$ESC_ADM'" >/dev/null
+check "escola SUSPENSA não cria turma → 403" "403" \
+  "$(api POST /api/classes '{"name":"Turma Bloqueada"}')"
+sql0 "UPDATE \"School\" SET status='$ORIG_STATUS' WHERE id='$ESC_ADM'" >/dev/null
+sql0 "DELETE FROM \"Class\" WHERE name='Turma Bloqueada'" >/dev/null 2>&1
+
 echo "── Correções da auditoria profunda ──"
 
 # frequência: 0/0 dias letivos quando não há eventos → rate null (mostra "—", não 0%/alarme)

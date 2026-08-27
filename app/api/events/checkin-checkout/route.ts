@@ -7,6 +7,7 @@
  * request is scoped to ONE school and the student must belong to it.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 import { authenticateAgent } from '@/lib/agent-auth';
 import { registerAttendanceEvent } from '@/lib/attendance-service';
 
@@ -39,6 +40,17 @@ export async function POST(req: NextRequest) {
   const timestamp = rawTimestamp ? new Date(rawTimestamp) : new Date();
   if (isNaN(timestamp.getTime())) {
     return NextResponse.json({ error: 'Invalid timestamp' }, { status: 400 });
+  }
+
+  // A pausa de contingência (plataforma ou escola) também vale para o
+  // tablet — o interruptor "pausar reconhecimento" tinha que parar as
+  // câmeras de verdade. Cota/AWS não se aplica (reconhecimento é local).
+  const [platform, schoolSettings] = await Promise.all([
+    prisma.platformSettings.findFirst({ select: { recognitionPaused: true } }),
+    prisma.schoolSettings.findUnique({ where: { schoolId: auth.schoolId }, select: { recognitionPaused: true } }),
+  ]);
+  if (platform?.recognitionPaused || schoolSettings?.recognitionPaused) {
+    return NextResponse.json({ error: 'Reconhecimento pausado.' }, { status: 503 });
   }
 
   try {

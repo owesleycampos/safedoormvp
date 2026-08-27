@@ -75,9 +75,11 @@ async function getChildren(userId: string) {
       return !(dateStr === todayStr && d.present === false);
     });
     const presentDays = countableDays.filter((d) => d.present === true).length;
+    // null quando a semana ainda não teve nenhum dia contável — mostrar
+    // 100% num vazio dava um falso "tudo certo".
     const weeklyPercentage = countableDays.length > 0
       ? Math.round((presentDays / countableDays.length) * 100)
-      : 100;
+      : null;
 
     // Mês perfeito: todos os dias úteis do mês local, exceto o de hoje
     // antes da chegada

@@ -2,15 +2,19 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { SuperAdminDashboardClient } from './dashboard-client';
+import { DEFAULT_TIMEZONE, dayRangeForDateStr, localDateStr, addDaysStr } from '@/lib/timezone';
 
 export default async function SuperAdminDashboard() {
   const session = await getServerSession(authOptions);
   if (!session || (session.user as any)?.role !== 'SUPERADMIN') return null;
 
-  const now = new Date();
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  // Limites de mês no fuso da plataforma (o /api/hq/metrics já usa isso);
+  // com Date local do servidor (UTC) o dashboard divergia perto da virada.
+  const todayStr = localDateStr(new Date(), DEFAULT_TIMEZONE);
+  const thisMonthStart = dayRangeForDateStr(todayStr.slice(0, 7) + '-01', DEFAULT_TIMEZONE).start;
+  const lastMonthFirst = addDaysStr(todayStr.slice(0, 7) + '-01', -1).slice(0, 7) + '-01';
+  const lastMonthStart = dayRangeForDateStr(lastMonthFirst, DEFAULT_TIMEZONE).start;
+  const lastMonthEnd = new Date(thisMonthStart.getTime() - 1);
 
   // Parallel queries for dashboard metrics
   const [

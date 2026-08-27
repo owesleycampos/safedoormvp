@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { checkStudentCap } from '@/lib/plan-limits';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 interface ImportRow {
   name: string;
@@ -22,12 +21,9 @@ interface ImportRow {
  * CSV format: name,birthDate (one student per line, first line = header)
  */
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
-  const schoolId = (session.user as any)?.schoolId as string;
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
+  const schoolId = auth.schoolId;
   const contentType = req.headers.get('content-type') || '';
 
   let classId: string;
@@ -129,11 +125,26 @@ export async function POST(req: NextRequest) {
       try {
         let user = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, role: true, parent: { select: { id: true } } },
+          select: {
+            id: true, role: true,
+            parent: {
+              select: {
+                id: true,
+                students: { select: { student: { select: { schoolId: true } } } },
+              },
+            },
+          },
         });
+        // Reaproveita só responsável desta escola ou sem vínculo — não anexa
+        // (nem expõe) o responsável de outra escola.
+        const foreignParent = user?.parent
+          && user.parent.students.length > 0
+          && !user.parent.students.some((l: any) => l.student.schoolId === schoolId);
         let parentId = user?.parent?.id ?? null;
         if (user && !user.parent && user.role !== 'PARENT') {
           errors.push(`${name}: e-mail ${email} pertence a outro tipo de usuário`);
+        } else if (foreignParent) {
+          errors.push(`${name}: e-mail ${email} já é de responsável de outra escola`);
         } else if (!user) {
           const parent = await prisma.parent.create({
             data: {
@@ -168,7 +179,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
-      userId: (session.user as any)?.id,
+      userId: (auth.session.user as any)?.id,
       action: 'STUDENTS_IMPORTED',
       entityType: 'Student',
       entityId: classId,
@@ -218,8 +229,10 @@ function parseCsv(text: string): ImportRow[] {
 
   // O caminho CSV cru declarava os campos de responsável e jogava todos
   // fora — só nome e data sobreviviam. Mapeia pelo cabeçalho, com o mesmo
-  // vocabulário que o dialog de import auto-detecta.
-  let col = { birth: 1, pName: -1, pEmail: -1, pPhone: -1 };
+  // vocabulário que o dialog de import auto-detecta. Sem cabeçalho NÃO
+  // assume que a coluna 2 é data de nascimento (um "nome,email" jogava o
+  // e-mail no campo data e virava Invalid Date, descartando o responsável).
+  let col = { birth: -1, pName: -1, pEmail: -1, pPhone: -1 };
   if (hasHeader) {
     const headers = split(lines[0]).map((h) => h.toLowerCase());
     const find = (...terms: string[]) =>

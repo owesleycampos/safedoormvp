@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireActiveSchool } from '@/lib/require-active-school';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
-  const schoolId = (session.user as any)?.schoolId;
-  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
+  const auth = await requireActiveSchool();
+  if ('error' in auth) return auth.error;
+  const { schoolId } = auth;
   const devices = await prisma.device.findMany({
     where: { schoolId },
     orderBy: { createdAt: 'asc' },

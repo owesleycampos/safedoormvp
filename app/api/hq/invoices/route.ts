@@ -62,11 +62,13 @@ export async function PATCH(req: NextRequest) {
   // antes a escola continuava SUSPENSA mesmo com a fatura quitada.
   if (status === 'PAID' && invoice.schoolId) {
     await prisma.subscription.updateMany({
-      where: { schoolId: invoice.schoolId, status: 'PAST_DUE' },
+      where: { schoolId: invoice.schoolId, status: { in: ['PAST_DUE', 'CANCELLED'] } },
       data: { status: 'ACTIVE' },
     });
+    // SUSPENDED e CANCELLED voltam a ACTIVE ao quitar (mesma máquina de
+    // estado do webhook, que reativa incondicionalmente ao confirmar).
     await prisma.school.updateMany({
-      where: { id: invoice.schoolId, status: 'SUSPENDED' },
+      where: { id: invoice.schoolId, status: { in: ['SUSPENDED', 'CANCELLED'] } },
       data: { status: 'ACTIVE' },
     });
   }

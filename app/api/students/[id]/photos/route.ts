@@ -60,28 +60,39 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const url = blob.url;
 
   const isFirst = count === 0;
-  if (isFirst || setProfile) {
-    await prisma.studentPhoto.updateMany({
+  const becomesProfile = isFirst || setProfile;
+
+  // Transação: sem ela, o updateMany limpava o perfil antigo e uma falha no
+  // create/update deixava o aluno sem foto de perfil ou com photoUrl errado
+  // (o irmão PUT/DELETE já usava $transaction).
+  const ops: any[] = [];
+  if (becomesProfile) {
+    ops.push(prisma.studentPhoto.updateMany({
       where: { studentId: params.id, isProfile: true },
       data: { isProfile: false },
-    });
+    }));
   }
-
-  const newPhoto = await prisma.studentPhoto.create({
+  const created = await prisma.studentPhoto.create({
     data: {
       studentId: params.id,
       url,
-      isProfile: isFirst || setProfile,
+      isProfile: becomesProfile,
       label: label || null,
     },
-  });
+  }).catch(() => null);
+  // create fora da transação para obter o id, mas o par updateMany+student
+  // roda atômico:
+  if (!created) return NextResponse.json({ error: 'Falha ao salvar a foto.' }, { status: 500 });
 
-  if (isFirst || setProfile) {
-    await prisma.student.update({
-      where: { id: params.id },
-      data: { photoUrl: url },
-    });
+  if (becomesProfile) {
+    await prisma.$transaction([
+      prisma.studentPhoto.updateMany({
+        where: { studentId: params.id, isProfile: true, id: { not: created.id } },
+        data: { isProfile: false },
+      }),
+      prisma.student.update({ where: { id: params.id }, data: { photoUrl: url } }),
+    ]);
   }
 
-  return NextResponse.json({ photo: newPhoto }, { status: 201 });
+  return NextResponse.json({ photo: created }, { status: 201 });
 }

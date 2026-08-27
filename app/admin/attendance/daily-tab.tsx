@@ -259,6 +259,9 @@ export default function DailyTab() {
   }, [classFilter]);
 
   const fetchData = useCallback(async () => {
+    // Spinner só no primeiro carregamento (o gate de render é `loading &&
+    // !data`). O poll de 30s e cada edição re-chamam fetchData sem
+    // desmontar a lista (antes sumia num spinner e perdia o scroll).
     setLoading(true);
     try {
       const params = new URLSearchParams({ date: dateStr });
@@ -482,7 +485,7 @@ export default function DailyTab() {
       <p className="text-xs text-muted-foreground capitalize">{dayLabel}</p>
 
       {/* Summary bar */}
-      {!loading && data && (
+      {data && (
         <div className="grid grid-cols-4 gap-2">
           {([
             { label: 'Total',     value: stats.total,   key: 'all'     },
@@ -511,13 +514,13 @@ export default function DailyTab() {
         </div>
       )}
 
-      {loading && (
+      {loading && !data && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      {!loading && filtered.length > 0 && canEdit && (
+      {data && filtered.length > 0 && canEdit && (
         <p className="text-[11px] text-muted-foreground">
           Toque no status do aluno para alterar. Um seletor de horário permite definir o momento exato.
           {!isToday && ' Você está corrigindo um dia anterior.'}
@@ -534,7 +537,7 @@ export default function DailyTab() {
         </button>
       )}
 
-      {!loading && filtered.length > 0 && (
+      {data && filtered.length > 0 && (
         <Card className="overflow-hidden">
           <div className="divide-y divide-border">
             {filtered.map((s) => {
@@ -603,7 +606,7 @@ export default function DailyTab() {
         </Card>
       )}
 
-      {!loading && loadError && (
+      {loadError && !data && (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <AlertTriangle className="h-10 w-10 text-muted-foreground/30" />
           <div>
@@ -618,7 +621,7 @@ export default function DailyTab() {
         </div>
       )}
 
-      {!loading && !loadError && filtered.length === 0 && (
+      {data && !loadError && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <Users className="h-10 w-10 text-muted-foreground/20" />
           <div>

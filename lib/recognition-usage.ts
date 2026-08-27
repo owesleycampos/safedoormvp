@@ -4,27 +4,30 @@ import { DEFAULT_TIMEZONE, localDateStr } from '@/lib/timezone';
 /**
  * Medição e cota do reconhecimento facial.
  *
- * Conta RECONHECIMENTOS de fato (frames que casaram com um aluno), não
- * todo frame analisado — uma câmera apontada para um corredor vazio não
- * pode consumir a cota. Uma linha por escola/mês.
+ * A AWS cobra por CHAMADA de SearchFacesByImage (haja match ou não), então a
+ * cota do plano é um teto de CHAMADAS por mês — é o que limita o custo. A
+ * reserva é ATÔMICA e feita ANTES de chamar a AWS: um updateMany condicional
+ * (count < cap) incrementa e diz se havia slot. Assim, mesmo com vários
+ * frames simultâneos, nunca se ultrapassa o teto nem se perde contagem
+ * (nada de read-then-increment nem fire-and-forget).
  */
+
+// Sem PlatformSettings (instalação nova) NÃO é ilimitado: cai num teto de
+// segurança para não gerar custo de AWS sem limite.
+const SAFE_FALLBACK_CAP = 20_000;
 
 export function monthKeyFor(tz: string | null | undefined): string {
   return localDateStr(new Date(), tz || DEFAULT_TIMEZONE).slice(0, 7); // "YYYY-MM"
 }
 
-/**
- * Verifica contingência (pausa global/por escola) e cota do plano.
- * Retorna null quando pode reconhecer, ou { status, error } para responder.
- */
-export type RecognitionGate =
-  | { blocked: { status: number; error: string }; minConfidence: number }
-  | { blocked: null; minConfidence: number };
+export interface RecognitionGate {
+  paused: { status: number; error: string } | null;
+  cap: number; // 0 = ilimitado (configuração explícita)
+  minConfidence: number;
+}
 
-export async function checkRecognitionAllowed(
-  schoolId: string,
-  tz?: string | null
-): Promise<RecognitionGate> {
+/** Verifica contingência (pausa) e devolve cota + minConfidence numa query. */
+export async function getRecognitionGate(schoolId: string): Promise<RecognitionGate> {
   const [platform, schoolSettings, subscription] = await Promise.all([
     prisma.platformSettings.findFirst({
       select: {
@@ -34,7 +37,6 @@ export async function checkRecognitionAllowed(
         maxRecogPremium: true,
       },
     }),
-    // minConfidence sai daqui também — o route buscava a MESMA linha de novo.
     prisma.schoolSettings.findUnique({
       where: { schoolId },
       select: { recognitionPaused: true, minConfidence: true },
@@ -43,7 +45,7 @@ export async function checkRecognitionAllowed(
   ]);
 
   const minConfidence = schoolSettings?.minConfidence ?? 0.9;
-  const deny = (status: number, error: string) => ({ blocked: { status, error }, minConfidence });
+  const deny = (status: number, error: string): RecognitionGate => ({ paused: { status, error }, cap: 0, minConfidence });
 
   if (platform?.recognitionPaused) {
     return deny(503, 'Reconhecimento temporariamente pausado pela plataforma. Use o registro manual.');
@@ -52,37 +54,44 @@ export async function checkRecognitionAllowed(
     return deny(503, 'Reconhecimento pausado para esta escola. Fale com o suporte. O registro manual continua funcionando.');
   }
 
-  // Sem plataforma/assinatura: cap indefinido. NÃO é ilimitado — cai no
-  // menor teto conhecido (Essencial) para uma escola sem plano ativo não
-  // gerar custo de AWS sem limite. cap<=0 (config 0) segue como ilimitado.
   let cap: number;
-  if (!platform) cap = 0;
-  else if (!subscription) cap = platform.maxRecogEssencial;
+  if (!platform) cap = SAFE_FALLBACK_CAP;
+  else if (!subscription) cap = platform.maxRecogEssencial || SAFE_FALLBACK_CAP;
   else cap =
     subscription.plan === 'ESSENCIAL' ? platform.maxRecogEssencial :
     subscription.plan === 'PROFISSIONAL' ? platform.maxRecogProfissional :
     platform.maxRecogPremium;
 
-  if (cap && cap > 0) {
-    const usage = await prisma.recognitionUsage.findUnique({
-      where: { schoolId_monthKey: { schoolId, monthKey: monthKeyFor(tz) } },
-      select: { count: true },
-    });
-    if ((usage?.count ?? 0) >= cap) {
-      return deny(429, `Cota mensal de reconhecimentos do plano atingida (${cap.toLocaleString('pt-BR')}). O registro manual continua funcionando.`);
-    }
-  }
-  return { blocked: null, minConfidence };
+  return { paused: null, cap, minConfidence };
 }
 
-/** Conta 1 chamada de reconhecimento para a escola no mês corrente. */
-export async function countRecognitionCall(schoolId: string, tz?: string | null): Promise<void> {
+/**
+ * Reserva UMA chamada de reconhecimento de forma atômica, ANTES da AWS.
+ * Retorna true se havia slot (e já contou), false se a cota estourou.
+ * cap=0 significa ilimitado: conta (para métrica) e sempre permite.
+ */
+export async function reserveRecognition(schoolId: string, cap: number, tz?: string | null): Promise<boolean> {
   const monthKey = monthKeyFor(tz);
+  // Garante a linha do mês (idempotente).
   await prisma.recognitionUsage.upsert({
     where: { schoolId_monthKey: { schoolId, monthKey } },
-    create: { schoolId, monthKey, count: 1 },
-    update: { count: { increment: 1 } },
-  }).catch(() => {
-    // Medição nunca derruba o reconhecimento em si.
+    create: { schoolId, monthKey, count: 0 },
+    update: {},
   });
+
+  if (cap > 0) {
+    // Incremento CONDICIONAL: só sobe se ainda há slot. Atômico no banco —
+    // frames concorrentes não passam do teto.
+    const res = await prisma.recognitionUsage.updateMany({
+      where: { schoolId, monthKey, count: { lt: cap } },
+      data: { count: { increment: 1 } },
+    });
+    return res.count > 0; // 0 = teto atingido
+  }
+
+  await prisma.recognitionUsage.update({
+    where: { schoolId_monthKey: { schoolId, monthKey } },
+    data: { count: { increment: 1 } },
+  });
+  return true;
 }

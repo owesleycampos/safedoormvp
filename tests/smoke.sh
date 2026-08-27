@@ -444,6 +444,24 @@ check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
 
+echo "── Auditoria 3: LGPD no delete, cota atômica ──"
+
+# LGPD: deletar aluno limpa azurePersonId/rekognitionFaceIds e desliga reconhecimento
+TESTAL=$(sql0 "SELECT id FROM \"Student\" WHERE \"schoolId\"=(SELECT \"schoolId\" FROM \"User\" WHERE email='admin@teste.com') AND \"isActive\" LIMIT 1")
+sql0 "UPDATE \"Student\" SET \"azurePersonId\"='fake-person', \"rekognitionFaceIds\"='[]', \"recognitionEnabled\"=true WHERE id='$TESTAL'" >/dev/null
+check "delete aluno → 200" "200" "$(api DELETE /api/students/$TESTAL)"
+check "biometria apagada no delete (LGPD)" "t" \
+  "$(sql0 "SELECT (\"azurePersonId\" IS NULL AND \"rekognitionFaceIds\" IS NULL AND NOT \"recognitionEnabled\") FROM \"Student\" WHERE id='$TESTAL'")"
+sql0 "UPDATE \"Student\" SET \"isActive\"=true WHERE id='$TESTAL'" >/dev/null
+
+# cota atômica: teto de 2, insere uso já em 2 → reserva bloqueia (updateMany count<cap = 0)
+sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test';
+      INSERT INTO \"RecognitionUsage\" (id,\"schoolId\",\"monthKey\",count,\"updatedAt\") VALUES ('at','atom-test','2099-01',2,now());" >/dev/null
+sql0 "UPDATE \"RecognitionUsage\" SET count=count+1 WHERE \"schoolId\"='atom-test' AND \"monthKey\"='2099-01' AND count < 2" >/dev/null
+BLOCKED=$(sql0 "SELECT count FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test'")
+check "cota no teto: reserva não incrementa (fica em 2)" "2" "$BLOCKED"
+sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test';" >/dev/null
+
 echo "── Rodada 'faça tudo': trava do digest, webhook fail-closed, escola suspensa ──"
 
 # webhook fail-closed sem segredo → 401

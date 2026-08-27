@@ -287,7 +287,9 @@ export default function ReportsTab() {
   const fetchAlerts = useCallback(async () => {
     try {
       const params = new URLSearchParams({ days: '30' });
-      if (classFilter !== 'all') params.set('classId', classFilter);
+      // NÃO manda classId: o filtro guarda o NOME da turma, não o id —
+      // mandava name como classId e o alerta de <75%% sumia. Busca tudo e
+      // filtra por className no cliente (displayedAlerts).
       const res = await fetch(`/api/reports/alerts?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -296,10 +298,16 @@ export default function ReportsTab() {
     } catch {
       setAlerts([]);
     }
-  }, [classFilter]);
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
+
+  // Alertas de <75% respeitam o filtro de turma por NOME (client-side).
+  const displayedAlerts = useMemo(
+    () => classFilter === 'all' ? alerts : alerts.filter((a) => a.className === classFilter),
+    [alerts, classFilter]
+  );
 
   const classNames = useMemo(
     () => Array.from(new Set(allRows.map((r) => r.className))).sort(),
@@ -322,7 +330,7 @@ export default function ReportsTab() {
     <div className="flex-1 p-3 md:p-6 space-y-4 overflow-x-hidden">
 
       {/* Alerts banner (inline, collapsible) */}
-      {alerts.length > 0 && (
+      {displayedAlerts.length > 0 && (
         <Card className="overflow-hidden">
           <button
             onClick={() => setAlertsExpanded(v => !v)}
@@ -330,7 +338,7 @@ export default function ReportsTab() {
           >
             <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs text-foreground flex-1">
-              <span className="font-medium">{alerts.length} aluno{alerts.length !== 1 ? 's' : ''}</span>
+              <span className="font-medium">{displayedAlerts.length} aluno{displayedAlerts.length !== 1 ? 's' : ''}</span>
               <span className="text-muted-foreground"> com frequência abaixo de 75%</span>
             </p>
             {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -339,7 +347,7 @@ export default function ReportsTab() {
             <div className="border-t border-border divide-y divide-border">
               {/* A lista mais acionável do produto terminava num número:
                   agora cada linha abre o histórico completo do aluno. */}
-              {alerts.map((a) => (
+              {displayedAlerts.map((a) => (
                 <Link
                   key={a.id}
                   href={`/admin/students/${a.id}/history`}

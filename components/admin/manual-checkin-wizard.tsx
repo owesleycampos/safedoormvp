@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, LogIn, LogOut, Check, X, GraduationCap, Users, Clock,
 } from 'lucide-react';
@@ -53,21 +53,28 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   });
 
-  // Reset on close
+  // Reset on close — timer guardado em ref e cancelado ao reabrir, senão o
+  // reset atrasado (300ms) disparava no meio de uma reabertura rápida e
+  // zerava o estado que o operador acabara de escolher.
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!open) {
-      setTimeout(() => {
-        setStep('grade');
-        setSelectedGrade('');
-        setSelectedClass(null);
-        setStudents([]);
-        setCarouselIndex(0);
-        setEventType('ENTRY');
-        setLastRegistered(null);
-        const now = new Date();
-        setManualTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
-      }, 300);
+    if (open) {
+      if (resetTimerRef.current) { clearTimeout(resetTimerRef.current); resetTimerRef.current = null; }
+      return;
     }
+    resetTimerRef.current = setTimeout(() => {
+      setStep('grade');
+      setSelectedGrade('');
+      setSelectedClass(null);
+      setStudents([]);
+      setCarouselIndex(0);
+      setEventType('ENTRY');
+      setLastRegistered(null);
+      setNameSearch('');
+      const now = new Date();
+      setManualTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+    }, 300);
+    return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
   }, [open]);
 
   // Load classes

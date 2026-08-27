@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import * as rekognition from '@/lib/rekognition';
 import { requireActiveSchool } from '@/lib/require-active-school';
-import { checkRecognitionAllowed, countRecognitionCall } from '@/lib/recognition-usage';
+import { getRecognitionGate, reserveRecognition } from '@/lib/recognition-usage';
 
 /**
  * GET /api/camera/recognize
@@ -55,11 +55,10 @@ export async function POST(req: NextRequest) {
 
   const schoolId = auth.schoolId;
 
-  // Contingência (pausa global/por escola) e cota mensal do plano; o gate
-  // já devolve o minConfidence (mesma linha de settings), sem 2ª consulta.
-  const gate = await checkRecognitionAllowed(schoolId, auth.timezone);
-  if (gate.blocked) {
-    return NextResponse.json({ error: gate.blocked.error }, { status: gate.blocked.status });
+  // Contingência (pausa) + cota + minConfidence numa consulta só.
+  const gate = await getRecognitionGate(schoolId);
+  if (gate.paused) {
+    return NextResponse.json({ error: gate.paused.error }, { status: gate.paused.status });
   }
   const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(gate.minConfidence * 100)));
 
@@ -76,6 +75,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Erro ao processar imagem.' }, { status: 400 });
   }
 
+  // RESERVA a chamada ANTES da AWS (atômico, aguardado): a AWS cobra por
+  // chamada, então o teto tem que barrar antes de gastar. Sem slot → 429.
+  const reserved = await reserveRecognition(schoolId, gate.cap, auth.timezone);
+  if (!reserved) {
+    return NextResponse.json(
+      { error: `Cota mensal de reconhecimentos do plano atingida (${gate.cap.toLocaleString('pt-BR')}). O registro manual continua funcionando.` },
+      { status: 429 }
+    );
+  }
+
   const collectionId = schoolId;
 
   try {
@@ -87,10 +96,6 @@ export async function POST(req: NextRequest) {
     if (faceMatches.length === 0) {
       return NextResponse.json({ matches: [], faceCount: 0 });
     }
-
-    // Mede só quando HOUVE reconhecimento (um aluno casou) — não os frames
-    // de corredor vazio, que esgotariam a cota do plano em horas.
-    countRecognitionCall(schoolId, auth.timezone);
 
     // ── Look up best match in DB ───────────────────────────────────────────
     const bestMatch = faceMatches[0];

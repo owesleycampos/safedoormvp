@@ -67,7 +67,7 @@ export function CameraClient() {
 
   useEffect(() => {
     fetch('/api/camera/recognize')
-      .then((r) => setRekognitionConfigured(r.ok || r.status !== 503))
+      .then((r) => setRekognitionConfigured(r.ok))
       .catch(() => setRekognitionConfigured(false));
   }, []);
 
@@ -136,6 +136,7 @@ export function CameraClient() {
       });
   }, []);
 
+  const lastFrameRef = useRef<Uint8ClampedArray | null>(null);
   const confirmationRef = useRef(false);
   useEffect(() => { confirmationRef.current = !!confirmation; }, [confirmation]);
 
@@ -160,6 +161,29 @@ export function CameraClient() {
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
       if (!blob) return;
+
+      // Gate de diferença de frame: se a cena mal mudou desde o último envio
+      // (corredor vazio, ninguém se mexeu), NÃO chama a AWS — cada chamada é
+      // cobrada. Reduz drasticamente o consumo de cota com a câmera parada.
+      try {
+        const small = document.createElement('canvas');
+        small.width = 32; small.height = 24;
+        const sctx = small.getContext('2d');
+        if (sctx) {
+          sctx.drawImage(video, 0, 0, 32, 24);
+          const cur = sctx.getImageData(0, 0, 32, 24).data;
+          const prev = lastFrameRef.current;
+          if (prev) {
+            let diff = 0;
+            for (let i = 0; i < cur.length; i += 4) {
+              diff += Math.abs(cur[i] - prev[i]) + Math.abs(cur[i + 1] - prev[i + 1]) + Math.abs(cur[i + 2] - prev[i + 2]);
+            }
+            const avg = diff / (cur.length / 4);
+            if (avg < 8) return; // cena praticamente igual → não envia
+          }
+          lastFrameRef.current = cur;
+        }
+      } catch { /* diff é best-effort; se falhar, segue enviando */ }
 
       const formData = new FormData();
       formData.append('image', blob, 'frame.jpg');

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import * as rekognition from '@/lib/rekognition';
 
 async function verifyAdminAndStudent(req: NextRequest, id: string) {
   const session = await getServerSession(authOptions);
@@ -110,9 +111,27 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const auth = await verifyAdminAndStudent(req, params.id);
   if (!auth) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+  // LGPD: remover um aluno tem que APAGAR a biometria dele do Rekognition —
+  // o soft-delete deixava o rosto do menor indexado (e ainda cobrando/
+  // sendo buscado a cada frame). Espelha o fluxo de revogação de consentimento.
+  const student = await prisma.student.findFirst({
+    where: { id: params.id, schoolId: auth.schoolId },
+    select: { schoolId: true, azurePersonId: true, rekognitionFaceIds: true },
+  });
+  if (student && rekognition.isConfigured() && student.azurePersonId) {
+    let known: string[] = [];
+    try { known = student.rekognitionFaceIds ? JSON.parse(student.rekognitionFaceIds) : []; } catch {}
+    await rekognition.deleteFacesForStudent(student.schoolId, params.id, known).catch(() => {});
+  }
+
   await prisma.student.update({
     where: { id: params.id },
-    data: { isActive: false },
+    data: {
+      isActive: false,
+      recognitionEnabled: false,
+      azurePersonId: null,
+      rekognitionFaceIds: null,
+    },
   });
 
   await prisma.auditLog.create({

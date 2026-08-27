@@ -47,7 +47,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.schoolId = (user as any).schoolId;
-      } else if (!token.schoolId && token.sub) {
+      } else if (!token.schoolId && token.sub && token.role === 'PARENT') {
         // O vínculo pelo link da turma atribui a escola a uma conta que pode
         // já estar logada — sem esta releitura, o JWT ficava com schoolId
         // nulo até o próximo login e as inscrições de push nasciam órfãs.

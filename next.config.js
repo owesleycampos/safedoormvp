@@ -84,16 +84,52 @@ const withPWA = require('next-pwa')({
   ],
 });
 
+// ── Security headers ──────────────────────────────────────────────────────
+// CSP permissiva o suficiente para o app (Next hidrata com scripts inline;
+// imagens vêm do Vercel Blob; câmera usa getUserMedia). frame-ancestors
+// 'none' + X-Frame-Options DENY bloqueiam clickjacking; HSTS força HTTPS;
+// nosniff mata MIME sniffing; Permissions-Policy só libera a câmera para a
+// própria origem (a página da portaria) e corta o resto.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://*.blob.vercel-storage.com",
+  "media-src 'self' blob:",
+  "worker-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+  "upgrade-insecure-requests",
+].join('; ');
+
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: CSP },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()' },
+  { key: 'X-DNS-Prefetch-Control', value: 'off' },
+];
+
 const nextConfig = {
+  poweredByHeader: false, // não anunciar "X-Powered-By: Next.js"
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.amazonaws.com' },
-      { protocol: 'https', hostname: '**.supabase.co' },
+      { protocol: 'https', hostname: '**.blob.vercel-storage.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
   experimental: {
-    serverActions: { allowedOrigins: ['localhost:3000'] },
+    serverActions: { allowedOrigins: ['localhost:3000', 'porta-segura.vercel.app'] },
   },
 };
 

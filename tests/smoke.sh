@@ -444,6 +444,27 @@ check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
 
+echo "── Segurança: headers, honeypot, zod ──"
+
+check "security headers presentes (X-Frame-Options)" "DENY" \
+  "$(curl -s -D - -o /dev/null "$BASE/api/health" | grep -i 'x-frame-options' | tr -d '\r' | awk '{print $2}')"
+check "HSTS presente" "max-age" \
+  "$(curl -s -D - -o /dev/null "$BASE/api/health" | grep -io 'strict-transport-security: max-age' | cut -d: -f1 | tr -d ' ' | sed 's/Strict-Transport-Security/max-age/')"
+check "nosniff presente" "nosniff" \
+  "$(curl -s -D - -o /dev/null "$BASE/api/health" | grep -io 'nosniff')"
+
+# honeypot: bot com campo 'website' preenchido → 200 sem criar escola
+SCHOOLS_B=$(sql0 "SELECT count(*) FROM \"School\"")
+curl -s -o /dev/null -X POST "$BASE/api/auth/register-school" -H 'Content-Type: application/json' \
+  -d '{"schoolName":"Bot X","ownerName":"Bot","email":"bot-smoke@x.com","password":"senha12345","lgpdAccepted":true,"website":"spam"}'
+SCHOOLS_A=$(sql0 "SELECT count(*) FROM \"School\"")
+check "honeypot bloqueia bot (nenhuma escola criada)" "$SCHOOLS_B" "$SCHOOLS_A"
+
+# zod: register-school com e-mail inválido → 400
+check "register-school valida e-mail (zod) → 400" "400" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/register-school" -H 'Content-Type: application/json' -d '{"schoolName":"X","ownerName":"Y","email":"nao-eh-email","password":"senha12345","lgpdAccepted":true}')"
+
+echo "── Auditoria 3: LGPD no delete, cota atômica ──"
 echo "── Auditoria 3: LGPD no delete, cota atômica ──"
 
 # LGPD: deletar aluno limpa azurePersonId/rekognitionFaceIds e desliga reconhecimento

@@ -141,7 +141,9 @@ export async function POST(req: NextRequest) {
       },
     }).catch(() => {});
 
-    return NextResponse.json(parent, { status: 201 });
+    // Não devolve o CPF (PII write-only) na resposta.
+    const { cpf: _cpf, ...safeParent } = parent as any;
+    return NextResponse.json(safeParent, { status: 201 });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return NextResponse.json({ error: 'E-mail ou CPF já cadastrado.' }, { status: 409 });

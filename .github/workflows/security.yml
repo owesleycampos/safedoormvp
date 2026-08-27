@@ -1,0 +1,26 @@
+name: Segurança
+
+# Verificação de segurança a cada push/PR: dependências vulneráveis e tipos.
+# Falha o build se surgir vulnerabilidade CRÍTICA nova (audit-level=critical).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1' # toda segunda 06:00 UTC — pega CVEs novas em deps antigas
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+      - name: Auditar dependências (falha em CRÍTICA)
+        run: npm audit --audit-level=critical
+      - name: Checagem de tipos
+        run: npx tsc --noEmit

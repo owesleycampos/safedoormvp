@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { clientIp, rateLimitOk } from '@/lib/rate-limit';
+import { z } from 'zod';
 
 /**
  * POST /api/auth/register-school — cadastro self-serve de uma escola.
@@ -13,25 +14,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Muitas tentativas. Aguarde alguns minutos.' }, { status: 429 });
   }
 
-  let body: any;
-  try { body = await req.json(); } catch {
+  let raw: any;
+  try { raw = await req.json(); } catch {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
   }
 
+  // Honeypot: um campo escondido que humano nunca preenche. Bot que preenche
+  // tudo cai aqui e recebe 200 falso (sem criar nada) — não aprende o filtro.
+  if (typeof raw.website === 'string' && raw.website.trim() !== '') {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Validação de schema (zod): tipos e limites explícitos em vez de checagem
+  // manual campo a campo, cortando payloads malformados na porta.
+  const schema = z.object({
+    schoolName: z.string().trim().min(2).max(120),
+    ownerName: z.string().trim().min(2).max(120),
+    ownerPhone: z.string().trim().max(30).optional().nullable(),
+    email: z.string().trim().email().max(160),
+    password: z.string().min(8).max(200),
+    city: z.string().trim().max(80).optional().nullable(),
+    state: z.string().trim().max(2).optional().nullable(),
+    sizeStudents: z.string().max(20).optional().nullable(),
+    revenueBand: z.string().max(20).optional().nullable(),
+    yearsInMarket: z.string().max(20).optional().nullable(),
+    usesRecognition: z.string().max(20).optional().nullable(),
+    lgpdAccepted: z.literal(true),
+  });
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Preencha os campos corretamente e aceite os termos.' }, { status: 400 });
+  }
   const {
     schoolName, ownerName, ownerPhone, email, password, city, state,
-    sizeStudents, revenueBand, yearsInMarket, usesRecognition, lgpdAccepted,
-  } = body;
-
-  if (!schoolName || !ownerName || !email || !password) {
-    return NextResponse.json({ error: 'Preencha nome da escola, seu nome, e-mail e senha.' }, { status: 400 });
-  }
-  if (String(password).length < 8) {
-    return NextResponse.json({ error: 'A senha deve ter ao menos 8 caracteres.' }, { status: 400 });
-  }
-  if (!lgpdAccepted) {
-    return NextResponse.json({ error: 'É necessário aceitar os termos.' }, { status: 400 });
-  }
+    sizeStudents, revenueBand, yearsInMarket, usesRecognition,
+  } = parsed.data;
 
   const normalizedEmail = String(email).toLowerCase().trim();
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail }, select: { id: true } });

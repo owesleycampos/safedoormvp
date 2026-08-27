@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
+import { validateImageUpload } from '@/lib/upload-guard';
 import { authenticateAgent } from '@/lib/agent-auth';
 
 const MAX_BYTES = 5 * 1024 * 1024; // frames JPEG do agente têm ~50-150KB
@@ -39,21 +40,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Envie multipart/form-data com o campo "photo".' }, { status: 400 });
   }
 
-  if (!photo || photo.size === 0) {
-    return NextResponse.json({ error: 'Campo "photo" ausente ou vazio.' }, { status: 400 });
-  }
-  if (photo.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'Foto acima de 5MB.' }, { status: 413 });
-  }
-  if (!ALLOWED.includes(photo.type)) {
-    return NextResponse.json({ error: `Tipo ${photo.type || 'desconhecido'} não aceito (JPEG, PNG ou WebP).` }, { status: 415 });
-  }
+  const valid = await validateImageUpload(photo);
+  if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: valid.status });
 
-  const ext = photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const key = `agent-photos/${auth.schoolId}/${auth.deviceId}/${stamp}.${ext}`;
+  const key = `agent-photos/${auth.schoolId}/${auth.deviceId}/${stamp}.${valid.ext}`;
 
-  const blob = await put(key, photo, { access: 'public', addRandomSuffix: true });
+  const blob = await put(key, valid.bytes, { access: 'public', addRandomSuffix: true, contentType: valid.type });
 
   return NextResponse.json({ url: blob.url }, { status: 201 });
 }

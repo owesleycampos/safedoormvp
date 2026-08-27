@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { clientIp, rateLimitOk } from '@/lib/rate-limit';
+import { z } from 'zod';
 
 /**
  * POST /api/invites/[token]/claim — public endpoint
@@ -31,12 +32,24 @@ export async function POST(
     return NextResponse.json({ error: 'Link inválido ou expirado.' }, { status: 404 });
   }
 
-  const body = await req.json();
-  const { studentId, birthDate, parentName, phone, email, password, biometricConsent } = body;
-
-  if (!studentId || !birthDate || !parentName) {
-    return NextResponse.json({ error: 'Dados incompletos.' }, { status: 400 });
+  let rawBody: any;
+  try { rawBody = await req.json(); } catch {
+    return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
   }
+  const claimSchema = z.object({
+    studentId: z.string().min(1).max(60),
+    birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).transform((v) => v.slice(0, 10)),
+    parentName: z.string().trim().min(1).max(120),
+    phone: z.string().trim().max(30).optional().nullable(),
+    email: z.string().trim().email().max(160).optional().nullable(),
+    password: z.string().max(200).optional().nullable(),
+    biometricConsent: z.boolean().optional(),
+  });
+  const parsedClaim = claimSchema.safeParse(rawBody);
+  if (!parsedClaim.success) {
+    return NextResponse.json({ error: 'Dados incompletos ou inválidos.' }, { status: 400 });
+  }
+  const { studentId, birthDate, parentName, phone, email, password, biometricConsent } = parsedClaim.data;
 
   // Verify student belongs to this class
   const student = await prisma.student.findFirst({

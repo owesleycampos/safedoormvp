@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { put } from '@vercel/blob';
+import { validateImageUpload } from '@/lib/upload-guard';
 
 const MAX_PHOTOS = 10;
 
@@ -41,22 +42,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const formData = await req.formData();
-  const photo = formData.get('photo') as File | null;
+  const photo = formData.get('photo');
   const label = formData.get('label') as string | null;
   const setProfile = formData.get('setProfile') === 'true';
 
-  if (!photo || photo.size === 0) {
-    return NextResponse.json({ error: 'Foto é obrigatória.' }, { status: 400 });
-  }
+  // Valida tipo REAL (magic bytes), não só o content-type, e o tamanho.
+  const valid = await validateImageUpload(photo);
+  if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: valid.status });
 
-  if (photo.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Foto muito grande. Máximo 10MB.' }, { status: 400 });
-  }
-
-  // Upload to Vercel Blob (persistent cloud storage)
-  const ext = photo.name.split('.').pop() || 'jpg';
-  const filename = `students/${params.id}/${Date.now()}.${ext}`;
-  const blob = await put(filename, photo, { access: 'public' });
+  // Nome do arquivo derivado da extensão validada (não do nome do cliente),
+  // com sufixo aleatório para não haver colisão/sobrescrita.
+  const filename = `students/${params.id}/${Date.now()}.${valid.ext}`;
+  const blob = await put(filename, valid.bytes, { access: 'public', addRandomSuffix: true, contentType: valid.type });
   const url = blob.url;
 
   const isFirst = count === 0;

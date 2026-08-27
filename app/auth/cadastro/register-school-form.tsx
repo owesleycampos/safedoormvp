@@ -76,7 +76,7 @@ export function RegisterSchoolForm() {
     schoolName: '', ownerName: '', ownerPhone: '', email: '', password: '',
     city: '', state: '',
     sizeStudents: '', revenueBand: '', yearsInMarket: '', usesRecognition: '',
-    lgpdAccepted: false,
+    lgpdAccepted: false, website: '',
   });
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -133,6 +133,14 @@ export function RegisterSchoolForm() {
 
       {step === 1 && (
         <div className="space-y-4">
+          {/* Honeypot anti-bot: invisível e fora da navegação; humano não vê. */}
+          <input
+            type="text" name="website" tabIndex={-1} autoComplete="off"
+            aria-hidden="true"
+            value={form.website}
+            onChange={(e) => set('website', e.target.value)}
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+          />
           <div className="space-y-1.5">
             <Label htmlFor="schoolName">Nome da escola</Label>
             <Input id="schoolName" value={form.schoolName} onChange={(e) => set('schoolName', e.target.value)} placeholder="Ex.: Colégio Novo Horizonte" autoFocus />

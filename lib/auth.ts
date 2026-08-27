@@ -6,7 +6,13 @@ import { prisma } from '@/lib/db';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
-  session: { strategy: 'jwt' },
+  // maxAge explícito: sessão de 7 dias (era o default de 30). Reduz a
+  // janela de um token roubado / de papel desatualizado.
+  session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
+  // Cookies endurecidos: em produção o NextAuth já prefixa __Secure- e usa
+  // httpOnly/secure/sameSite=lax; explicitar deixa a intenção clara e
+  // garante o comportamento independente de detecção de ambiente.
+  useSecureCookies: process.env.NODE_ENV === 'production',
   pages: {
     signIn: '/auth/login',
     error: '/auth/error',

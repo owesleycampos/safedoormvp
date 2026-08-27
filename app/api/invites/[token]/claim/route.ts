@@ -176,6 +176,16 @@ export async function POST(
     });
   }
 
+  // LGPD: consentimento colhido no vínculo. Registrado ANTES do early-return
+  // de "já vinculado" — um pai que vinculou antes sem marcar e reabre o
+  // convite para marcar o consentimento precisa que ele seja gravado.
+  if (biometricConsent === true) {
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { biometricConsentAt: new Date(), biometricConsentName: parentName },
+    }).catch(() => {});
+  }
+
   // Check if already linked
   const existing = await prisma.studentParent.findUnique({
     where: { studentId_parentId: { studentId, parentId: parent.id } },
@@ -188,16 +198,6 @@ export async function POST(
       message: `${student.name} já está vinculado(a) à sua conta.`,
       student: { name: student.name, className: student.class?.name },
     });
-  }
-
-  // LGPD: o convite é o momento natural de colher o consentimento para o
-  // uso das fotos no reconhecimento facial — quem autoriza é exatamente o
-  // responsável que acabou de provar o vínculo pela data de nascimento.
-  if (biometricConsent === true) {
-    await prisma.student.update({
-      where: { id: studentId },
-      data: { biometricConsentAt: new Date(), biometricConsentName: parentName },
-    }).catch(() => {});
   }
 
   // Create link

@@ -52,8 +52,10 @@ export default async function SuperAdminDashboard() {
     prisma.awsAccount.findMany(),
   ]);
 
-  // Calculate MRR from active subscriptions
+  // MRR só de assinaturas ATIVAS — TRIAL não é receita (a lista inclui
+  // trials para outras métricas, mas eles não somam no faturamento).
   const mrr = schoolsWithSubs.reduce((acc, sub) => {
+    if (sub.status !== 'ACTIVE') return acc;
     const monthly = sub.billing === 'ANNUAL'
       ? Math.round(sub.priceMonthly * (1 - sub.discount))
       : sub.priceMonthly;

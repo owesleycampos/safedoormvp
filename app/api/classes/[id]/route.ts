@@ -70,7 +70,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const cls = await prisma.class.findFirst({
     where: { id: params.id, schoolId },
-    include: { _count: { select: { students: true } } },
+    // Só alunos ATIVOS travam a exclusão. A lista mostra a turma com "0
+    // alunos" (só conta ativos), então contar inativos aqui criava uma
+    // turma impossível de excluir.
+    include: { _count: { select: { students: { where: { isActive: true } } } } },
   });
   if (!cls) return NextResponse.json({ error: 'Turma não encontrada' }, { status: 404 });
   if (cls._count.students > 0) {

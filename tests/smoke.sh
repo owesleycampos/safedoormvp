@@ -444,6 +444,39 @@ check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
 
+echo "── Correções da auditoria profunda ──"
+
+# frequência: 0/0 dias letivos quando não há eventos → rate null (mostra "—", não 0%/alarme)
+JARF2=$(mktemp)
+CSRFF2=$(curl -s -c "$JARF2" "$BASE/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+curl -s -b "$JARF2" -c "$JARF2" -X POST "$BASE/api/auth/callback/credentials" \
+  -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF2" \
+  --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
+SP2=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
+curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr.json
+check "sem dia letivo → rate null (não 0%/alarme falso)" "true" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/fr.json'));print('true' if d['year']['rate'] is None and d['year']['schoolDays']==0 else 'false')")"
+
+# insere 2 entradas em dias úteis (a Ana + um colega no mesmo dia = dia letivo)
+COLEGA=$(sql0 "SELECT id FROM \"Student\" WHERE \"schoolId\"=(SELECT \"schoolId\" FROM \"Student\" WHERE id='$SP2') AND id != '$SP2' AND \"isActive\" LIMIT 1")
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('fr-b','$COLEGA','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr2.json
+check "dias letivos = dias com entrada da escola (2)" "2" \
+  "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['schoolDays'])")"
+check "aluno presente em 1 dos 2 dias letivos = 50%" "50" \
+  "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['rate'])")"
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('fr-a','fr-b');" >/dev/null
+
+# PUT de aluno com classId de OUTRA escola → 400 (não corrompe)
+CLS_OUTRA=$(sql0 "SELECT id FROM \"Class\" WHERE \"schoolId\" != (SELECT \"schoolId\" FROM \"Student\" WHERE id='$JOAO') LIMIT 1")
+if [ -n "$CLS_OUTRA" ]; then
+  FD=$(printf -- "--X\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\nJoão\r\n--X\r\nContent-Disposition: form-data; name=\"classId\"\r\n\r\n%s\r\n--X--\r\n" "$CLS_OUTRA")
+  CODE=$(curl -s -b "$JAR" -o /dev/null -w '%{http_code}' -X PUT "$BASE/api/students/$JOAO" -H "Content-Type: multipart/form-data; boundary=X" --data-binary "$FD")
+  check "PUT aluno com turma de outra escola → 400" "400" "$CODE"
+else
+  echo "  (só uma escola no teste — pulando PUT cross-tenant)"
+fi
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

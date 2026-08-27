@@ -55,20 +55,13 @@ export async function POST(req: NextRequest) {
 
   const schoolId = auth.schoolId;
 
-  // Contingência (pausa global/por escola) e cota mensal do plano — cada
-  // frame é uma chamada cobrada; sem isso não há freio de custo.
-  const blocked = await checkRecognitionAllowed(schoolId, auth.timezone);
-  if (blocked) {
-    return NextResponse.json({ error: blocked.error }, { status: blocked.status });
+  // Contingência (pausa global/por escola) e cota mensal do plano; o gate
+  // já devolve o minConfidence (mesma linha de settings), sem 2ª consulta.
+  const gate = await checkRecognitionAllowed(schoolId, auth.timezone);
+  if (gate.blocked) {
+    return NextResponse.json({ error: gate.blocked.error }, { status: gate.blocked.status });
   }
-
-  // School-configured minimum confidence drives the AWS match threshold
-  const settings = await prisma.schoolSettings.findUnique({
-    where: { schoolId },
-    select: { minConfidence: true },
-  });
-  const minConfidence = settings?.minConfidence ?? 0.9;
-  const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(minConfidence * 100)));
+  const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(gate.minConfidence * 100)));
 
   // ── Parse image from FormData ──────────────────────────────────────────────
   let imageBytes: Buffer;
@@ -87,8 +80,6 @@ export async function POST(req: NextRequest) {
 
   try {
     // ── Search for matching faces ──────────────────────────────────────────
-    // Mede ANTES da chamada: a AWS cobra mesmo quando não há match.
-    await countRecognitionCall(schoolId, auth.timezone);
     const { matches: faceMatches, box } = await rekognition.searchFacesByImage(
       collectionId, imageBytes, faceMatchThreshold
     );
@@ -96,6 +87,10 @@ export async function POST(req: NextRequest) {
     if (faceMatches.length === 0) {
       return NextResponse.json({ matches: [], faceCount: 0 });
     }
+
+    // Mede só quando HOUVE reconhecimento (um aluno casou) — não os frames
+    // de corredor vazio, que esgotariam a cota do plano em horas.
+    countRecognitionCall(schoolId, auth.timezone);
 
     // ── Look up best match in DB ───────────────────────────────────────────
     const bestMatch = faceMatches[0];

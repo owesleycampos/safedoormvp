@@ -268,7 +268,8 @@ export async function registerAttendanceEvent(
         timestamp,
         notes, // recomputed for the NEW time — an early-exit note can't outlive a later exit
         dayKey: day.dateStr,
-        notified: false,
+        // NÃO reseta `notified`: a criança lingerando na frente da câmera de
+        // saída gerava um update a cada 60s e um push novo a cada vez.
         ...(isManual ? { isManual: true } : {}),
         ...(confidence != null ? { confidence } : {}),
         ...(photoUrl ? { photoUrl } : {}),
@@ -276,7 +277,9 @@ export async function registerAttendanceEvent(
     });
     if (isManual) {
       await audit('MANUAL_CHECKIN_OVERRIDE', updated.id);
-    } else {
+    } else if (!existing.notified) {
+      // Só (re)notifica se o push da saída ainda NÃO saiu — retry de uma
+      // falha anterior. Se o pai já foi avisado, o lingering não re-avisa.
       await notify(updated.id, timestamp);
     }
     return {

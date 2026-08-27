@@ -33,6 +33,16 @@ export async function POST(req: NextRequest) {
   const settings = await prisma.platformSettings.findFirst();
   const webhookSecret = settings?.webhookSecret;
 
+  // Fail-CLOSED: sem segredo configurado, o endpoint público não pode
+  // aceitar eventos de pagamento (qualquer um reativaria uma escola
+  // suspensa). O dono configura o segredo em /hq/webhooks antes de usar.
+  if (!webhookSecret) {
+    return NextResponse.json(
+      { error: 'Webhook não configurado. Defina o segredo no painel.' },
+      { status: 401 }
+    );
+  }
+
   if (webhookSecret) {
     const headerSecret = req.headers.get('x-webhook-secret');
     const signatureHeader = req.headers.get('x-signature') || req.headers.get('stripe-signature');

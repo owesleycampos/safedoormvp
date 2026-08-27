@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const { name, grade, shift } = await req.json();
 
   if (!name) return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 });

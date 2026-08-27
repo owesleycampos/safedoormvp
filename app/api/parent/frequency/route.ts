@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { DEFAULT_TIMEZONE, addDaysStr, dayRangeForDateStr, localDateStr, isWeekendDateStr } from '@/lib/timezone';
+import { DEFAULT_TIMEZONE, dayRangeForDateStr, localDateStr } from '@/lib/timezone';
 
 /**
  * GET /api/parent/frequency?studentId= — média de frequência do filho por
- * BIMESTRE, SEMESTRE e ANO letivo, para o responsável ter o dado detalhado
- * que a escola já vê nos relatórios.
+ * BIMESTRE, SEMESTRE e ANO letivo.
  *
- * Frequência = dias com entrada registrada ÷ dias letivos (seg-sex) do
- * período, até hoje. Mesma regra de dias úteis do relatório da escola.
+ * DIA LETIVO = dia em que a ESCOLA operou de fato (pelo menos um aluno
+ * registrou entrada naquele dia). Isso substitui "todo dia útil": sem uma
+ * agenda acadêmica cadastrada, contar seg-sex incluía janeiro, férias e
+ * feriados como letivos — o que afundava a % e disparava alarme falso de
+ * 75%. Contar só os dias em que a escola realmente funcionou dá a taxa
+ * correta sem depender de calendário, e casa com a experiência do pai.
+ *
+ * Frequência = dias letivos em que o ALUNO entrou ÷ dias letivos da escola,
+ * no período, até hoje.
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -32,50 +38,58 @@ export async function GET(req: NextRequest) {
   });
   if (!link) return NextResponse.json({ error: 'Aluno não encontrado.' }, { status: 404 });
 
+  const schoolId = link.student.schoolId;
   const tz = link.student.school?.settings?.timezone || DEFAULT_TIMEZONE;
   const todayStr = localDateStr(new Date(), tz);
   const [y, m] = todayStr.split('-').map(Number);
 
-  // Bimestre corrente alinhado ao calendário (Jan-Fev, Mar-Abr, ...).
-  const bStartMonth = m - ((m - 1) % 2); // 1,3,5,7,9,11
+  const bStartMonth = m - ((m - 1) % 2); // bimestre do calendário: jan-fev, mar-abr, ...
   const bimStart = `${y}-${String(bStartMonth).padStart(2, '0')}-01`;
-  // Semestre corrente (Jan-Jun ou Jul-Dez).
   const semStart = m <= 6 ? `${y}-01-01` : `${y}-07-01`;
-  // Ano letivo: ano civil corrente.
   const yearStart = `${y}-01-01`;
 
-  async function frequencyFrom(startStr: string) {
-    const start = dayRangeForDateStr(startStr, tz).start;
-    const end = dayRangeForDateStr(todayStr, tz).end;
+  // UMA consulta cobrindo o ANO (que contém bimestre e semestre): entradas
+  // da escola inteira. Dela saem os dias letivos (dias com entrada) E os
+  // dias em que ESTE aluno entrou — sem 3 varreduras separadas.
+  const yearRange = dayRangeForDateStr(yearStart, tz);
+  const todayRange = dayRangeForDateStr(todayStr, tz);
+  const entries = await prisma.attendanceEvent.findMany({
+    where: {
+      student: { schoolId },
+      eventType: 'ENTRY',
+      timestamp: { gte: yearRange.start, lt: todayRange.end },
+    },
+    select: { studentId: true, timestamp: true },
+  });
 
-    const entries = await prisma.attendanceEvent.findMany({
-      where: { studentId: sid, eventType: 'ENTRY', timestamp: { gte: start, lt: end } },
-      select: { timestamp: true },
+  // Dia letivo → conjunto de dias (YYYY-MM-DD) em que a escola operou.
+  const schoolDays = new Set<string>();
+  const studentDays = new Set<string>();
+  for (const e of entries) {
+    const d = localDateStr(e.timestamp, tz);
+    schoolDays.add(d);
+    if (e.studentId === sid) studentDays.add(d);
+  }
+
+  function periodStats(startStr: string) {
+    let total = 0;
+    let present = 0;
+    schoolDays.forEach((d) => {
+      if (d < startStr || d > todayStr) return;
+      total++;
+      if (studentDays.has(d)) present++;
     });
-    const daysPresent = new Set(entries.map((e) => localDateStr(e.timestamp, tz)));
-
-    let schoolDays = 0;
-    for (let d = startStr; d <= todayStr; d = addDaysStr(d, 1)) {
-      if (!isWeekendDateStr(d)) schoolDays++;
-    }
-    const present = daysPresent.size;
     return {
-      rate: schoolDays > 0 ? Math.round((present / schoolDays) * 1000) / 10 : 0,
+      rate: total > 0 ? Math.round((present / total) * 1000) / 10 : null,
       present,
-      schoolDays,
+      schoolDays: total,
     };
   }
 
-  const [bimester, semester, year] = await Promise.all([
-    frequencyFrom(bimStart),
-    frequencyFrom(semStart),
-    frequencyFrom(yearStart),
-  ]);
-
   const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   return NextResponse.json({
-    bimester: { ...bimester, label: `${monthNames[bStartMonth - 1]}–${monthNames[bStartMonth]} de ${y}` },
-    semester: { ...semester, label: m <= 6 ? `1º semestre ${y}` : `2º semestre ${y}` },
-    year: { ...year, label: `Ano de ${y}` },
+    bimester: { ...periodStats(bimStart), label: `${monthNames[bStartMonth - 1]}–${monthNames[bStartMonth]} de ${y}` },
+    semester: { ...periodStats(semStart), label: m <= 6 ? `1º semestre ${y}` : `2º semestre ${y}` },
+    year: { ...periodStats(yearStart), label: `Ano de ${y}` },
   });
 }

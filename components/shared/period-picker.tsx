@@ -28,18 +28,22 @@ function fmt(d: string) {
  * tela e o controle ficava espremido dentro de outro card.
  */
 export function PeriodPicker({
-  value, onChange, presets = ['7d', '30d', '90d'],
+  value, onChange, presets = ['7d', '30d', '90d'], tz,
 }: {
   value: PeriodValue;
   onChange: (v: PeriodValue) => void;
   presets?: Array<'7d' | '30d' | '90d'>;
+  tz?: string;
 }) {
   const [open, setOpen] = useState(false);
 
+  const todayStr = tz
+    ? new Date().toLocaleDateString('en-CA', { timeZone: tz })
+    : toStr(new Date());
+
   function pickPreset(p: '7d' | '30d' | '90d') {
-    const today = toStr(new Date());
     const days = p === '7d' ? 6 : p === '30d' ? 29 : 89;
-    onChange({ preset: p, from: addDays(today, -days), to: today });
+    onChange({ preset: p, from: addDays(todayStr, -days), to: todayStr });
   }
 
   const presetLabel: Record<string, string> = { '7d': '7 dias', '30d': '30 dias', '90d': '90 dias' };
@@ -76,6 +80,7 @@ export function PeriodPicker({
         <CalendarModal
           from={value.from}
           to={value.to}
+          todayStr={todayStr}
           onClose={() => setOpen(false)}
           onApply={(from, to) => { onChange({ preset: 'custom', from, to }); setOpen(false); }}
         />
@@ -84,7 +89,7 @@ export function PeriodPicker({
   );
 }
 
-function CalendarModal({ from, to, onClose, onApply }: { from: string; to: string; onClose: () => void; onApply: (f: string, t: string) => void }) {
+function CalendarModal({ from, to, todayStr, onClose, onApply }: { from: string; to: string; todayStr: string; onClose: () => void; onApply: (f: string, t: string) => void }) {
   const [selFrom, setSelFrom] = useState(from);
   const [selTo, setSelTo] = useState(to);
   const [viewMonth, setViewMonth] = useState(() => {
@@ -109,7 +114,6 @@ function CalendarModal({ from, to, onClose, onApply }: { from: string; to: strin
   const month = viewMonth.getMonth();
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = toStr(new Date());
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   const cells: (string | null)[] = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);

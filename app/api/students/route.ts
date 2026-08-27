@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') || '';
   const classId = searchParams.get('classId');
-  const limit = parseInt(searchParams.get('limit') || '50');
+  const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
 
   const students = await prisma.student.findMany({
     where: {
@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
       isActive: true,
       ...(search && {
         OR: [
-          { name: { contains: search } },
-          { class: { name: { contains: search } } },
+          { name: { contains: search, mode: 'insensitive' as const } },
+          { class: { name: { contains: search, mode: 'insensitive' as const } } },
         ],
       }),
       ...(classId && { classId }),

@@ -44,7 +44,7 @@ export async function GET() {
   // MRR: soma dos planos ativos, normalizando anual para mensal e aplicando desconto.
   let mrrCents = 0;
   for (const sub of subscriptions) {
-    if (sub.status !== 'ACTIVE' && sub.status !== 'TRIAL') continue;
+    if (sub.status !== 'ACTIVE') continue; // TRIAL não é receita
     const net = sub.priceMonthly * (1 - (sub.discount || 0));
     mrrCents += Math.round(net);
   }

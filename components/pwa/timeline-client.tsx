@@ -34,8 +34,20 @@ function groupEventsByDay(events: any[], tz: string) {
 
 export function TimelineClient({ children, events, selectedStudentId, tz = 'America/Sao_Paulo', from, to }: TimelineClientProps) {
   const router = useRouter();
+  // Infere o preset a partir do intervalo (para 7/30/90 dias ficarem
+  // destacados quando o pai os escolhe), senão o controle nunca acendia.
+  function inferPreset(f?: string, t?: string): PeriodValue['preset'] {
+    if (!f || !t) return 'custom';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+    if (t !== today) return 'custom';
+    const span = Math.round((new Date(t + 'T12:00:00').getTime() - new Date(f + 'T12:00:00').getTime()) / 86400000);
+    if (span === 6) return '7d';
+    if (span === 29) return '30d';
+    if (span === 89) return '90d';
+    return 'custom';
+  }
   const period: PeriodValue = {
-    preset: 'custom',
+    preset: inferPreset(from, to),
     from: from || '',
     to: to || '',
   };
@@ -115,7 +127,7 @@ export function TimelineClient({ children, events, selectedStudentId, tz = 'Amer
 
       {/* Seletor de período — linha própria, largura total */}
       <div className="px-4 mt-4">
-        <PeriodPicker value={period} onChange={applyPeriod} />
+        <PeriodPicker value={period} onChange={applyPeriod} tz={tz} />
       </div>
 
       {/* Events */}
@@ -249,14 +261,19 @@ function FrequencySummary({ studentId }: { studentId: string }) {
         <div className="grid grid-cols-3 gap-3">
           {items.map((it) => {
             const d = data[it.key];
-            const rate = d?.rate ?? 0;
+            const rate = d?.rate; // null quando a escola ainda não teve dia letivo no período
+            const hasData = rate != null;
             // Abaixo de 75% é o limite legal (LDB) — sinaliza discretamente.
-            const low = rate < 75;
+            const low = hasData && rate < 75;
             return (
               <div key={it.key}>
-                <p className={cn('text-xl font-semibold tabular-nums', low && 'text-warning')}>{rate}%</p>
+                <p className={cn('text-xl font-semibold tabular-nums', low && 'text-warning')}>
+                  {hasData ? `${rate}%` : '—'}
+                </p>
                 <p className="text-[11px] font-medium">{it.title}</p>
-                <p className="text-[10px] text-muted-foreground">{d?.present ?? 0}/{d?.schoolDays ?? 0} dias</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {hasData ? `${d.present}/${d.schoolDays} dias` : 'sem dias letivos'}
+                </p>
               </div>
             );
           })}
@@ -264,7 +281,7 @@ function FrequencySummary({ studentId }: { studentId: string }) {
       )}
       {data?.year?.label && (
         <p className="text-[10px] text-muted-foreground mt-2">
-          Presença em dias letivos (seg a sex). {data.year.label}.
+          Presença nos dias em que a escola funcionou. {data.year.label}.
         </p>
       )}
     </div>

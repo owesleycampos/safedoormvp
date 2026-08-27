@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
     update: {
       p256dh: keys.p256dh,
       auth: keys.auth,
+      // RE-VINCULA ao chamador atual. Em aparelho compartilhado (mesmo
+      // navegador, pais diferentes) o endpoint é o mesmo: sem reatribuir
+      // parentId, o pai B recebia os avisos do filho do pai A.
+      parentId: parent?.id || null,
+      userAgent: req.headers.get('user-agent') || undefined,
       ...(schoolId ? { schoolId } : {}),
     },
   });

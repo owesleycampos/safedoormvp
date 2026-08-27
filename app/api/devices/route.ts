@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const devices = await prisma.device.findMany({
     where: { schoolId },
     orderBy: { createdAt: 'asc' },
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const { name, description, type } = await req.json();
 
   if (!name) return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 });

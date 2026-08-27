@@ -53,6 +53,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const classId = formData.get('classId') as string;
     const birthDate = formData.get('birthDate') as string;
 
+    // A turma de destino PRECISA ser da mesma escola. Sem isto, o PUT
+    // escrevia um classId de outra escola no aluno — ele sumia das listas
+    // das duas escolas e corrompia todo relatório por turma.
+    if (classId) {
+      const cls = await prisma.class.findFirst({
+        where: { id: classId, schoolId: auth.schoolId },
+        select: { id: true },
+      });
+      if (!cls) return NextResponse.json({ error: 'Turma inválida.' }, { status: 400 });
+    }
+
     const student = await prisma.student.update({
       where: { id: params.id },
       data: {

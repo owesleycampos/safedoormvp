@@ -50,6 +50,7 @@ export function CameraClient() {
   const [recentRecognitions, setRecentRecognitions] = useState<RecentRecognition[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [rekognitionConfigured, setRekognitionConfigured] = useState<boolean | null>(null);
+  const [scanHalted, setScanHalted] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [suggestedMode, setSuggestedMode] = useState<'ENTRY' | 'EXIT' | null>(null);
   // Confirmação em tela cheia: o aluno na frente da câmera precisa ver de
@@ -165,16 +166,26 @@ export function CameraClient() {
 
       const res = await fetch('/api/camera/recognize', { method: 'POST', body: formData });
       if (!res.ok) {
-        if (res.status === 503) { setRekognitionConfigured(false); return; }
-        // 401/403/500 eram engolidos: a tela dizia "Monitorando" enquanto
-        // subia um frame a cada 2s sem registrar nada.
-        failStreakRef.current += 1;
-        if (failStreakRef.current === 3) {
-          const msg = res.status === 401 ? 'Sessão expirada. Recarregue a página e entre de novo.'
-            : res.status === 403 ? 'Acesso bloqueado. Verifique a situação da escola.'
-            : res.status === 429 ? 'Cota mensal de reconhecimentos atingida. Use o registro manual.'
-            : 'O servidor de reconhecimento está retornando erro.';
+        const stop = (msg: string) => {
+          // Para o loop de vez: 429 (cota) e 503 (pausa) NÃO se resolvem
+          // sozinhos — seguir enviando um frame a cada 2s só queima cota e
+          // requisições pagas. O operador reinicia quando resolver.
+          if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+          setScanHalted(msg);
           toast({ variant: 'destructive', title: 'Reconhecimento interrompido', description: msg });
+        };
+        if (res.status === 429) { stop('Cota mensal de reconhecimentos atingida. Use o registro manual.'); return; }
+        if (res.status === 503) {
+          const data = await res.json().catch(() => ({}));
+          stop(data.error || 'Reconhecimento pausado. Use o registro manual.');
+          return;
+        }
+        // 401/403/500: engolidos antes. Depois de 3 seguidos, para e avisa.
+        failStreakRef.current += 1;
+        if (failStreakRef.current >= 3) {
+          stop(res.status === 401 ? 'Sessão expirada. Recarregue a página e entre de novo.'
+            : res.status === 403 ? 'Acesso bloqueado. Verifique a situação da escola.'
+            : 'O servidor de reconhecimento está retornando erro.');
         }
         return;
       }
@@ -435,10 +446,28 @@ export function CameraClient() {
           )}
 
           {/* Scanning indicator */}
-          {cameraStatus === 'active' && (
+          {cameraStatus === 'active' && !scanHalted && (
             <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-md px-2.5 py-1">
               <span className={cn('h-1.5 w-1.5 rounded-full', isScanning ? 'bg-white/60 animate-pulse' : 'bg-white')} />
               <span className="text-white text-[10px]">{isScanning ? 'Analisando...' : 'Monitorando'}</span>
+            </div>
+          )}
+
+          {/* Reconhecimento parado (cota/pausa/erro) */}
+          {cameraStatus === 'active' && scanHalted && (
+            <div className="absolute inset-x-3 bottom-3 flex items-center gap-2 bg-destructive/90 backdrop-blur-sm rounded-md px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-white flex-shrink-0" />
+              <span className="text-white text-[11px] flex-1">{scanHalted}</span>
+              <button
+                onClick={() => {
+                  setScanHalted(null);
+                  failStreakRef.current = 0;
+                  if (!intervalRef.current) intervalRef.current = setInterval(scanFrame, SCAN_INTERVAL_MS);
+                }}
+                className="text-white text-[11px] font-semibold underline underline-offset-2 flex-shrink-0"
+              >
+                Tentar de novo
+              </button>
             </div>
           )}
 

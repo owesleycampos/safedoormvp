@@ -36,8 +36,8 @@ export default async function BillingPage() {
       prisma.invoice.count({ where: { status: 'PENDING' } }),
     ]);
 
-  // Calculate totals
-  const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'TRIAL');
+  // Só ACTIVE conta como receita; TRIAL fica de fora do MRR.
+  const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE');
   const mrr = activeSubs.reduce((acc, sub) => {
     const monthly = sub.billing === 'ANNUAL'
       ? Math.round(sub.priceMonthly * (1 - sub.discount))

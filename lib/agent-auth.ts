@@ -60,8 +60,15 @@ export async function authenticateAgent(
 }
 
 async function touchDevice(deviceId: string) {
-  await prisma.device.update({
-    where: { id: deviceId },
+  // Throttle: uma escrita a cada request de agente era um write por chamada.
+  // Só atualiza se o último 'visto' tem mais de 60s (ou o device não está
+  // ONLINE). updateMany condicional = atômico e barato.
+  const cutoff = new Date(Date.now() - 60_000);
+  await prisma.device.updateMany({
+    where: {
+      id: deviceId,
+      OR: [{ lastSeen: { lt: cutoff } }, { lastSeen: null }, { status: { not: 'ONLINE' } }],
+    },
     data: { lastSeen: new Date(), status: 'ONLINE' },
   }).catch(() => {});
 }

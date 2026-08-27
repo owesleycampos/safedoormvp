@@ -434,9 +434,19 @@ export function CameraClient() {
                 const video = videoRef.current!;
                 const isKnown = face.studentId !== null;
                 const box = face.box;
+                // object-cover recorta o vídeo para preencher o elemento, então
+                // as coordenadas normalizadas não mapeiam 1:1 — sem corrigir a
+                // escala/offset do crop as caixas saíam deslocadas do rosto.
+                const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
+                const cw = video.clientWidth, ch = video.clientHeight;
+                const scale = Math.max(cw / vw, ch / vh);
+                const dispW = vw * scale, dispH = vh * scale;
+                const offX = (cw - dispW) / 2, offY = (ch - dispH) / 2;
                 const boxPx = box ? {
-                  left: box.left * video.clientWidth, top: box.top * video.clientHeight,
-                  width: box.width * video.clientWidth, height: box.height * video.clientHeight,
+                  left: offX + box.left * dispW,
+                  top: offY + box.top * dispH,
+                  width: box.width * dispW,
+                  height: box.height * dispH,
                 } : null;
 
                 return (

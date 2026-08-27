@@ -482,8 +482,7 @@ export default function ReportsTab() {
                   <span className={cn(
                     'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-sm font-bold',
                     freq >= 75 ? 'bg-foreground/[0.06] text-foreground'
-                      : freq >= 50 ? 'bg-muted text-muted-foreground'
-                      : 'bg-muted text-muted-foreground'
+                      : 'bg-warning/10 text-warning'
                   )}>
                     {freq}%
                   </span>
@@ -613,8 +612,7 @@ export default function ReportsTab() {
                           <span className={cn(
                             'inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-medium',
                             freq >= 75 ? 'bg-foreground/[0.06] text-foreground'
-                              : freq >= 50 ? 'bg-muted-foreground/10 text-muted-foreground'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-warning/10 text-warning'
                           )}>
                             {freq}%
                           </span>

@@ -106,6 +106,8 @@ model School {
   yearsInMarket     String? // "MENOS_1" | "1_3" | "3_10" | "10_MAIS"
   usesRecognition   String? // "NAO" | "PLANILHA" | "CATRACA" | "OUTRO_APP" | "SIM_FACIAL"
   onboardingDoneAt  DateTime?
+  recognitionUsage  RecognitionUsage[]
+  cronRuns          CronRun[]
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 }
@@ -236,6 +238,7 @@ model Student {
   attendance           AttendanceEvent[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
+  absenceAlerts        AbsenceAlert[]
 
   @@index([schoolId, classId])
 }
@@ -367,6 +370,7 @@ model UnrecognizedFaceLog {
 model AbsenceAlert {
   id        String   @id @default(cuid())
   studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   dayKey    String // "YYYY-MM-DD" no fuso da escola
   sentAt    DateTime @default(now())
   channels  String? // canais que receberam (ex: "push", "push,whatsapp")
@@ -540,6 +544,7 @@ model WebhookEvent {
 model RecognitionUsage {
   id        String   @id @default(cuid())
   schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   monthKey  String // "YYYY-MM" no fuso da escola
   count     Int      @default(0)
   updatedAt DateTime @updatedAt
@@ -560,6 +565,7 @@ model CronRun {
   job       String // ex.: "daily-digest"
   dayKey    String // "YYYY-MM-DD" no fuso da escola
   schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([job, dayKey, schoolId])

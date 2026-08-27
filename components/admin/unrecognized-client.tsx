@@ -56,7 +56,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
     setIdentifyLog(log);
     setIdentifyTarget('');
     if (identifyStudents.length === 0) {
-      const res = await fetch('/api/students?limit=500');
+      const res = await fetch('/api/students?limit=500&fields=picker');
       if (res.ok) {
         const data = await res.json();
         setIdentifyStudents(data.students ?? []);

@@ -74,12 +74,14 @@ export async function POST(req: NextRequest) {
     httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
   });
   res.cookies.set(RETURN_COOKIE, originalToken, {
-    httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
+    // Vive mais que a sessão impersonada (1h): senão, ao expirar a
+    // impersonação o dono perdia também a própria sessão e caía no login.
+    httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 8 * 60 * 60,
   });
   // Sem encodeURIComponent aqui: o next/server já codifica o valor do
   // cookie, e codificar de novo deixava "Maria%20Silva" na faixa.
   res.cookies.set(MARKER_COOKIE, target.name || target.email || 'usuário', {
-    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
+    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: 8 * 60 * 60,
   });
   return res;
 }

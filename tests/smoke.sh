@@ -455,12 +455,19 @@ check "biometria apagada no delete (LGPD)" "t" \
 sql0 "UPDATE \"Student\" SET \"isActive\"=true WHERE id='$TESTAL'" >/dev/null
 
 # cota atômica: teto de 2, insere uso já em 2 → reserva bloqueia (updateMany count<cap = 0)
-sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test';
-      INSERT INTO \"RecognitionUsage\" (id,\"schoolId\",\"monthKey\",count,\"updatedAt\") VALUES ('at','atom-test','2099-01',2,now());" >/dev/null
-sql0 "UPDATE \"RecognitionUsage\" SET count=count+1 WHERE \"schoolId\"='atom-test' AND \"monthKey\"='2099-01' AND count < 2" >/dev/null
-BLOCKED=$(sql0 "SELECT count FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test'")
+ATOM_ESC=$(sql0 "SELECT \"schoolId\" FROM \"User\" WHERE email='admin@teste.com'")
+sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='$ATOM_ESC' AND \"monthKey\"='2099-01';
+      INSERT INTO \"RecognitionUsage\" (id,\"schoolId\",\"monthKey\",count,\"updatedAt\") VALUES ('at','$ATOM_ESC','2099-01',2,now());" >/dev/null
+sql0 "UPDATE \"RecognitionUsage\" SET count=count+1 WHERE \"schoolId\"='$ATOM_ESC' AND \"monthKey\"='2099-01' AND count < 2" >/dev/null
+BLOCKED=$(sql0 "SELECT count FROM \"RecognitionUsage\" WHERE \"schoolId\"='$ATOM_ESC' AND \"monthKey\"='2099-01'")
 check "cota no teto: reserva não incrementa (fica em 2)" "2" "$BLOCKED"
-sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='atom-test';" >/dev/null
+sql0 "DELETE FROM \"RecognitionUsage\" WHERE \"schoolId\"='$ATOM_ESC' AND \"monthKey\"='2099-01';" >/dev/null
+
+# picker leve não vaza PII
+check "picker de aluno → 200" "200" "$(api GET '/api/students?limit=5&fields=picker')"
+check "picker não traz responsaveis/emails" "true" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/p.json'));s=(d.get('students') or [{}])[0];print('true' if 'parents' not in s and 'name' in s else 'false')")"
+check "resumo de presenca por turma -> 200" "200" "$(api GET /api/classes/attendance-summary)"
 
 echo "── Rodada 'faça tudo': trava do digest, webhook fail-closed, escola suspensa ──"
 

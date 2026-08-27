@@ -19,19 +19,45 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') || '';
   const classId = searchParams.get('classId');
   const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
+  const picker = searchParams.get('fields') === 'picker';
+
+  const where = {
+    schoolId,
+    isActive: true,
+    ...(search && {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' as const } },
+        { class: { name: { contains: search, mode: 'insensitive' as const } } },
+      ],
+    }),
+    ...(classId && { classId }),
+  };
+
+  // Modo picker: só id/nome/turma/foto — sem árvore de responsáveis nem
+  // e-mails. Os seletores 'escolher aluno' pediam a lista pesada de 500
+  // linhas (com PII) só para um dropdown.
+  if (picker) {
+    const rows = await prisma.student.findMany({
+      where,
+      select: {
+        id: true, name: true, photoUrl: true,
+        class: { select: { name: true } },
+      },
+      orderBy: [{ class: { name: 'asc' } }, { name: 'asc' }],
+      take: limit,
+    });
+    return NextResponse.json({
+      // Mantém class:{name} e className para casar com os dois consumidores.
+      students: rows.map((r) => ({
+        id: r.id, name: r.name, photoUrl: r.photoUrl,
+        className: r.class?.name ?? null,
+        class: r.class ? { name: r.class.name } : null,
+      })),
+    });
+  }
 
   const students = await prisma.student.findMany({
-    where: {
-      schoolId,
-      isActive: true,
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' as const } },
-          { class: { name: { contains: search, mode: 'insensitive' as const } } },
-        ],
-      }),
-      ...(classId && { classId }),
-    },
+    where,
     include: {
       class: { select: { id: true, name: true, grade: true } },
       photos: { where: { isProfile: true }, take: 1 },

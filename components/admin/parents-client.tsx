@@ -173,7 +173,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
   async function openLinkDialog(parent: ParentItem) {
     setLinkParent(parent); setLinkSearch(''); setLinkOpen(true);
     try {
-      const res = await fetch('/api/students?limit=500');
+      const res = await fetch('/api/students?limit=500&fields=picker');
       const data = await res.json();
       setLinkStudents(data.students ?? data ?? []);
     } catch { setLinkStudents([]); }

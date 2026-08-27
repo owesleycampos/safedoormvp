@@ -73,11 +73,11 @@ function getEffectiveStatus(s: StudentRow): AttendanceStatus {
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; border: string; icon: React.ElementType; iconColor: string }> = {
   present:    { label: 'Presente',         color: 'bg-foreground/[0.06] text-foreground',         border: 'border-l-foreground',       icon: CheckCircle2,  iconColor: 'text-foreground' },
-  late:       { label: 'Atraso',           color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: Clock,         iconColor: 'text-muted-foreground' },
-  absent:     { label: 'Ausente',          color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground/50', icon: MinusCircle,   iconColor: 'text-muted-foreground' },
+  late:       { label: 'Atraso',           color: 'bg-warning/10 text-warning',                   border: 'border-l-warning',          icon: Clock,         iconColor: 'text-warning' },
+  absent:     { label: 'Ausente',          color: 'bg-destructive/10 text-destructive',           border: 'border-l-destructive',      icon: MinusCircle,   iconColor: 'text-destructive' },
   left:       { label: 'Saiu',             color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: LogOut,        iconColor: 'text-muted-foreground' },
   early_exit: { label: 'Saída antecipada', color: 'bg-muted text-muted-foreground',               border: 'border-l-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
-  exit_only:  { label: 'Saída sem entrada', color: 'bg-muted text-muted-foreground',              border: 'border-l-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
+  exit_only:  { label: 'Saída sem entrada', color: 'bg-warning/10 text-warning',                  border: 'border-l-warning',          icon: AlertTriangle, iconColor: 'text-warning' },
 };
 
 // ─── Time Picker Dialog ──────────────────────────────────────────────────────

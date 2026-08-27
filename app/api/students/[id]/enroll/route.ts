@@ -67,31 +67,22 @@ export async function POST(
     } catch { /* corrupt JSON — fall back to scan */ }
     await rekognition.deleteFacesForStudent(collectionId, studentId, knownFaceIds);
 
-    // ── 3. Index each photo ────────────────────────────────────────────────
-    let facesAdded = 0;
-    let skippedPhotos = 0;
-    const newFaceIds: string[] = [];
-
-    for (const photo of student.photos) {
-      // Fetch the image bytes from the URL (Vercel Blob or any HTTPS URL)
-      let imageBuffer: Buffer;
+    // ── 3. Index photos EM PARALELO (era sequencial: 10 fotos = 10× latência).
+    // Cada foto: fetch do blob + indexFace. Falhas isoladas não derrubam as
+    // outras, e os FaceIds obtidos são persistidos mesmo em sucesso parcial.
+    const results = await Promise.all(student.photos.map(async (photo) => {
       try {
         const res = await fetch(photo.url);
-        if (!res.ok) { skippedPhotos++; continue; }
-        imageBuffer = Buffer.from(await res.arrayBuffer());
+        if (!res.ok) return [] as string[];
+        const buf = Buffer.from(await res.arrayBuffer());
+        return await rekognition.indexFace(collectionId, buf, studentId);
       } catch {
-        skippedPhotos++;
-        continue;
+        return [] as string[];
       }
-
-      const faceIds = await rekognition.indexFace(collectionId, imageBuffer, studentId);
-      if (faceIds.length > 0) {
-        facesAdded++;
-        newFaceIds.push(...faceIds);
-      } else {
-        skippedPhotos++;
-      }
-    }
+    }));
+    const newFaceIds: string[] = results.flat();
+    const facesAdded = results.filter((r) => r.length > 0).length;
+    const skippedPhotos = student.photos.length - facesAdded;
 
     // If no faces were detected in any photo, abort
     if (facesAdded === 0) {

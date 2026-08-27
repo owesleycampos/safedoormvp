@@ -71,30 +71,15 @@ export function ClassesClient({ classes: initialClasses, schoolId }: ClassesClie
   const [copied, setCopied] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, { present: number; total: number }>>({});
 
-  // Fetch today's attendance per class
+  // Presença de hoje por turma — endpoint LEVE (contagem por turma), em vez
+  // de puxar a matriz aluno×dia da escola inteira só para os badges.
   useEffect(() => {
     async function fetchAttendance() {
       try {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const res = await fetch(`/api/reports/attendance?from=${todayStr}&to=${todayStr}`);
+        const res = await fetch('/api/classes/attendance-summary');
         if (!res.ok) return;
         const data = await res.json();
-        const rows = data.rows ?? [];
-        // Group by className -> map to classId using our classes list
-        const byClassName: Record<string, { present: number; total: number }> = {};
-        rows.forEach((r: any) => {
-          const status = r.attendance?.[todayStr];
-          if (!status || status === 'weekend') return;
-          if (!byClassName[r.className]) byClassName[r.className] = { present: 0, total: 0 };
-          byClassName[r.className].total++;
-          if (status === 'present' || status === 'late') byClassName[r.className].present++;
-        });
-        // Map className to classId
-        const byId: Record<string, { present: number; total: number }> = {};
-        initialClasses.forEach(c => {
-          if (byClassName[c.name]) byId[c.id] = byClassName[c.name];
-        });
-        setAttendance(byId);
+        setAttendance(data.summary ?? {});
       } catch { /* silent */ }
     }
     fetchAttendance();

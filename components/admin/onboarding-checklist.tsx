@@ -1,5 +1,7 @@
 'use client';
 
+import { useSession } from 'next-auth/react';
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Circle, ChevronDown, ChevronUp, X } from 'lucide-react';
@@ -27,6 +29,9 @@ const DEFAULT_STEPS: OnboardingStep[] = [
 ];
 
 export function OnboardingChecklist() {
+  const { data: session } = useSession();
+  const schoolId = (session?.user as any)?.schoolId || 'x';
+  const dismissKey = `onboarding_dismissed_${schoolId}`;
   const [status, setStatus] = useState<OnboardingStatus>({
     steps: DEFAULT_STEPS,
     progress: 0,
@@ -37,7 +42,7 @@ export function OnboardingChecklist() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('onboarding_dismissed');
+      const stored = localStorage.getItem(dismissKey);
       if (stored === 'true') {
         setDismissed(true);
         return;
@@ -64,7 +69,7 @@ export function OnboardingChecklist() {
   function handleDismiss() {
     setDismissed(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('onboarding_dismissed', 'true');
+      localStorage.setItem(dismissKey, 'true');
     }
   }
 

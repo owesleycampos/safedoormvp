@@ -223,7 +223,10 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
     ? Math.round((data.presentCount / data.totalStudents) * 100) : 0;
 
   // Calculate trend from chart data
-  const trendRates = data.trend?.filter(t => t.total > 0).map(t => Math.round((t.present / t.total) * 100)) ?? [];
+  // Só dias úteis (o gráfico já exclui fim de semana) — senão a "média nos
+  // dias úteis" podia embutir um sábado com evento.
+  const isWeekday = (d: string) => { const g = new Date(d + 'T12:00:00').getDay(); return g !== 0 && g !== 6; };
+  const trendRates = data.trend?.filter(t => t.total > 0 && isWeekday(t.date)).map(t => Math.round((t.present / t.total) * 100)) ?? [];
   const avgRate = trendRates.length > 0 ? Math.round(trendRates.reduce((a, b) => a + b, 0) / trendRates.length) : 0;
 
   const today = new Date();

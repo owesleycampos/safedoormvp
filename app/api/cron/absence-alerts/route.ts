@@ -20,6 +20,7 @@ import { prisma } from '@/lib/db';
 import { resolveSchedule, timeToMinutes } from '@/lib/attendance-rules';
 import { DEFAULT_TIMEZONE, dayRangeInTz, isWeekendDateStr, localMinutes } from '@/lib/timezone';
 import { notifyGuardians } from '@/lib/notify';
+import { mapWithConcurrency } from '@/lib/async-pool';
 
 /** Minutos após o limite de atraso antes de alarmar — dá tempo do trânsito. */
 const TOLERANCE_MIN = 45;
@@ -59,13 +60,17 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const candidates: Array<{ studentId: string; name: string; school: string; dayKey: string }> = [];
-  let sent = 0;
+  type SchoolResult = { candidates: Array<{ studentId: string; name: string; school: string; dayKey: string }>; sent: number };
 
-  for (const school of schools) {
+  // Escolas processadas em paralelo com teto de concorrência — com 100 escolas,
+  // uma de cada vez somaria a latência de todas e arriscaria o timeout. A ordem
+  // dos resultados é preservada; a idempotência continua na unique (studentId,
+  // dayKey), então o paralelismo é seguro.
+  const perSchool = await mapWithConcurrency<typeof schools[number], SchoolResult>(schools, 8, async (school) => {
+    const out: SchoolResult = { candidates: [], sent: 0 };
     const tz = school.settings?.timezone || DEFAULT_TIMEZONE;
     const day = dayRangeInTz(now, tz);
-    if (isWeekendDateStr(day.dateStr)) continue;
+    if (isWeekendDateStr(day.dateStr)) return out;
     const nowMin = localMinutes(now, tz);
 
     // Turmas cujo turno já passou do limite + tolerância, AGRUPADAS por turno.
@@ -82,7 +87,7 @@ export async function GET(req: NextRequest) {
       arr.push(c.id);
       dueByShift.set(key, arr);
     }
-    if (dueByShift.size === 0) continue;
+    if (dueByShift.size === 0) return out;
 
     // Só os turnos que de fato operaram hoje (pelo menos uma entrada no turno).
     const dueClassIds: string[] = [];
@@ -97,7 +102,7 @@ export async function GET(req: NextRequest) {
       });
       if (anyEntry) dueClassIds.push(...classIds);
     }
-    if (dueClassIds.length === 0) continue;
+    if (dueClassIds.length === 0) return out;
 
     const absent = await prisma.student.findMany({
       where: {
@@ -114,7 +119,7 @@ export async function GET(req: NextRequest) {
     });
 
     for (const s of absent) {
-      candidates.push({ studentId: s.id, name: s.name, school: school.name, dayKey: day.dateStr });
+      out.candidates.push({ studentId: s.id, name: s.name, school: school.name, dayKey: day.dateStr });
       if (dryRun) continue;
 
       try {
@@ -144,9 +149,13 @@ export async function GET(req: NextRequest) {
         where: { studentId_dayKey: { studentId: s.id, dayKey: day.dateStr } },
         data: { channels: channels.join(',') || null },
       }).catch(() => {});
-      sent++;
+      out.sent++;
     }
-  }
+    return out;
+  });
+
+  const candidates = perSchool.flatMap((r) => r.candidates);
+  const sent = perSchool.reduce((a, r) => a + r.sent, 0);
 
   return NextResponse.json({
     ok: true,

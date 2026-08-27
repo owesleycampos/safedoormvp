@@ -11,7 +11,11 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test:logic": "tsx tests/logic.test.ts",
+    "test:pool": "tsx tests/async-pool.test.ts",
+    "test:concurrency": "tsx tests/concurrency.test.ts",
+    "test:smoke": "bash tests/smoke.sh"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",

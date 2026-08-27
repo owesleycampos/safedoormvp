@@ -15,6 +15,7 @@ import { prisma } from '@/lib/db';
 import { resolveSchedule, timeToMinutes } from '@/lib/attendance-rules';
 import { DEFAULT_TIMEZONE, dayRangeInTz, isWeekendDateStr, localMinutes } from '@/lib/timezone';
 import { sendPushToSubscription } from '@/lib/notifications';
+import { mapWithConcurrency } from '@/lib/async-pool';
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -52,12 +53,15 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const results: Array<{ school: string; shift: string; present: number; absent: number; sentTo: number }> = [];
+  type DigestEntry = { school: string; shift: string; present: number; absent: number; sentTo: number };
 
-  for (const school of schools) {
+  // Escolas em paralelo com teto de concorrência (ver async-pool). A ordem é
+  // preservada; a idempotência continua na unique (job, dayKey, schoolId).
+  const perSchool = await mapWithConcurrency<typeof schools[number], DigestEntry[]>(schools, 8, async (school) => {
+    const results: DigestEntry[] = [];
     const tz = school.settings?.timezone || DEFAULT_TIMEZONE;
     const day = dayRangeInTz(now, tz);
-    if (isWeekendDateStr(day.dateStr)) continue;
+    if (isWeekendDateStr(day.dateStr)) return results;
     const nowMin = localMinutes(now, tz);
 
     // Cada TURNO é resumido separadamente, com trava própria. A chave antiga
@@ -74,7 +78,7 @@ export async function GET(req: NextRequest) {
       arr.push(c.id);
       byShift.set(key, arr);
     }
-    if (byShift.size === 0) continue;
+    if (byShift.size === 0) return results;
 
     for (const [shiftKey, classIds] of Array.from(byShift.entries())) {
       // Só as ENTRADAS das turmas deste turno — senão o resumo da manhã
@@ -147,7 +151,9 @@ export async function GET(req: NextRequest) {
         },
       }).catch(() => {});
     }
-  }
+    return results;
+  });
 
+  const results = perSchool.flat();
   return NextResponse.json({ ok: true, dryRun, digests: results });
 }

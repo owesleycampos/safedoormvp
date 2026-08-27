@@ -26,8 +26,32 @@ export interface RecognitionGate {
   minConfidence: number;
 }
 
-/** Verifica contingência (pausa) e devolve cota + minConfidence numa query. */
+// Cache do gate por escola. O gate (pausa/cota/minConfidence) muda raramente —
+// ler 3 tabelas a cada frame (câmera manda ~1 frame/2s) é desperdício que, com
+// 100 escolas, vira centenas de queries/segundo. Cacheia por 30s POR ESCOLA.
+// Só o gate é cacheado; a RESERVA continua atômica e por-frame (nunca fura o
+// teto). Custo: uma pausa/mudança de plano leva até 30s para propagar — ok para
+// um controle de contingência. Em serverless cada instância tem seu cache; numa
+// rajada de frames na mesma instância o ganho é grande.
+const GATE_TTL_MS = 30_000;
+const gateCache = new Map<string, { gate: RecognitionGate; exp: number }>();
+
+/** Limpa o cache do gate de uma escola (use ao pausar/mudar plano para efeito imediato). */
+export function invalidateGateCache(schoolId?: string): void {
+  if (schoolId) gateCache.delete(schoolId);
+  else gateCache.clear();
+}
+
+/** Verifica contingência (pausa) e devolve cota + minConfidence numa query (cacheado 30s). */
 export async function getRecognitionGate(schoolId: string): Promise<RecognitionGate> {
+  const cached = gateCache.get(schoolId);
+  if (cached && cached.exp > Date.now()) return cached.gate;
+  const gate = await computeRecognitionGate(schoolId);
+  gateCache.set(schoolId, { gate, exp: Date.now() + GATE_TTL_MS });
+  return gate;
+}
+
+async function computeRecognitionGate(schoolId: string): Promise<RecognitionGate> {
   const [platform, schoolSettings, subscription] = await Promise.all([
     prisma.platformSettings.findFirst({
       select: {
@@ -72,26 +96,36 @@ export async function getRecognitionGate(schoolId: string): Promise<RecognitionG
  */
 export async function reserveRecognition(schoolId: string, cap: number, tz?: string | null): Promise<boolean> {
   const monthKey = monthKeyFor(tz);
-  // Garante a linha do mês (idempotente).
-  await prisma.recognitionUsage.upsert({
-    where: { schoolId_monthKey: { schoolId, monthKey } },
-    create: { schoolId, monthKey, count: 0 },
-    update: {},
-  });
 
   if (cap > 0) {
-    // Incremento CONDICIONAL: só sobe se ainda há slot. Atômico no banco —
-    // frames concorrentes não passam do teto.
-    const res = await prisma.recognitionUsage.updateMany({
+    // Caminho comum (a linha do mês já existe): UMA escrita — incremento
+    // CONDICIONAL atômico, só sobe se ainda há slot. Frames concorrentes não
+    // passam do teto.
+    let res = await prisma.recognitionUsage.updateMany({
       where: { schoolId, monthKey, count: { lt: cap } },
       data: { count: { increment: 1 } },
     });
-    return res.count > 0; // 0 = teto atingido
+    if (res.count > 0) return true;
+
+    // 0 afetadas = linha ausente (1º frame do mês) OU teto atingido. Garante a
+    // linha e tenta de novo uma vez; se ainda 0, é teto de verdade.
+    await prisma.recognitionUsage.upsert({
+      where: { schoolId_monthKey: { schoolId, monthKey } },
+      create: { schoolId, monthKey, count: 0 },
+      update: {},
+    });
+    res = await prisma.recognitionUsage.updateMany({
+      where: { schoolId, monthKey, count: { lt: cap } },
+      data: { count: { increment: 1 } },
+    });
+    return res.count > 0;
   }
 
-  await prisma.recognitionUsage.update({
+  // Ilimitado (cap=0): conta para métrica e sempre permite — uma escrita.
+  await prisma.recognitionUsage.upsert({
     where: { schoolId_monthKey: { schoolId, monthKey } },
-    data: { count: { increment: 1 } },
+    create: { schoolId, monthKey, count: 1 },
+    update: { count: { increment: 1 } },
   });
   return true;
 }

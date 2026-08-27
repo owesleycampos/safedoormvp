@@ -48,6 +48,10 @@ export async function validateImageUpload(file: unknown): Promise<ValidatedImage
   if (!kind) {
     return { ok: false, error: 'O arquivo enviado não é uma imagem válida.', status: 415 };
   }
+  // Tipo e extensão saem do que os MAGIC BYTES dizem, não do file.type (que o
+  // cliente controla). Senão dava para salvar bytes JPEG com Content-Type
+  // image/png — um objeto no Blob cujo header mente sobre o conteúdo.
   const ext = kind === 'jpeg' ? 'jpg' : kind;
-  return { ok: true, bytes, type: file.type, ext };
+  const type = kind === 'jpeg' ? 'image/jpeg' : kind === 'png' ? 'image/png' : 'image/webp';
+  return { ok: true, bytes, type, ext };
 }

@@ -47,12 +47,18 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   let url = '/pwa/children';
 
-  if (data.type === 'attendance' && data.studentId) {
+  // Deep-link explícito tem prioridade (o digest manda /admin/attendance).
+  if (data.url) {
+    url = data.url;
+  }
+  // Presença e ausência levam à timeline do aluno específico.
+  if ((data.type === 'attendance' || data.type === 'absence') && data.studentId) {
     url = `/pwa/timeline?studentId=${data.studentId}`;
   }
 
+  // Botão "Ver Timeline": vai ao aluno se a notificação carregava um.
   if (event.action === 'view') {
-    url = `/pwa/timeline`;
+    url = data.studentId ? `/pwa/timeline?studentId=${data.studentId}` : '/pwa/timeline';
   }
 
   event.waitUntil(

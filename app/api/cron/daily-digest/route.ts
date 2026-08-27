@@ -15,6 +15,7 @@ import { prisma } from '@/lib/db';
 import { resolveSchedule, timeToMinutes } from '@/lib/attendance-rules';
 import { DEFAULT_TIMEZONE, dayRangeInTz, isWeekendDateStr, localMinutes } from '@/lib/timezone';
 import { sendPushToSubscription } from '@/lib/notifications';
+import { mapWithConcurrency } from '@/lib/async-pool';
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -52,93 +53,107 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const results: Array<{ school: string; present: number; absent: number; sentTo: number }> = [];
+  type DigestEntry = { school: string; shift: string; present: number; absent: number; sentTo: number };
 
-  for (const school of schools) {
+  // Escolas em paralelo com teto de concorrência (ver async-pool). A ordem é
+  // preservada; a idempotência continua na unique (job, dayKey, schoolId).
+  const perSchool = await mapWithConcurrency<typeof schools[number], DigestEntry[]>(schools, 8, async (school) => {
+    const results: DigestEntry[] = [];
     const tz = school.settings?.timezone || DEFAULT_TIMEZONE;
     const day = dayRangeInTz(now, tz);
-    if (isWeekendDateStr(day.dateStr)) continue;
-
-    // O resumo só considera turmas cujo turno já fechou a entrada (+60min).
-    // Sem esse filtro, o resumo das 8h30 contaria o turno da TARDE inteiro
-    // como ausente. Escolas multi-turno: o digest sai quando o primeiro
-    // turno fecha, cobrindo apenas as turmas devidas naquele momento.
+    if (isWeekendDateStr(day.dateStr)) return results;
     const nowMin = localMinutes(now, tz);
-    const dueClassIds = school.classes
-      .filter((c) => {
-        const sched = resolveSchedule(c.shift, school.settings ?? null);
-        return sched ? nowMin >= timeToMinutes(sched.entryLimit) + 60 : false;
-      })
-      .map((c) => c.id);
-    if (dueClassIds.length === 0) continue;
 
-    const digestKey = `${school.id}:${day.dateStr}`;
+    // Cada TURNO é resumido separadamente, com trava própria. A chave antiga
+    // era só por dia: o run da manhã fechava a trava e os turnos da tarde/
+    // noite nunca eram resumidos. Agrupa as turmas por turno e processa só os
+    // turnos cuja entrada já fechou (+60min).
+    const byShift = new Map<string, string[]>();
+    for (const c of school.classes) {
+      const sched = resolveSchedule(c.shift, school.settings ?? null);
+      if (!sched) continue;
+      if (nowMin < timeToMinutes(sched.entryLimit) + 60) continue;
+      const key = c.shift || 'GERAL';
+      const arr = byShift.get(key) || [];
+      arr.push(c.id);
+      byShift.set(key, arr);
+    }
+    if (byShift.size === 0) return results;
 
-    // Só as ENTRADAS das turmas devidas (não a escola inteira) — senão o
-    // resumo da manhã contava alunos da tarde como "presentes".
-    const [students, entries] = await Promise.all([
-      prisma.student.findMany({
-        where: { schoolId: school.id, isActive: true, classId: { in: dueClassIds } },
-        select: { id: true, name: true },
-      }),
-      prisma.attendanceEvent.findMany({
-        where: {
-          student: { schoolId: school.id, classId: { in: dueClassIds } },
-          eventType: 'ENTRY',
-          timestamp: { gte: day.start, lt: day.end },
-        },
-        select: { studentId: true },
-        distinct: ['studentId'],
-      }),
-    ]);
-    if (students.length === 0 || entries.length === 0) continue; // sem aula hoje
+    for (const [shiftKey, classIds] of Array.from(byShift.entries())) {
+      // Só as ENTRADAS das turmas deste turno — senão o resumo da manhã
+      // contava alunos da tarde como "presentes".
+      const [students, entries] = await Promise.all([
+        prisma.student.findMany({
+          where: { schoolId: school.id, isActive: true, classId: { in: classIds } },
+          select: { id: true, name: true },
+        }),
+        prisma.attendanceEvent.findMany({
+          where: {
+            student: { schoolId: school.id, classId: { in: classIds } },
+            eventType: 'ENTRY',
+            timestamp: { gte: day.start, lt: day.end },
+          },
+          select: { studentId: true },
+          distinct: ['studentId'],
+        }),
+      ]);
+      if (students.length === 0 || entries.length === 0) continue; // turno sem aula hoje
 
-    const presentIds = new Set(entries.map((e) => e.studentId));
-    const absentees = students.filter((s) => !presentIds.has(s.id));
+      const presentIds = new Set(entries.map((e) => e.studentId));
+      const absentees = students.filter((s) => !presentIds.has(s.id));
 
-    // Idempotência ATÔMICA: reivindica a trava ANTES de enviar. Uma segunda
-    // execução sobreposta falha aqui (P2002) e não reenvia o digest.
-    if (!dryRun) {
-      try {
-        await prisma.cronRun.create({ data: { job: 'daily-digest', dayKey: day.dateStr, schoolId: school.id } });
-      } catch {
-        continue; // já enviado (ou em andamento) para esta escola/dia
+      // Idempotência ATÔMICA por ESCOLA+DIA+TURNO. Uma segunda execução do
+      // mesmo turno falha aqui (P2002) e não reenvia; a tarde tem chave
+      // própria e é enviada quando fecha.
+      const runKey = `${day.dateStr}:${shiftKey}`;
+      if (!dryRun) {
+        try {
+          await prisma.cronRun.create({ data: { job: 'daily-digest', dayKey: runKey, schoolId: school.id } });
+        } catch {
+          continue; // este turno já foi resumido hoje
+        }
       }
-    }
 
-    const names = absentees.slice(0, 8).map((s) => s.name.split(' ').slice(0, 2).join(' '));
-    const more = absentees.length > 8 ? ` e mais ${absentees.length - 8}` : '';
-    const body = absentees.length === 0
-      ? `Todos os ${students.length} alunos presentes hoje. 🎉`
-      : `${presentIds.size} presentes, ${absentees.length} ausentes: ${names.join(', ')}${more}. Veja a Chamada Diária para contatar os responsáveis.`;
+      const names = absentees.slice(0, 8).map((s) => s.name.split(' ').slice(0, 2).join(' '));
+      const more = absentees.length > 8 ? ` e mais ${absentees.length - 8}` : '';
+      const body = absentees.length === 0
+        ? `Todos os ${students.length} alunos presentes hoje. 🎉`
+        : `${presentIds.size} presentes, ${absentees.length} ausentes: ${names.join(', ')}${more}. Veja a Chamada Diária para contatar os responsáveis.`;
 
-    results.push({ school: school.name, present: presentIds.size, absent: absentees.length, sentTo: school.pushSubscriptions.length });
-    if (dryRun) continue;
+      results.push({ school: school.name, shift: shiftKey, present: presentIds.size, absent: absentees.length, sentTo: school.pushSubscriptions.length });
+      if (dryRun) continue;
 
-    let delivered = 0;
-    for (const sub of school.pushSubscriptions) {
-      const ok = await sendPushToSubscription(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        {
-          title: `Porta Segura — Resumo de hoje`,
-          body,
-          tag: `digest-${day.dateStr}`,
-          data: { type: 'digest', url: '/admin/attendance' },
-        },
-        sub.id
+      // Fan-out de push em paralelo — antes serializava um round-trip por
+      // inscrição dentro da mesma invocação compartilhada com todas as escolas.
+      const outcomes = await Promise.all(
+        school.pushSubscriptions.map((sub) =>
+          sendPushToSubscription(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            {
+              title: `Porta Segura — Resumo de hoje`,
+              body,
+              tag: `digest-${day.dateStr}-${shiftKey}`,
+              data: { type: 'digest', url: '/admin/attendance' },
+            },
+            sub.id
+          )
+        )
       );
-      if (ok) delivered++;
+      const delivered = outcomes.filter(Boolean).length;
+
+      await prisma.auditLog.create({
+        data: {
+          action: 'DIGEST_SENT',
+          entityType: 'School',
+          entityId: `${school.id}:${runKey}`,
+          metadata: JSON.stringify({ shift: shiftKey, present: presentIds.size, absent: absentees.length, delivered }),
+        },
+      }).catch(() => {});
     }
+    return results;
+  });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'DIGEST_SENT',
-        entityType: 'School',
-        entityId: digestKey,
-        metadata: JSON.stringify({ present: presentIds.size, absent: absentees.length, delivered }),
-      },
-    }).catch(() => {});
-  }
-
+  const results = perSchool.flat();
   return NextResponse.json({ ok: true, dryRun, digests: results });
 }

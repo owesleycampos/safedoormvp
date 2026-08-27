@@ -68,3 +68,4 @@ dev.db
 *.db-journal
 
 .env*.local
+tests/load/load-fixtures.json

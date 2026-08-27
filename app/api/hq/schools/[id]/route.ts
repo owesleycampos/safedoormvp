@@ -47,8 +47,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       where: { schoolId_monthKey: { schoolId: school.id, monthKey } },
       select: { count: true },
     }),
-    prisma.attendanceEvent.count({
-      where: { student: { schoolId: school.id }, eventType: 'ENTRY', timestamp: { gte: dayRange.start, lt: dayRange.end } },
+    // Alunos ATIVOS DISTINTOS com entrada hoje. Contar eventos brutos (com
+    // reentradas e alunos inativos) contra o total de ativos fazia a taxa
+    // passar de 100%.
+    prisma.attendanceEvent.findMany({
+      where: {
+        student: { schoolId: school.id, isActive: true },
+        eventType: 'ENTRY',
+        timestamp: { gte: dayRange.start, lt: dayRange.end },
+      },
+      select: { studentId: true },
+      distinct: ['studentId'],
     }),
     prisma.attendanceEvent.count({
       where: { student: { schoolId: school.id }, timestamp: { gte: dayRangeForDateStr(monthKey + '-01', tz).start } },
@@ -116,7 +125,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       remaining: recogCap > 0 ? Math.max(0, recogCap - usedRecog) : null,
       monthKey,
     },
-    today: { entries: entriesToday, presenceRate: activeStudents > 0 ? Math.round((entriesToday / activeStudents) * 100) : 0 },
+    today: {
+      entries: entriesToday.length,
+      presenceRate: activeStudents > 0 ? Math.min(100, Math.round((entriesToday.length / activeStudents) * 100)) : 0,
+    },
     eventsThisMonth,
     lastEventAt: lastEvent?.timestamp ?? null,
     devices,

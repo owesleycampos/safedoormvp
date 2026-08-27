@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { requireActiveSchool } from '@/lib/require-active-school';
 import { registerAttendanceEvent } from '@/lib/attendance-service';
+import { validateImageUpload } from '@/lib/upload-guard';
 
 /**
  * POST /api/attendance/recognize
@@ -34,23 +35,24 @@ export async function POST(req: NextRequest) {
       const conf = form.get('confidence');
       confidence = conf != null && conf !== '' ? Number(conf) : null;
 
+      // Foto opcional: validada por magic bytes (não confia no content-type do
+      // cliente). Se for inválida, apenas ignora — a foto nunca bloqueia o
+      // registro de presença.
       const photo = form.get('photo');
-      if (
-        photo instanceof File && photo.size > 0 && photo.size <= 5 * 1024 * 1024 &&
-        ['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) &&
-        process.env.BLOB_READ_WRITE_TOKEN
-      ) {
-        try {
-          const ext = photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg';
-          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const blob = await put(
-            `camera-photos/${auth.schoolId}/${stamp}.${ext}`,
-            photo,
-            { access: 'public', addRandomSuffix: true }
-          );
-          photoUrl = blob.url;
-        } catch {
-          // Falha de upload nunca bloqueia o registro de presença.
+      if (photo instanceof File && photo.size > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
+        const validated = await validateImageUpload(photo);
+        if (validated.ok) {
+          try {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const blob = await put(
+              `camera-photos/${auth.schoolId}/${stamp}.${validated.ext}`,
+              validated.bytes,
+              { access: 'public', addRandomSuffix: true, contentType: validated.type }
+            );
+            photoUrl = blob.url;
+          } catch {
+            // Falha de upload nunca bloqueia o registro de presença.
+          }
         }
       }
     } else {

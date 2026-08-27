@@ -44,6 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Sessão original não encontrada.' }, { status: 400 });
   }
 
+  // Prazo ABSOLUTO da impersonação. O maxAge do token/cookie sozinho não
+  // segura 1h: a sessão JWT do NextAuth é rolante e reescreve o cookie com o
+  // maxAge global (7 dias) no próximo request do usuário impersonado. Por
+  // isso o teto real é este timestamp, verificado no callback de sessão.
+  const impExp = Date.now() + MAX_AGE * 1000;
   const impersonated = await encode({
     secret,
     maxAge: MAX_AGE,
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
       role: target.role,
       schoolId: target.schoolId,
       impersonatedBy: (session.user as any)?.id,
+      impExp,
     },
   });
 
@@ -80,8 +86,11 @@ export async function POST(req: NextRequest) {
   });
   // Sem encodeURIComponent aqui: o next/server já codifica o valor do
   // cookie, e codificar de novo deixava "Maria%20Silva" na faixa.
+  // Vive exatamente o tempo da impersonação (MAX_AGE): a faixa não pode
+  // continuar afirmando "você está vendo como X" depois que a sessão
+  // impersonada já expirou.
   res.cookies.set(MARKER_COOKIE, target.name || target.email || 'usuário', {
-    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: 8 * 60 * 60,
+    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
   });
   return res;
 }

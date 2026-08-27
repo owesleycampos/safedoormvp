@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireSuperAdmin } from '@/lib/require-superadmin';
 import { DEFAULT_TIMEZONE, localDateStr } from '@/lib/timezone';
+import { mrrCents } from '@/lib/billing';
 
 /**
  * GET /api/hq/metrics — métricas apuradas do SaaS para o console do dono:
@@ -34,23 +35,26 @@ export async function GET() {
       select: { schoolId: true, count: true },
     }),
     prisma.subscription.findMany({
-      where: { status: 'TRIAL', trialEndsAt: { not: null } },
+      // "Terminando" = ainda por vencer. Sem o piso `gte: now` a lista trazia
+      // trials expirados semanas atrás como se estivessem para acabar.
+      where: { status: 'TRIAL', trialEndsAt: { gte: new Date() } },
       select: { schoolId: true, trialEndsAt: true },
       orderBy: { trialEndsAt: 'asc' },
       take: 10,
     }),
   ]);
 
-  // MRR: soma dos planos ativos, normalizando anual para mensal e aplicando desconto.
-  let mrrCents = 0;
-  for (const sub of subscriptions) {
-    if (sub.status !== 'ACTIVE') continue; // TRIAL não é receita
-    const net = sub.priceMonthly * (1 - (sub.discount || 0));
-    mrrCents += Math.round(net);
-  }
+  // MRR pela fonte única (só ACTIVE, desconto só no anual) — antes o Monitor
+  // aplicava desconto em toda ativa e divergia do Dashboard/Billing.
+  const totalMrrCents = mrrCents(subscriptions);
 
+  // Distribuição por plano conta só quem realmente paga (ACTIVE) — CANCELLED
+  // e TRIAL não são "assinaturas por plano" do faturamento.
   const planCounts: Record<string, number> = {};
-  for (const sub of subscriptions) planCounts[sub.plan] = (planCounts[sub.plan] || 0) + 1;
+  for (const sub of subscriptions) {
+    if (sub.status !== 'ACTIVE') continue;
+    planCounts[sub.plan] = (planCounts[sub.plan] || 0) + 1;
+  }
 
   // Nome das escolas dos top consumidores e dos trials.
   const ids = Array.from(new Set([...topUsage.map(t => t.schoolId), ...trialsEnding.map(t => t.schoolId)]));
@@ -69,7 +73,7 @@ export async function GET() {
       total: schoolsByStatus.reduce((a, g) => a + g._count, 0),
       byStatus: statusMap,
     },
-    revenue: { mrrCents, arrCents: mrrCents * 12, planCounts },
+    revenue: { mrrCents: totalMrrCents, arrCents: totalMrrCents * 12, planCounts },
     students: { total: totalStudents, active: activeStudents },
     parents: totalParents,
     recognition: {

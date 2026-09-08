@@ -69,11 +69,22 @@ export function CameraClient() {
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { modeChosenRef.current = modeChosen; }, [modeChosen]);
 
-  useEffect(() => {
+  // Distingue "não liberado" (o servidor respondeu 503) de "não consegui
+  // perguntar" (rede caiu). Antes, QUALQUER falha marcava como não configurado
+  // e o botão Iniciar ficava cinza até recarregar a página inteira — uma
+  // oscilação de rede de 1s trancava a portaria.
+  const probeRekognition = useCallback(() => {
     fetch('/api/camera/recognize')
-      .then((r) => setRekognitionConfigured(r.ok))
-      .catch(() => setRekognitionConfigured(false));
+      .then((r) => setRekognitionConfigured(r.status === 503 ? false : r.ok))
+      // Falha de REDE não é "não configurado". Bloquear a portaria por causa de
+      // uma oscilação de 1s é pior do que deixar iniciar: se o reconhecimento
+      // estiver mesmo fora, o próprio scan devolve 503 e o disjuntor da câmera
+      // avisa com a mensagem certa. (Marcar null aqui deixaria isLoading=true
+      // para sempre — o mesmo travamento com outro rótulo.)
+      .catch(() => setRekognitionConfigured(true));
   }, []);
+
+  useEffect(() => { probeRekognition(); }, [probeRekognition]);
 
   // Suggest the mode from the school's configured windows, so an operator
   // who forgot to flip ENTRADA→SAÍDA in the afternoon gets a visible nudge.
@@ -408,12 +419,20 @@ export function CameraClient() {
           {rekognitionConfigured === false && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20 px-8">
               <AlertCircle className="h-8 w-8 text-muted-foreground" />
-              <div className="text-center">
-                <p className="text-white text-sm font-medium">AWS Rekognition não configurado</p>
-                <p className="text-white/50 text-xs mt-2 leading-relaxed">
-                  Adicione <code className="text-white/70">AWS_ACCESS_KEY_ID</code> e{' '}
-                  <code className="text-white/70">AWS_SECRET_ACCESS_KEY</code>
+              {/* Quem lê isto é a secretária da portaria, não quem faz deploy:
+                  nomes de variável de ambiente não ajudam e assustam. */}
+              <div className="text-center space-y-3">
+                <p className="text-white text-sm font-medium">Reconhecimento facial ainda não liberado</p>
+                <p className="text-white/50 text-xs leading-relaxed max-w-xs">
+                  Esta escola ainda não tem o reconhecimento facial ativado. Fale com o suporte do Porta Segura. O registro manual continua funcionando normalmente.
                 </p>
+                <button
+                  type="button"
+                  onClick={probeRekognition}
+                  className="h-8 px-3 rounded-md border border-white/20 text-white/80 text-xs hover:bg-white/10 transition-colors"
+                >
+                  Verificar de novo
+                </button>
               </div>
             </div>
           )}

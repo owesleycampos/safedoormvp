@@ -105,7 +105,14 @@ export async function GET(req: NextRequest) {
       take: 20,
     }),
     prisma.unrecognizedFaceLog.count({ where: { schoolId, reviewed: false } }),
-    prisma.device.count({ where: { schoolId, status: 'OFFLINE' } }),
+    // "Offline" = aparelho que JÁ esteve online e parou de responder (aí sim é
+    // "verifique energia e internet"). Um device recém-cadastrado nasce OFFLINE
+    // com lastSeen nulo e nunca fica online quando a escola usa a câmera do
+    // NAVEGADOR (só o agente de mesa marca ONLINE) — isso disparava um alerta
+    // vermelho, todos os dias, impossível de limpar, enquanto o sistema
+    // registrava presenças normalmente. Alarme que não se apaga é alarme que se
+    // aprende a ignorar.
+    prisma.device.count({ where: { schoolId, status: 'OFFLINE', lastSeen: { not: null } } }),
     prisma.class.findMany({
       where: { schoolId },
       select: { id: true, name: true },

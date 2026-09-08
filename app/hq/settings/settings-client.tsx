@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from '@/components/ui/toaster';
 import { Settings, Save, DollarSign, Users, Clock } from 'lucide-react';
 
 interface PlatformSettings {
@@ -59,12 +60,12 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
       maxRecogPremium: parseInt(form.maxRecogPremium),
     };
     if (Object.values(nums).some((v) => Number.isNaN(v))) {
-      alert('Preencha todos os campos com números válidos.');
+      toast({ variant: 'destructive', title: 'Preencha todos os campos com números válidos.' });
       return;
     }
-    if (nums.trialDays < 0 || nums.trialDays > 90) { alert('Trial deve ter entre 0 e 90 dias.'); return; }
-    if (nums.annualDiscount < 0 || nums.annualDiscount > 0.9) { alert('Desconto anual deve estar entre 0% e 90%.'); return; }
-    if (nums.essencialPrice < 0 || nums.profissionalPrice < 0 || nums.premiumPrice < 0) { alert('Preços não podem ser negativos.'); return; }
+    if (nums.trialDays < 0 || nums.trialDays > 90) { toast({ variant: 'destructive', title: 'Trial deve ter entre 0 e 90 dias.' }); return; }
+    if (nums.annualDiscount < 0 || nums.annualDiscount > 0.9) { toast({ variant: 'destructive', title: 'Desconto anual deve estar entre 0% e 90%.' }); return; }
+    if (nums.essencialPrice < 0 || nums.profissionalPrice < 0 || nums.premiumPrice < 0) { toast({ variant: 'destructive', title: 'Preços não podem ser negativos.' }); return; }
     setSaving(true);
     try {
       const res = await fetch('/api/hq/settings', {
@@ -74,7 +75,7 @@ export function SettingsClient({ settings }: { settings: PlatformSettings }) {
       }).catch(() => null);
       if (!res || !res.ok) {
         const d = await res?.json().catch(() => null);
-        alert(d?.error || 'Falha ao salvar as configurações.');
+        toast({ variant: 'destructive', title: d?.error || 'Falha ao salvar as configurações.' });
         return;
       }
       setSaved(true);

@@ -798,10 +798,12 @@ export default function SettingsPage() {
 
                     {/* Info box */}
                     <div className="rounded-md bg-secondary border border-border p-4">
+                      {/* Quem lê é a secretária: "chaves VAPID em variáveis de
+                          ambiente" não é acionável por ela e só gera dúvida. */}
                       <p className="text-xs text-foreground">
-                        As notificações são enviadas via Web Push (PWA) para os responsáveis
-                        que autorizaram o recebimento no aplicativo. Certifique-se de que as
-                        chaves VAPID estão configuradas nas variáveis de ambiente.
+                        Os avisos chegam no celular dos responsáveis que ativaram as
+                        notificações no aplicativo. Cada responsável precisa autorizar uma
+                        vez, no próprio aparelho.
                       </p>
                     </div>
 

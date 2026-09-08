@@ -6,6 +6,9 @@ import { prisma } from '@/lib/db';
 import { isImpersonationExpired } from '@/lib/impersonation';
 import { clientIp, rateLimitPeek, rateLimitRecord } from '@/lib/rate-limit';
 
+/** De quanto em quanto tempo o JWT reconfere papel/escola no banco. */
+const REVALIDATE_MS = 60_000;
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   // maxAge explícito: sessão de 7 dias (era o default de 30). Reduz a
@@ -72,18 +75,42 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.schoolId = (user as any).schoolId;
-      } else if (!token.schoolId && token.sub && token.role === 'PARENT') {
-        // O vínculo pelo link da turma atribui a escola a uma conta que pode
-        // já estar logada — sem esta releitura, o JWT ficava com schoolId
-        // nulo até o próximo login e as inscrições de push nasciam órfãs.
-        // Custo: 1 consulta apenas para tokens ainda sem escola.
+        (token as any).checkedAt = Date.now();
+        return token;
+      }
+
+      if (!token.sub) return token;
+
+      // REVALIDAÇÃO PERIÓDICA. Antes, papel e escola eram gravados no login e
+      // nunca mais conferidos durante os 7 dias da sessão: rebaixar um ADMIN
+      // para PARENT, tirá-lo da escola ou APAGAR a conta não tinha efeito
+      // nenhum — o cookie continuava dizendo ADMIN e o requireActiveSchool
+      // confiava nele. (O status da escola já era relido a cada request; a
+      // identidade não.) Uma consulta a cada 60s por sessão resolve.
+      const checkedAt = Number((token as any).checkedAt ?? 0);
+      const needsRefresh =
+        Date.now() - checkedAt > REVALIDATE_MS ||
+        // caso antigo: vínculo pelo link da turma atribui a escola a uma conta
+        // já logada; sem reler, as inscrições de push nasciam órfãs.
+        (!token.schoolId && token.role === 'PARENT');
+
+      if (needsRefresh) {
         const fresh = await prisma.user.findUnique({
           where: { id: token.sub },
           select: { schoolId: true, role: true },
-        }).catch(() => null);
-        if (fresh?.schoolId) {
-          token.schoolId = fresh.schoolId;
+        }).catch(() => undefined); // erro de banco: mantém o token, não desloga
+
+        if (fresh === null) {
+          // Conta apagada: derruba a identidade. Os layouts, que agora falham
+          // fechado sem papel, mandam para o login.
+          delete (token as any).role;
+          delete (token as any).schoolId;
+          return token;
+        }
+        if (fresh) {
           token.role = fresh.role;
+          token.schoolId = fresh.schoolId;
+          (token as any).checkedAt = Date.now();
         }
       }
       return token;

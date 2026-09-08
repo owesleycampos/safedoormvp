@@ -161,9 +161,17 @@ export async function registerAttendanceEvent(
 
   // ── Cooldown (automatic sources; DB-backed → multi-camera safe) ────────
   if (!isManual) {
-    const cooldownCutoff = new Date(Date.now() - COOLDOWN_SECONDS * 1000);
+    const now = Date.now();
+    const cooldownCutoff = new Date(now - COOLDOWN_SECONDS * 1000);
+    // O `lte: agora` é o teto que faltava. Sem ele, um evento gravado com data
+    // FUTURA (tablet com relógio adiantado) casava a janela para sempre e todo
+    // scan seguinte virava "cooldown" — o aluno sumia da chamada por dias.
     const recentEvent = await prisma.attendanceEvent.findFirst({
-      where: { studentId, eventType, timestamp: { gte: cooldownCutoff } },
+      where: {
+        studentId,
+        eventType,
+        timestamp: { gte: cooldownCutoff, lte: new Date(now) },
+      },
       select: { id: true },
     });
     if (recentEvent) {

@@ -207,7 +207,7 @@ function ChildCard({ child, index }: { child: any; index: number }) {
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 15, delay: 0.4 + index * 0.08 }}
-                      title="Presenca Exemplar este mes"
+                      title="Presença Exemplar este mês"
                     >
                       <Award className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                     </motion.span>
@@ -281,7 +281,7 @@ function ChildCard({ child, index }: { child: any; index: number }) {
                   >
                     <Award className="h-3 w-3 text-foreground" />
                     <span className="text-[10px] font-medium text-foreground">
-                      Presenca Exemplar
+                      Presença Exemplar
                     </span>
                   </motion.div>
                 )}

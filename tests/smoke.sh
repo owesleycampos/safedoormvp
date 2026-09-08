@@ -437,13 +437,21 @@ SP_ST=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" 
 # (aluno não é cobrado por dias antes de existir na escola). Sem isto o fixture
 # ficava irreal — aluno "matriculado hoje" com presença backdatada.
 sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP_ST';" >/dev/null
-sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('freq-sm2','$SP_ST','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+# Datas RELATIVAS a hoje. Com datas fixas de agosto, o teste só passava enquanto
+# "hoje" caísse no bimestre jul–ago: virado setembro, as presenças ficavam fora
+# do bimestre corrente e o teste quebrava sozinho, sem nada ter mudado no produto.
+FD1=$(date -u +%Y-%m-%d)                 # hoje
+FD2=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)  # ontem
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','${FD1} 11:00:00+00',true,false,now(),now(),'${FD1}'),('freq-sm2','$SP_ST','ENTRY','${FD2} 11:00:00+00',true,false,now(),now(),'${FD2}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 FREQ=$(curl -s -b "$JARF" "$BASE/api/parent/frequency?studentId=$SP_ST")
 echo "$FREQ" > /tmp/freq.json
 check "frequência retorna bimestre/semestre/ano" "true" \
   "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('true' if all(k in d for k in ['bimester','semester','year']) else 'false')")"
-check "presença conta dias úteis com entrada (>=2)" "ok" \
-  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('ok' if d['bimester']['present']>=2 else 'nao')")"
+# O ANO sempre contém os dois dias semeados; o BIMESTRE sempre contém hoje.
+# Assim a asserção vale em qualquer época, inclusive na virada de bimestre
+# (quando ontem cai no bimestre anterior).
+check "presença conta os 2 dias com entrada (ano) e o dia de hoje (bimestre)" "ok" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('ok' if d['year']['present']>=2 and d['bimester']['present']>=1 else 'nao')")"
 check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
@@ -534,19 +542,23 @@ check "sem dia letivo → rate null (não 0%/alarme falso)" "true" \
 
 # insere 2 entradas em dias úteis (a Ana + um colega no mesmo dia = dia letivo)
 COLEGA=$(sql0 "SELECT id FROM \"Student\" WHERE \"schoolId\"=(SELECT \"schoolId\" FROM \"Student\" WHERE id='$SP2') AND id != '$SP2' AND \"isActive\" LIMIT 1")
-sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('fr-b','$COLEGA','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+# Relativas a hoje (ver bloco anterior): com datas fixas isto quebraria sozinho
+# na virada do ano, quando agosto sai da janela do "ano corrente".
+FR_ONTEM=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)
+FR_HOJE=$(date -u +%Y-%m-%d)
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','${FR_ONTEM} 11:00:00+00',true,false,now(),now(),'${FR_ONTEM}'),('fr-b','$COLEGA','ENTRY','${FR_HOJE} 11:00:00+00',true,false,now(),now(),'${FR_HOJE}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr2.json
 check "dias letivos = dias com entrada da escola (2)" "2" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['schoolDays'])")"
 check "aluno presente em 1 dos 2 dias letivos = 50%" "50" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['rate'])")"
 
-# PISO na matrícula: matriculado em 25/08 (09:00 BRT) não é cobrado pelo dia
-# letivo de 24/08. O horário é meio-dia UTC de propósito: meia-noite UTC cairia
-# em 24/08 no fuso de SP e o piso (data LOCAL) não isolaria o dia.
-sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-08-25 12:00:00+00' WHERE id='$SP2';" >/dev/null
+# PISO na matrícula: matriculado HOJE não é cobrado pelo dia letivo de ONTEM.
+# Meio-dia UTC de propósito: meia-noite UTC cairia no dia anterior no fuso de SP
+# e o piso (data LOCAL) não isolaria o dia.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='${FR_HOJE} 12:00:00+00' WHERE id='$SP2';" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr3.json
-check "piso na matrícula: 24/08 (pré-matrícula) não conta → 1 dia letivo" "1" \
+check "piso na matrícula: dia anterior à matrícula não conta → 1 dia letivo" "1" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr3.json'))['year']['schoolDays'])")"
 sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP2';" >/dev/null
 

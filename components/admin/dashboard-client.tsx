@@ -173,6 +173,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
     return { preset: '7d', from, to };
   });
   const [data, setData] = useState<StatsData | null>(initialData);
+  const [loadError, setLoadError] = useState(false);
 
   // KPIs always fetch "today", chart fetches the selected period
   const fetchStats = useCallback(async (cid?: string) => {
@@ -187,8 +188,9 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
         params.set('trendDays', chartPeriod.preset === '7d' ? '7' : chartPeriod.preset === '30d' ? '30' : '90');
       }
       const res = await fetch(`/api/dashboard/stats?${params}`);
-      if (res.ok) setData(await res.json());
-    } catch { /* silent */ }
+      if (res.ok) { setData(await res.json()); setLoadError(false); }
+      else setLoadError(true);
+    } catch { setLoadError(true); }
   }, [chartPeriod]);
 
   useEffect(() => {
@@ -204,6 +206,28 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
       localStorage.setItem('dashboard_class_filter', classFilter);
     }
   }, [classFilter]);
+
+  // Falha na carga: antes o componente ficava com `data` nulo e pulsava o
+  // esqueleto cinza PARA SEMPRE — sem erro, sem mensagem, sem tentar de novo.
+  if (!data && loadError) {
+    return (
+      <div className="flex-1 p-5 md:p-8 w-full">
+        <div className="rounded-lg border border-border bg-card p-6 text-center space-y-3 max-w-md mx-auto mt-10">
+          <p className="text-sm font-medium">Não foi possível carregar o painel.</p>
+          <p className="text-sm text-muted-foreground">
+            Verifique sua conexão. Se persistir, fale com o suporte.
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchStats(classFilter)}
+            className="h-9 px-4 rounded-md border border-border text-sm hover:bg-accent transition-colors"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!data) {
     // Primeiro paint instantâneo; os números chegam da API em seguida.

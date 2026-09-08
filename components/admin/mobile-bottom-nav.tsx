@@ -15,6 +15,9 @@ export function AdminMobileBottomNav() {
 
   return (
     <nav
+      // data-bottom-bar: o globals.css levanta esta barra quando a faixa de
+      // impersonação está na tela (senão a faixa a cobre por inteiro).
+      data-bottom-bar
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch border-t border-border bg-background/90 backdrop-blur-xl"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >

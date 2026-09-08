@@ -256,7 +256,12 @@
   /* Impersonação: a faixa fixa do dono reserva 52px no rodapé e levanta a
      barra de abas do responsável para não ficar coberta. */
   body.impersonating { padding-bottom: 52px; }
-  body.impersonating .tab-bar { bottom: 52px; }
+  /* A faixa de impersonação é fixed bottom-0. Só a tab-bar do PWA era levantada;
+   a barra inferior do ADMIN no celular ficava COBERTA pela faixa, e o dono
+   perdia toda a navegação (Dashboard/Câmera/Alunos/Frequência) ao abrir a tela
+   de uma escola pelo telefone. */
+body.impersonating nav[data-bottom-bar],
+body.impersonating .tab-bar { bottom: 52px; }
 
   /* Esconde a barra de rolagem em controles que rolam na horizontal
      (seletor de período no celular), sem perder a rolagem por gesto. */

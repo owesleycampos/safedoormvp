@@ -187,6 +187,14 @@ export default function SettingsPage() {
           fetch('/api/school'),
           fetch('/api/school/settings'),
         ]);
+        // Uma resposta 4xx/5xx (trial vencido, sessão caída, erro do banco) NÃO
+        // entra no `catch` — o código seguia adiante com o formulário VAZIO, e
+        // salvar gravava strings vazias por cima de nome, CNPJ, endereço e
+        // contato da escola (o PATCH aceita '' como valor válido).
+        if (!schoolRes.ok || !settingsRes.ok) {
+          setLoadError(true);
+          return;
+        }
         if (schoolRes.ok) {
           const data = await schoolRes.json();
           setSchool({

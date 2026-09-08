@@ -216,37 +216,37 @@ function useTypewriter(words: string[], typingSpeed = 80, deletingSpeed = 40, pa
 const FAQ_DATA = [
   {
     q: 'Como funciona o reconhecimento facial?',
-    a: 'Utilizamos inteligencia artificial avancada para identificar cada aluno no momento em que ele passa pela camera. O processo leva menos de 2 segundos e funciona mesmo com mascara, oculos ou mudancas no visual.',
+    a: 'Utilizamos inteligência artificial avançada para identificar cada aluno no momento em que ele passa pela câmera. O processo leva menos de 2 segundos e funciona mesmo com máscara, óculos ou mudanças no visual.',
   },
   {
     q: 'Preciso instalar algum hardware especial?',
-    a: 'Nao. O Porta Segura funciona com cameras IP comuns ou ate webcams. Voce pode comecar com o equipamento que ja tem na escola. Nos fornecemos orientacao completa sobre posicionamento e configuracao.',
+    a: 'Não. O Porta Segura funciona com câmeras IP comuns ou até webcams. Você pode começar com o equipamento que já tem na escola. Nós fornecemos orientação completa sobre posicionamento e configuração.',
   },
   {
-    q: 'Os dados dos alunos estao seguros?',
-    a: 'Sim. Todos os dados sao criptografados com AES-256, armazenados em servidores AWS no Brasil e tratados em total conformidade com a LGPD. Pais podem solicitar exclusao dos dados a qualquer momento.',
+    q: 'Os dados dos alunos estão seguros?',
+    a: 'Sim. Todos os dados são criptografados com AES-256, armazenados em servidores AWS no Brasil e tratados em total conformidade com a LGPD. Pais podem solicitar exclusão dos dados a qualquer momento.',
   },
   {
     q: 'Quanto tempo leva para implementar?',
-    a: 'A implementacao basica leva de 24 a 48 horas. Isso inclui configuracao do sistema, cadastro dos alunos (via foto), treinamento da equipe e primeiros testes. Oferecemos suporte completo durante todo o processo.',
+    a: 'A implementação básica leva de 24 a 48 horas. Isso inclui configuração do sistema, cadastro dos alunos (via foto), treinamento da equipe e primeiros testes. Oferecemos suporte completo durante todo o processo.',
   },
   {
     q: 'Funciona com qualquer tamanho de escola?',
-    a: 'Sim. O Porta Segura foi projetado para escalar de pequenas creches com 30 alunos ate redes escolares com milhares de estudantes. Os planos sao flexiveis e crescem junto com a sua instituicao.',
+    a: 'Sim. O Porta Segura foi projetado para escalar de pequenas creches com 30 alunos até redes escolares com milhares de estudantes. Os planos são flexíveis e crescem junto com a sua instituição.',
   },
   {
     q: 'Os pais precisam instalar algum aplicativo?',
-    a: 'Nao. As notificacoes sao enviadas por WhatsApp e email. Os pais tambem podem acessar o painel pelo navegador do celular para acompanhar o historico de presenca do filho.',
+    a: 'Não. As notificações são enviadas por WhatsApp e e-mail. Os pais também podem acessar o painel pelo navegador do celular para acompanhar o histórico de presença do filho.',
   },
 ];
 
 // ─── Testimonials ─────────────────────────────────────────────
 const TESTIMONIALS = [
   {
-    quote: 'O Porta Segura transformou a forma como gerenciamos a presenca. Os pais adoram receber notificacao em tempo real quando o filho chega na escola.',
+    quote: 'O Porta Segura transformou a forma como gerenciamos a presença. Os pais adoram receber notificação em tempo real quando o filho chega na escola.',
     name: 'Maria Silva',
     role: 'Diretora',
-    school: 'Colegio Novo Horizonte',
+    school: 'Colégio Novo Horizonte',
   },
   {
     quote: 'Reduzimos o tempo de chamada de 15 minutos para zero. Os professores agora usam esse tempo para ensinar. Foi a melhor decisao que tomamos.',
@@ -255,7 +255,7 @@ const TESTIMONIALS = [
     school: 'Escola Estrela do Saber',
   },
   {
-    quote: 'A seguranca da escola melhorou drasticamente. Sabemos exatamente quem esta no campus a qualquer momento. Os pais confiam mais na nossa instituicao.',
+    quote: 'A segurança da escola melhorou drasticamente. Sabemos exatamente quem esta no campus a qualquer momento. Os pais confiam mais na nossa instituição.',
     name: 'Ana Beatriz Costa',
     role: 'Proprietaria',
     school: 'Instituto Educacional ABC',
@@ -267,17 +267,17 @@ const PRICING = [
   {
     name: 'Starter',
     price: 'R$ 297',
-    period: '/mes',
+    period: '/mês',
     description: 'Para escolas pequenas',
-    features: ['Ate 100 alunos', 'Reconhecimento facial', 'Notificacoes WhatsApp', 'Painel basico', 'Suporte por email', '1 camera'],
+    features: ['Até 100 alunos', 'Reconhecimento facial', 'Notificações WhatsApp', 'Painel básico', 'Suporte por e-mail', '1 câmera'],
     highlight: false,
   },
   {
     name: 'Professional',
     price: 'R$ 597',
-    period: '/mes',
+    period: '/mês',
     description: 'Para escolas em crescimento',
-    features: ['Ate 500 alunos', 'Tudo do Starter', 'Relatorios avancados', 'Multiplas cameras', 'Suporte prioritario', 'API de integracao', 'Multi-turnos'],
+    features: ['Até 500 alunos', 'Tudo do Starter', 'Relatórios avançados', 'Múltiplas câmeras', 'Suporte prioritário', 'API de integração', 'Multi-turnos'],
     highlight: true,
   },
   {
@@ -296,7 +296,7 @@ const PRICING = [
 
 export function LandingPageClient() {
   const typedText = useTypewriter(
-    ['reconhecimento facial', 'presenca automatica', 'paz para os pais'],
+    ['reconhecimento facial', 'presença automática', 'paz para os pais'],
     70,
     35,
     2200,
@@ -400,7 +400,7 @@ export function LandingPageClient() {
           </div>
 
           <GlowButton href={CTA_URL} className="!px-5 !py-2.5 !text-sm">
-            Comecar Agora
+            Começar agora
             <ArrowRight className="w-4 h-4" />
           </GlowButton>
         </div>
@@ -446,7 +446,7 @@ export function LandingPageClient() {
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6">
-              <span className="text-white">Seguranca escolar com</span>
+              <span className="text-white">Segurança escolar com</span>
               <br />
               <span className="text-blue-400">
                 {typedText}
@@ -458,12 +458,12 @@ export function LandingPageClient() {
             </h1>
 
             <p className="text-lg md:text-xl text-neutral-400 max-w-xl mb-10 leading-relaxed">
-              Reconhecimento facial que registra presenca automaticamente e notifica os pais em tempo real. Sem catracas, sem papel, sem complicacao.
+              Reconhecimento facial que registra presença automaticamente e notifica os pais em tempo real. Sem catracas, sem papel, sem complicacao.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
               <GlowButton href={CTA_URL}>
-                Comecar Agora
+                Começar agora
                 <ArrowRight className="w-5 h-5" />
               </GlowButton>
               <GlowButton variant="outline" onClick={() => scrollTo('como-funciona')}>
@@ -512,7 +512,7 @@ export function LandingPageClient() {
                 {[
                   { label: 'Presentes Hoje', value: '347', change: '+12' },
                   { label: 'Taxa de Presenca', value: '96.2%', change: '+2.1%' },
-                  { label: 'Notificacoes', value: '892', change: 'enviadas' },
+                  { label: 'Notificações', value: '892', change: 'enviadas' },
                 ].map((kpi) => (
                   <div key={kpi.label} className="bg-white/5 rounded-xl p-4">
                     <p className="text-xs text-neutral-500 mb-1">{kpi.label}</p>
@@ -604,7 +604,7 @@ export function LandingPageClient() {
             <SectionTitle
               eyebrow="Como Funciona"
               title="Tres passos simples"
-              subtitle="Da instalacao da camera ate a notificacao do pai. Tudo automatico, tudo em tempo real."
+              subtitle="Da instalacao da câmera até a notificação do pai. Tudo automático, tudo em tempo real."
             />
           </ScrollSection>
 
@@ -614,19 +614,19 @@ export function LandingPageClient() {
                 step: '01',
                 icon: ScanFace,
                 title: 'Camera detecta',
-                desc: 'A camera identifica o rosto do aluno no momento em que ele entra na escola. Sem filas, sem contato.',
+                desc: 'A câmera identifica o rosto do aluno no momento em que ele entra na escola. Sem filas, sem contato.',
               },
               {
                 step: '02',
                 icon: ClipboardCheck,
                 title: 'Presenca registrada',
-                desc: 'O sistema registra automaticamente a presenca com horario exato. Dados armazenados com seguranca na nuvem.',
+                desc: 'O sistema registra automaticamente a presença com horario exato. Dados armazenados com segurança na nuvem.',
               },
               {
                 step: '03',
                 icon: Bell,
                 title: 'Pais notificados',
-                desc: 'Os pais recebem notificacao instantanea por WhatsApp ou email confirmando a chegada do filho.',
+                desc: 'Os pais recebem notificação instantânea por WhatsApp ou e-mail confirmando a chegada do filho.',
               },
             ].map((item, i) => (
               <motion.div
@@ -704,12 +704,12 @@ export function LandingPageClient() {
               </h3>
               <div className="space-y-4">
                 {[
-                  'Reconhecimento facial automatico',
+                  'Reconhecimento facial automático',
                   'Presenca registrada em menos de 2s',
-                  'Notificacao instantanea para os pais',
+                  'Notificacao instantânea para os pais',
                   'Dados 100% digitais e seguros',
                   'Controle total de acesso em tempo real',
-                  'Relatorios automaticos e inteligentes',
+                  'Relatórios automaticos e inteligentes',
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-green-500/70 mt-0.5 flex-shrink-0" />
@@ -727,8 +727,8 @@ export function LandingPageClient() {
         <div className="max-w-6xl mx-auto px-6">
           <ScrollSection>
             <SectionTitle
-              eyebrow="Seguranca e Conformidade"
-              title="Seus dados estao protegidos"
+              eyebrow="Segurança e Conformidade"
+              title="Seus dados estão protegidos"
               subtitle="Infraestrutura de nivel enterprise para proteger os dados dos seus alunos."
             />
           </ScrollSection>
@@ -738,7 +738,7 @@ export function LandingPageClient() {
               { icon: Shield, label: 'LGPD Compliant', desc: 'Total conformidade com a lei brasileira' },
               { icon: Lock, label: 'Criptografia AES-256', desc: 'Dados criptografados em repouso e transito' },
               { icon: Server, label: 'Servidores AWS Brasil', desc: 'Dados armazenados em territorio nacional' },
-              { icon: Database, label: 'Backup Automatico', desc: 'Backups diarios com retencao de 90 dias' },
+              { icon: Database, label: 'Backup Automático', desc: 'Backups diários com retencao de 90 dias' },
               { icon: Zap, label: '99.9% Uptime', desc: 'Infraestrutura redundante e monitorada' },
               { icon: Headphones, label: 'Suporte Dedicado', desc: 'Atendimento humano em horario comercial' },
             ].map((item, i) => (
@@ -768,7 +768,7 @@ export function LandingPageClient() {
             <SectionTitle
               eyebrow="Depoimentos"
               title="O que dizem nossos clientes"
-              subtitle="Escolas que ja transformaram sua gestao de presenca."
+              subtitle="Escolas que já transformaram sua gestão de presença."
             />
           </ScrollSection>
 
@@ -848,7 +848,7 @@ export function LandingPageClient() {
                   variant={plan.highlight ? 'primary' : 'outline'}
                   className="!w-full !justify-center"
                 >
-                  {plan.name === 'Enterprise' ? 'Falar com Vendas' : 'Comecar Agora'}
+                  {plan.name === 'Enterprise' ? 'Falar com Vendas' : 'Começar agora'}
                 </GlowButton>
               </motion.div>
             ))}
@@ -863,7 +863,7 @@ export function LandingPageClient() {
             <SectionTitle
               eyebrow="FAQ"
               title="Perguntas frequentes"
-              subtitle="Tire suas duvidas sobre o Porta Segura."
+              subtitle="Tire suas dúvidas sobre o Porta Segura."
             />
           </ScrollSection>
 
@@ -917,11 +917,11 @@ export function LandingPageClient() {
                 Pronto para modernizar <br className="hidden md:block" /> sua escola?
               </h2>
               <p className="text-lg text-neutral-400 mb-10 max-w-xl mx-auto">
-                Junte-se as escolas que ja usam reconhecimento facial para garantir seguranca e tranquilidade para pais e educadores.
+                Junte-se as escolas que já usam reconhecimento facial para garantir segurança e tranquilidade para pais e educadores.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <GlowButton href={CTA_URL}>
-                  Comecar Agora - Gratis
+                  Começar agora, grátis
                   <ArrowRight className="w-5 h-5" />
                 </GlowButton>
                 <GlowButton variant="outline" onClick={() => scrollTo('precos')}>
@@ -944,7 +944,7 @@ export function LandingPageClient() {
                 <span className="font-semibold text-base tracking-tight text-white">Porta Segura</span>
               </div>
               <p className="text-sm text-neutral-500 max-w-sm leading-relaxed">
-                Reconhecimento facial para escolas. Seguranca, presenca automatica e comunicacao com os pais em uma unica plataforma.
+                Reconhecimento facial para escolas. Segurança, presença automática e comunicacao com os pais em uma unica plataforma.
               </p>
             </div>
 
@@ -953,7 +953,7 @@ export function LandingPageClient() {
               <h4 className="text-sm font-semibold text-white mb-4">Produto</h4>
               <ul className="space-y-2 text-sm text-neutral-500">
                 <li><button onClick={() => scrollTo('como-funciona')} className="hover:text-white transition-colors">Como Funciona</button></li>
-                <li><button onClick={() => scrollTo('precos')} className="hover:text-white transition-colors">Precos</button></li>
+                <li><button onClick={() => scrollTo('precos')} className="hover:text-white transition-colors">Preços</button></li>
                 <li><button onClick={() => scrollTo('faq')} className="hover:text-white transition-colors">FAQ</button></li>
               </ul>
             </div>
@@ -961,9 +961,11 @@ export function LandingPageClient() {
             <div>
               <h4 className="text-sm font-semibold text-white mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-neutral-500">
-                <li><span className="hover:text-white transition-colors cursor-pointer">Termos de Uso</span></li>
-                <li><span className="hover:text-white transition-colors cursor-pointer">Politica de Privacidade</span></li>
-                <li><span className="hover:text-white transition-colors cursor-pointer">LGPD</span></li>
+                {/* Eram <span> com cursor de link: mudavam de cor no hover e não
+                    levavam a lugar nenhum, embora as páginas existam. */}
+                <li><Link href="/terms" className="hover:text-white transition-colors">Termos de Uso</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">Política de Privacidade</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">LGPD</Link></li>
               </ul>
             </div>
           </div>
@@ -995,7 +997,7 @@ export function LandingPageClient() {
             className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-xl border-t border-white/10 py-3 px-6 md:hidden"
           >
             <GlowButton href={CTA_URL} className="!w-full !justify-center">
-              Comecar Agora
+              Começar agora
               <ArrowRight className="w-4 h-4" />
             </GlowButton>
           </motion.div>
@@ -1013,7 +1015,7 @@ export function LandingPageClient() {
             className="fixed bottom-6 right-6 z-50 hidden md:block"
           >
             <GlowButton href={CTA_URL}>
-              Comecar Agora
+              Começar agora
               <ArrowRight className="w-4 h-4" />
             </GlowButton>
           </motion.div>

@@ -357,14 +357,24 @@ export default function DailyTab() {
     setBatchBusy(true);
     let count = 0;
     try {
-      for (const s of absentStudents) {
-        const res = await fetch('/api/events/manual', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId: s.id, eventType: 'ENTRY' }),
-        });
-        const d = await res.json();
-        if (d.success) count++;
+      // Em blocos de 6 em paralelo, não um a um: com 30 ausentes eram 30
+      // idas e voltas em série (~10-45s de botão congelado), e a secretária
+      // costumava sair da página no meio, deixando a chamada pela metade sem
+      // qualquer indicação de onde parou.
+      const CHUNK = 6;
+      for (let i = 0; i < absentStudents.length; i += CHUNK) {
+        const slice = absentStudents.slice(i, i + CHUNK);
+        const results = await Promise.all(slice.map((s) =>
+          fetch('/api/events/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // suppressNotification: isto é fechamento administrativo da
+            // chamada. Sem o flag, cada família recebia um push dizendo que a
+            // criança ACABOU de chegar — horas depois da chegada real.
+            body: JSON.stringify({ studentId: s.id, eventType: 'ENTRY', suppressNotification: true }),
+          }).then((r) => r.json()).catch(() => ({ success: false }))
+        ));
+        count += results.filter((d: any) => d?.success).length;
       }
       toast({ variant: 'success', title: `${count} aluno${count !== 1 ? 's' : ''} marcado${count !== 1 ? 's' : ''} como presente` });
       fetchData();

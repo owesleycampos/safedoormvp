@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if ('error' in auth) return auth.error;
 
   const body = await req.json();
-  const { studentId, eventType, notes, override, timestamp } = body;
+  const { studentId, eventType, notes, override, timestamp, suppressNotification } = body;
 
   if (!studentId || !eventType || !['ENTRY', 'EXIT'].includes(eventType)) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
@@ -63,6 +63,8 @@ export async function POST(req: NextRequest) {
     timestamp: eventTime,
     explicitNotes: notes ?? null,
     override: !!override,
+    // Fechamento administrativo da chamada não avisa "seu filho chegou".
+    suppressNotification: !!suppressNotification,
     actorUserId: (auth.session.user as any)?.id ?? null,
     actorName: (auth.session.user as any)?.name || 'admin',
   });

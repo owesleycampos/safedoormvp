@@ -25,6 +25,8 @@ import { resolveSchedule, computeStatus, type AttendanceStatus } from '@/lib/att
 import { DEFAULT_TIMEZONE, dayRangeInTz, localMinutes } from '@/lib/timezone';
 
 const COOLDOWN_SECONDS = 60;
+/** Intervalo mínimo entre a ENTRADA e a SAÍDA do mesmo aluno no mesmo dia. */
+const MIN_ENTRY_EXIT_GAP_MS = 10 * 60_000;
 
 export type EventSource = 'CAMERA_WEB' | 'AGENT' | 'MANUAL';
 
@@ -44,6 +46,16 @@ export interface RegisterEventInput {
   override?: boolean;
   actorUserId?: string | null;
   actorName?: string | null;
+  /**
+   * Não enviar push aos responsáveis por ESTE registro.
+   *
+   * Existe para a reconciliação administrativa: quando a secretária clica
+   * "Todos presentes" às 15h para fechar a chamada, o pai NÃO pode receber
+   * "seu filho chegou à escola" — a criança chegou de manhã, e o aviso de
+   * chegada é justamente o produto de segurança. Um push falso de chegada
+   * horas depois destrói a confiança na notificação que importa.
+   */
+  suppressNotification?: boolean;
 }
 
 export interface EventStudentInfo {
@@ -69,7 +81,8 @@ export type RegisterEventResult =
         | 'LOW_CONFIDENCE'
         | 'COOLDOWN'
         | 'DUPLICATE_ENTRY'
-        | 'STALE_EXIT';
+        | 'STALE_EXIT'
+        | 'TOO_SOON_AFTER_ENTRY';
       message: string;
       httpStatus: number;
       existingEventId?: string;
@@ -91,6 +104,7 @@ export async function registerAttendanceEvent(
   const {
     studentId, eventType, source, schoolId, deviceId,
     confidence, explicitNotes, override, actorUserId, actorName,
+    suppressNotification,
   } = input;
   const isManual = source === 'MANUAL';
   const timestamp = input.timestamp ?? new Date();
@@ -208,6 +222,7 @@ export async function registerAttendanceEvent(
   });
 
   const notify = async (eventId: string, eventTime: Date) => {
+    if (suppressNotification) return; // reconciliação administrativa (ver input)
     const wantsPush = eventType === 'ENTRY'
       ? settings?.notifyOnEntry ?? true
       : settings?.notifyOnExit ?? true;
@@ -258,6 +273,28 @@ export async function registerAttendanceEvent(
       ok: false, code: 'DUPLICATE_ENTRY', httpStatus: 200,
       message: 'Entrada já registrada hoje.', existingEventId: existing.id, student: studentInfo,
     };
+  }
+
+  // ── Guarda: SAÍDA logo depois da ENTRADA ───────────────────────────────
+  // Cenário real: 07:35, acaba a fila de entrada, o operador troca para SAÍDA
+  // com crianças ainda passando na frente da câmera. Em um tick de 2s cada uma
+  // ganhava uma SAÍDA às 07:35 (marcada como "saída antecipada") e o pai
+  // recebia um push dizendo que o filho DEIXOU a escola 5 minutos depois de
+  // chegar. O cooldown não pegava isso: ele é por tipo de evento.
+  // Correção manual com override continua podendo (é a secretária consertando).
+  if (eventType === 'EXIT' && !(isManual && override)) {
+    const entryToday = await prisma.attendanceEvent.findFirst({
+      where: { studentId, eventType: 'ENTRY', timestamp: { gte: day.start, lt: day.end } },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+    if (entryToday && timestamp.getTime() - entryToday.timestamp.getTime() < MIN_ENTRY_EXIT_GAP_MS) {
+      return {
+        ok: false, code: 'TOO_SOON_AFTER_ENTRY', httpStatus: 200,
+        message: 'Entrada registrada há poucos minutos. Confira se a câmera está no modo certo.',
+        student: studentInfo,
+      };
+    }
   }
 
   // ── EXIT (re-registration moves time forward only) ─────────────────────

@@ -574,6 +574,21 @@ else
   echo "  (só uma escola no teste — pulando PUT cross-tenant)"
 fi
 
+echo "── Guarda: saída logo depois da entrada (modo errado da câmera) ──"
+# Cenário: acaba a fila de entrada, o operador troca para SAÍDA e as crianças
+# ainda estão passando. Sem a guarda, cada uma ganhava uma SAÍDA imediata e o
+# pai recebia "seu filho saiu da escola" minutos depois de ele chegar.
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+R=$(post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:20:00-03:00\"}" -H "x-device-api-key: $KEY_A")
+check "entrada base → 201" "201" "$(echo "$R" | tail -1)"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:23:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída 3 min após a entrada NÃO é gravada" "0" \
+  "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T12:05:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída no fim do turno é gravada normalmente" "1" \
+  "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

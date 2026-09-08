@@ -589,6 +589,19 @@ check "saída no fim do turno é gravada normalmente" "1" \
   "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
 
+echo "── Registro legal: entrada mais cedo vence; saída não desliza ──"
+# Sync offline atrasado: a entrada real (07:10) chega DEPOIS da que o segundo
+# portão gravou (07:45). Sem a regra, o aluno ficava marcado ATRASO para sempre.
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:45:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "entrada 07:45 nasce como ATRASO" "ATRASO" \
+  "$(sql0 "SELECT COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='ENTRY'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:10:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "entrada anterior (07:10) substitui e limpa o ATRASO" "07:10|NULL" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='ENTRY'")"
+
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"
 [ "$FAIL" -eq 0 ]

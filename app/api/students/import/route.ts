@@ -165,11 +165,16 @@ export async function POST(req: NextRequest) {
         }
         if (parentId) {
           const isFirst = (await prisma.studentParent.count({ where: { studentId } })) === 0;
-          await prisma.studentParent.createMany({
+          // Conta o que o banco REALMENTE inseriu. Antes somava sempre, mesmo
+          // quando o skipDuplicates pulava o vínculo: reenviar a mesma planilha
+          // (para corrigir uma data de nascimento) respondia "0 alunos
+          // importados, 40 responsáveis vinculados" — e a secretária concluía
+          // que tinha acabado de criar 40 responsáveis novos.
+          const linked = await prisma.studentParent.createMany({
             data: [{ studentId, parentId, relationship: 'Responsável', isPrimary: isFirst }],
             skipDuplicates: true,
           });
-          parentsLinked++;
+          parentsLinked += linked.count;
         }
       } catch (err: any) {
         errors.push(`${name} (responsável): ${err.message}`);

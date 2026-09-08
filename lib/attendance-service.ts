@@ -269,6 +269,24 @@ export async function registerAttendanceEvent(
         student: studentInfo,
       };
     }
+    // MANTER A MAIS CEDO: se chega uma entrada ANTERIOR à registrada, ela é a
+    // verdadeira. Cenário real: o tablet fica sem internet às 07:05 e guarda a
+    // entrada do Pedro (07:10); às 07:45 ele passa na câmera do segundo portão
+    // e o sistema grava 07:45 → ATRASO. Quando a internet volta e o tablet
+    // envia os 07:10 reais, isto era descartado como duplicado e o Pedro ficava
+    // marcado como atrasado PARA SEMPRE, sem ninguém entender por quê.
+    if (timestamp < existing.timestamp) {
+      const updated = await prisma.attendanceEvent.update({
+        where: { id: existing.id },
+        data: { timestamp, notes, dayKey: day.dateStr },
+      });
+      await audit('ENTRY_EARLIER_APPLIED', updated.id);
+      return {
+        ok: true, created: false, updated: true, status,
+        event: { id: updated.id, eventType: updated.eventType, timestamp: updated.timestamp, notes: updated.notes },
+        student: studentInfo,
+      };
+    }
     return {
       ok: false, code: 'DUPLICATE_ENTRY', httpStatus: 200,
       message: 'Entrada já registrada hoje.', existingEventId: existing.id, student: studentInfo,
@@ -307,11 +325,12 @@ export async function registerAttendanceEvent(
         existingEventId: existing.id, student: studentInfo,
       };
     }
+    const notesForUpdate = notes;
     const updated = await prisma.attendanceEvent.update({
       where: { id: existing.id },
       data: {
         timestamp,
-        notes, // recomputed for the NEW time — an early-exit note can't outlive a later exit
+        notes: notesForUpdate,
         dayKey: day.dateStr,
         // NÃO reseta `notified`: a criança lingerando na frente da câmera de
         // saída gerava um update a cada 60s e um push novo a cada vez.

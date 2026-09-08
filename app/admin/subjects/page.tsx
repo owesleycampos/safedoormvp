@@ -353,14 +353,23 @@ function SubjectsTab() {
     }
     setAddingPreset('all');
     try {
+      // Mesmo caso do template: contar o que REALMENTE foi criado.
+      let ok = 0;
       for (const n of missing) {
-        await fetch('/api/subjects', {
+        const r = await fetch('/api/subjects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: n, color: getDefaultColor(n) }),
         });
+        if (r.ok) ok++;
       }
-      toast({ variant: 'success', title: `${missing.length} matérias criadas` });
+      if (ok === 0) {
+        toast({ variant: 'destructive', title: 'Nenhuma matéria foi criada. Tente de novo.' });
+      } else if (ok < missing.length) {
+        toast({ variant: 'warning', title: `${ok} de ${missing.length} matérias criadas` });
+      } else {
+        toast({ variant: 'success', title: `${ok} matérias criadas` });
+      }
       fetchSubjects();
     } catch {
       toast({ variant: 'destructive', title: 'Erro ao criar matérias' });
@@ -837,7 +846,10 @@ function ScheduleTab() {
           const startTime = time?.start || `${String(7 + periodIdx + 1).padStart(2, '0')}:00`;
           const endTime = time?.end || `${String(7 + periodIdx + 1).padStart(2, '0')}:50`;
 
-          await fetch('/api/schedules', {
+          // O resultado era ignorado e `created++` rodava sempre: com a sessão
+          // expirada, os 30 POSTs voltavam 401 e a tela dizia "Grade aplicada:
+          // 30 aulas criadas" antes de repintar um quadro vazio.
+          const r = await fetch('/api/schedules', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -849,7 +861,7 @@ function ScheduleTab() {
               endTime,
             }),
           });
-          created++;
+          if (r.ok) created++;
         }
       }
 

@@ -78,13 +78,24 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
   }, [open]);
 
   // Load classes
+  // Sem estado de carregamento, a tela mostrava "Nenhuma turma cadastrada"
+  // enquanto a requisição estava no ar — e PARA SEMPRE se ela falhasse, numa
+  // escola com 30 turmas, sem oferecer nova tentativa.
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [classesError, setClassesError] = useState(false);
+  const loadClasses = useCallback(() => {
+    setLoadingClasses(true);
+    setClassesError(false);
+    fetch('/api/classes')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('http'))))
+      .then(({ classes }) => setClasses(classes || []))
+      .catch(() => setClassesError(true))
+      .finally(() => setLoadingClasses(false));
+  }, []);
   useEffect(() => {
     if (!open) return;
-    fetch('/api/classes')
-      .then((r) => r.json())
-      .then(({ classes }) => setClasses(classes || []))
-      .catch(() => {});
-  }, [open]);
+    loadClasses();
+  }, [open, loadClasses]);
 
   // Unique grades
   const grades = Array.from(
@@ -239,7 +250,24 @@ export function ManualCheckinWizard({ open, onOpenChange }: ManualCheckinWizardP
           {step === 'grade' && (
             <div className="p-5 space-y-3">
               <p className="text-sm text-muted-foreground mb-4">Selecione a série</p>
-              {grades.length === 0 && classes.length === 0 && (
+              {loadingClasses && (
+                <div className="flex flex-col items-center py-16 gap-3 text-center">
+                  <p className="text-sm text-muted-foreground">Carregando turmas...</p>
+                </div>
+              )}
+              {!loadingClasses && classesError && (
+                <div className="flex flex-col items-center py-16 gap-3 text-center">
+                  <p className="text-sm text-muted-foreground">Não foi possível carregar as turmas.</p>
+                  <button
+                    type="button"
+                    onClick={loadClasses}
+                    className="h-8 px-3 rounded-md border border-border text-xs hover:bg-accent transition-colors"
+                  >
+                    Tentar de novo
+                  </button>
+                </div>
+              )}
+              {!loadingClasses && !classesError && grades.length === 0 && classes.length === 0 && (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
                   <GraduationCap className="h-10 w-10 text-muted-foreground/20" />
                   <p className="text-sm text-muted-foreground">Nenhuma turma cadastrada</p>

@@ -298,12 +298,15 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Era `hidden md:flex`: o registro manual sumia exatamente no
+                aparelho onde a portaria trabalha (celular/tablet). O rótulo
+                colapsa em telas estreitas; o botão continua acessível. */}
             <button
               onClick={() => setManualOpen(true)}
-              className="hidden md:flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
             >
               <ClipboardEdit className="h-3.5 w-3.5" />
-              Registrar
+              <span className="hidden sm:inline">Registrar</span>
             </button>
             <Link
               href="/admin/camera"
@@ -399,7 +402,15 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
                 </div>
                 <PeriodPicker value={chartPeriod} onChange={setChartPeriod} />
               </div>
-              {data.trend && data.trend.some(t => t.total > 0) ? (
+              {/* Precisa de >= 2 dias ÚTEIS com dados: o LineChart devolve null
+                  com menos que isso, e a condição antiga (qualquer dia com
+                  total > 0) deixava o card renderizar título, "Média: X%" e o
+                  seletor de período sobre um espaço em branco, sem cair no
+                  "Sem dados no período". */}
+              {data.trend && data.trend.filter(t => {
+                const wd = new Date(t.date + 'T12:00:00').getDay();
+                return wd !== 0 && wd !== 6 && t.total > 0;
+              }).length >= 2 ? (
                 <LineChart data={data.trend} />
               ) : (
                 <div className="flex items-center justify-center h-[180px]">

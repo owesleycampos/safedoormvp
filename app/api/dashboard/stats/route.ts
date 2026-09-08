@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     select: { studentId: true, timestamp: true },
   });
 
-  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, offlineDevices, classes, entryEvents, lateEvents] = await Promise.all([
+  const [totalStudents, presentInRange, recentEvents, unrecognizedCount, offlineDevices, classes, entryEvents, lateEvents, studentEnrollments] = await Promise.all([
     prisma.student.count({ where: studentWhere }),
     prisma.attendanceEvent.findMany({
       where: {
@@ -138,6 +138,8 @@ export async function GET(req: NextRequest) {
       select: { studentId: true },
       distinct: ['studentId'],
     }),
+    // Datas de matrícula: denominador correto de cada dia do gráfico.
+    prisma.student.findMany({ where: studentWhere, select: { createdAt: true } }),
   ]);
 
   // Build trend (day by day, school-local days)
@@ -148,12 +150,29 @@ export async function GET(req: NextRequest) {
     if (!entriesByDay.has(day)) entriesByDay.set(day, new Set());
     entriesByDay.get(day)!.add(e.studentId);
   }
+  // Denominador POR DIA: quantos alunos já estavam matriculados naquele dia.
+  // Usar `totalStudents` (o total de HOJE) media o passado com a régua do
+  // presente: a escola tinha 200 alunos, matriculou 60 no dia 20, e todos os
+  // dias anteriores passavam a ser lidos como 200/260 = 77% — um dia de
+  // presença perfeita aparecia como queda. A "Média %" herdava o mesmo erro.
+  const enrolledDates = studentEnrollments
+    .map((st) => localDateStr(st.createdAt, tz))
+    .sort();
+  const enrolledUpTo = (day: string) => {
+    // conta quantas matrículas são <= day (lista já ordenada)
+    let lo = 0, hi = enrolledDates.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (enrolledDates[mid] <= day) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  };
   for (let d = trendStartStr; d <= trendEndStr; d = addDaysStr(d, 1)) {
     if (isWeekendDateStr(d)) {
       trend.push({ date: d, present: 0, total: 0 });
       continue;
     }
-    trend.push({ date: d, present: entriesByDay.get(d)?.size ?? 0, total: totalStudents });
+    trend.push({ date: d, present: entriesByDay.get(d)?.size ?? 0, total: enrolledUpTo(d) });
   }
 
   // Average stay time in range (students who have both entry and exit that day)

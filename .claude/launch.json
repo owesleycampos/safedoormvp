@@ -2,22 +2,39 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "Porta Segura (banco de TESTE)",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": [
+        "-c",
+        "export PATH=/Users/wesleycampos/.nvm/versions/node/v24.14.0/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin:$PATH && export DATABASE_URL='postgresql://postgres:testpass@localhost:5544/safedoor_test' && export DIRECT_URL=\"$DATABASE_URL\" && export NEXTAUTH_SECRET='dev-preview-secret-1234567890' && export NEXTAUTH_URL='http://localhost:3010' && export CRON_SECRET='cron-test-secret' && export AGENT_API_SECRET='test-agent-secret' && npx next dev -p 3010"
+      ],
+      "port": 3010
+    },
+    {
       "name": "Next.js Dev Server",
       "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["-c", "export PATH=/Users/wesleycampos/.nvm/versions/node/v24.14.0/bin:$PATH && cd /Users/wesleycampos/Downloads/SAFEDOORBRASIL && npm run dev"],
+      "runtimeArgs": [
+        "-c",
+        "export PATH=/Users/wesleycampos/.nvm/versions/node/v24.14.0/bin:$PATH && cd /Users/wesleycampos/Downloads/SAFEDOORBRASIL && npm run dev"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "Prisma Studio",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "db:studio"],
+      "runtimeArgs": [
+        "run",
+        "db:studio"
+      ],
       "port": 5555
     },
     {
       "name": "Python AI Agent",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["agent-python/main.py"],
+      "runtimeArgs": [
+        "agent-python/main.py"
+      ],
       "port": null
     }
   ]

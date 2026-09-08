@@ -21,10 +21,14 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
-import { resolveSchedule, computeStatus, type AttendanceStatus } from '@/lib/attendance-rules';
+import { resolveSchedule, computeStatus, timeToMinutes, type AttendanceStatus } from '@/lib/attendance-rules';
 import { DEFAULT_TIMEZONE, dayRangeInTz, localMinutes } from '@/lib/timezone';
 
 const COOLDOWN_SECONDS = 60;
+/** Folga depois do horário de saída do turno em que a saída ainda pode ser
+    refinada para frente (passagens muito depois disso são só a criança
+    circulando, não uma saída nova). */
+const EXIT_GRACE_MIN = 90;
 /** Intervalo mínimo entre a ENTRADA e a SAÍDA do mesmo aluno no mesmo dia. */
 const MIN_ENTRY_EXIT_GAP_MS = 10 * 60_000;
 
@@ -315,13 +319,28 @@ export async function registerAttendanceEvent(
     }
   }
 
-  // ── EXIT (re-registration moves time forward only) ─────────────────────
+  // ── EXIT (a saída só avança DENTRO da janela de saída do turno) ────────
   if (eventType === 'EXIT' && existing) {
-    const allowUpdate = (isManual && override) || timestamp > existing.timestamp;
+    const movingForward = timestamp > existing.timestamp;
+    // Uma saída já registrada pode ser refinada para frente — a criança demora
+    // na porta, passa de novo — mas NÃO indefinidamente. O limite é ancorado no
+    // horário de saída DO TURNO da própria escola (mais uma folga), não numa
+    // constante arbitrária. Assim:
+    //   • saiu 11:30, saída real 12:05 (turno fecha 12:00) → move, correto;
+    //   • saiu 11:50 (ANTECIPADA, pai avisado) e passa às 15:00 esperando o
+    //     irmão → NÃO move: o registro legal continua 11:50 e a evidência da
+    //     saída antecipada não é apagada.
+    // Sem grade definida para a turma, mantém o comportamento antigo.
+    let withinExitWindow = true;
+    if (movingForward && schedule) {
+      withinExitWindow =
+        localMinutes(timestamp, tz) <= timeToMinutes(schedule.exit) + EXIT_GRACE_MIN;
+    }
+    const allowUpdate = (isManual && override) || (movingForward && withinExitWindow);
     if (!allowUpdate) {
       return {
         ok: false, code: 'STALE_EXIT', httpStatus: 200,
-        message: 'Já existe uma saída mais recente registrada hoje.',
+        message: 'Já existe uma saída registrada hoje.',
         existingEventId: existing.id, student: studentInfo,
       };
     }

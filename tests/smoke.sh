@@ -600,6 +600,15 @@ post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97
 check "entrada anterior (07:10) substitui e limpa o ATRASO" "07:10|NULL" \
   "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='ENTRY'")"
 
+# Saída antecipada REAL às 11:50; passagem às 15:00 (muito depois do fim do
+# turno) é a criança circulando, não uma saída nova — não pode mover o registro
+# nem apagar a evidência. Já 11:30 -> 12:05 (turno fecha 12:00) DEVE mover.
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T11:50:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída 11:50 registrada como SAIDA_ANTECIPADA" "11:50|SAIDA_ANTECIPADA" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T15:00:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "passagem às 15:00 (fora da janela) NÃO move a saída" "11:50|SAIDA_ANTECIPADA" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
 
 echo

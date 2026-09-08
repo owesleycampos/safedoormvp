@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { requireActiveSchool } from '@/lib/require-active-school';
 import { registerAttendanceEvent } from '@/lib/attendance-service';
+import { DEFAULT_TIMEZONE, hasExplicitTimezone, zonedWallClockUtc } from '@/lib/timezone';
 
 /**
  * POST /api/events/manual
@@ -30,9 +31,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
   }
 
-  const eventTime = timestamp ? new Date(timestamp) : new Date();
+  // A tela manda "YYYY-MM-DDTHH:mm:00" SEM fuso (é a hora de parede da escola).
+  // `new Date()` interpretaria isso como hora do SERVIDOR (UTC na Vercel), o que
+  // gravava tudo 3h adiantado. Sem fuso explícito → converte no fuso da ESCOLA.
+  let eventTime: Date;
+  if (!timestamp) {
+    eventTime = new Date();
+  } else if (hasExplicitTimezone(String(timestamp))) {
+    eventTime = new Date(String(timestamp));
+  } else {
+    eventTime = zonedWallClockUtc(String(timestamp), auth.timezone || DEFAULT_TIMEZONE);
+  }
   if (isNaN(eventTime.getTime())) {
     return NextResponse.json({ error: 'Timestamp inválido.' }, { status: 400 });
+  }
+  // Relógio adiantado (tablet/cliente) não pode gravar no futuro: um evento com
+  // data futura fica preso na janela de cooldown e some da chamada por dias.
+  const nowMs = Date.now();
+  if (eventTime.getTime() > nowMs + 5 * 60_000) {
+    return NextResponse.json(
+      { error: 'Horário no futuro. Confira o relógio do aparelho.' },
+      { status: 400 }
+    );
   }
 
   const result = await registerAttendanceEvent({

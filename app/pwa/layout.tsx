@@ -8,6 +8,9 @@ export default async function PwaLayout({ children }: { children: React.ReactNod
 
   if (!session) redirect('/auth/login');
   const role = (session.user as any)?.role;
+  // FALHA FECHADO (ver comentário gêmeo em app/admin/layout.tsx): sem papel,
+  // os dois layouts se redirecionavam mutuamente em loop.
+  if (!role) redirect('/auth/login');
   if (role === 'SUPERADMIN') redirect('/hq');
   if (role !== 'PARENT') redirect('/admin/dashboard');
 

@@ -34,8 +34,18 @@ export async function GET(req: NextRequest) {
       }
     : {};
 
+  // VAZAMENTO ENTRE ESCOLAS: `{ students: { none: {} } }` sozinho não tinha
+  // NENHUM filtro de escola — qualquer responsável ainda sem aluno vinculado,
+  // de QUALQUER escola, aparecia (nome + e-mail) na busca de outra escola, que
+  // podia então vinculá-lo a um aluno seu e ver os dados dele. Agora o não
+  // vinculado só aparece para a escola que o cadastrou (User.schoolId).
   const scope: Prisma.ParentWhereInput = includeUnlinked
-    ? { OR: [parentsOfSchool(auth.schoolId), { students: { none: {} } }] }
+    ? {
+        OR: [
+          parentsOfSchool(auth.schoolId),
+          { students: { none: {} }, user: { schoolId: auth.schoolId } },
+        ],
+      }
     : parentsOfSchool(auth.schoolId);
 
   const parents = await prisma.parent.findMany({
@@ -119,6 +129,9 @@ export async function POST(req: NextRequest) {
             email,
             name,
             role: 'PARENT',
+            // Marca a escola que cadastrou. Sem isto o responsável nasce órfão
+            // e a busca "incluir não vinculados" de QUALQUER escola o encontrava.
+            schoolId: auth.schoolId,
             ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
           },
         },

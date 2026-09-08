@@ -293,7 +293,10 @@ export default function ReportsTab() {
       const res = await fetch(`/api/reports/alerts?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setAlerts(data.students ?? []);
+        // A rota devolve { alerts, alertCount, ... } — lia-se `data.students`,
+        // que nunca existiu: o alerta de infrequência (<75%, LDB art. 12) era
+        // calculado certo no servidor e SEMPRE chegava vazio na tela.
+        setAlerts(data.alerts ?? []);
       }
     } catch {
       setAlerts([]);

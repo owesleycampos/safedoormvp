@@ -4,6 +4,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { isImpersonationExpired } from '@/lib/impersonation';
+import { clientIp, rateLimitPeek, rateLimitRecord } from '@/lib/rate-limit';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
@@ -25,18 +26,35 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // Sem isto o login era força bruta a céu aberto: nenhuma contagem de
+        // tentativas, nenhum bloqueio, e o único evento auditado (USER_SIGNIN)
+        // só é gravado no SUCESSO — ou seja, milhares de tentativas erradas não
+        // deixavam rastro nenhum. O e-mail do admin é descobrível pelo cadastro
+        // público, e uma conta ADMIN dá acesso a todos os alunos, fotos e
+        // responsáveis da escola.
+        // Só a FALHA gasta tentativa: quem acerta a senha nunca é bloqueado,
+        // e quem fica errando esgota o balde em 10 erros por 15 min.
+        const email = credentials.email.toLowerCase();
+        const bucket = `login:${clientIp(req as any)}:${email}`;
+        const FAIL_LIMIT = 10;
+        const FAIL_WINDOW_MS = 15 * 60_000;
+        if (!rateLimitPeek(bucket, FAIL_LIMIT)) {
+          return null; // resposta genérica: não revela se o e-mail existe
+        }
+        const fail = () => { rateLimitRecord(bucket, FAIL_WINDOW_MS); return null; };
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+          where: { email },
           include: { school: true, parent: true },
         });
 
-        if (!user || !user.passwordHash) return null;
+        if (!user || !user.passwordHash) return fail();
 
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!isValid) return null;
+        if (!isValid) return fail();
 
         return {
           id: user.id,

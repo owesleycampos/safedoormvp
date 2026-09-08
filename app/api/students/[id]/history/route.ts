@@ -133,8 +133,11 @@ export async function GET(
     const hasLateNote = dayEvents.some(
       (e) => e.notes && e.notes.toLowerCase().includes('atraso')
     );
+    // A nota gravada é a constante 'SAIDA_ANTECIPADA' (sem acento, com _), mas
+    // comparava-se com 'saída antecipada' (com acento e espaço) — nunca casava,
+    // então a saída antecipada jamais aparecia no histórico do aluno.
     const hasEarlyExitNote = dayEvents.some(
-      (e) => e.notes && e.notes.toLowerCase().includes('saída antecipada')
+      (e) => e.notes && e.notes.toLowerCase().includes('antecipada')
     );
 
     let status: DaySummary['status'] = 'present';

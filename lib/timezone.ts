@@ -88,6 +88,36 @@ export function zonedMidnightUtc(dateStr: string, timeZone: string): Date {
   return result;
 }
 
+/**
+ * UTC instant of a WALL-CLOCK date+time da ESCOLA ("YYYY-MM-DDTHH:mm[:ss]",
+ * sem fuso). DST-safe, mesma técnica de zonedMidnightUtc.
+ *
+ * Existe porque a chamada diária monta `${data}T${hora}:00` sem designador de
+ * fuso e o servidor fazia `new Date(...)`, que pela especificação interpreta
+ * como hora LOCAL DO SERVIDOR — UTC na Vercel. Toda correção manual entrava
+ * 3h adiantada: uma saída às 12:30 virava 09:30, era classificada como
+ * SAIDA_ANTECIPADA e o push dizia ao pai que a criança saiu às 09:30. Perto da
+ * meia-noite chegava a cair no dia anterior.
+ */
+export function zonedWallClockUtc(dateTimeStr: string, timeZone: string): Date {
+  const s = dateTimeStr.trim();
+  // aceita "YYYY-MM-DDTHH:mm" e "YYYY-MM-DDTHH:mm:ss"
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(:\d{2})?$/.exec(s);
+  if (!m) return new Date(NaN);
+  const guess = new Date(`${m[1]}T${m[2]}${m[3] ?? ':00'}Z`);
+  if (isNaN(guess.getTime())) return new Date(NaN);
+  const offset = tzOffsetMs(timeZone, guess);
+  let result = new Date(guess.getTime() - offset);
+  const offset2 = tzOffsetMs(timeZone, result);
+  if (offset2 !== offset) result = new Date(guess.getTime() - offset2);
+  return result;
+}
+
+/** true se a string já traz fuso explícito (Z ou ±HH:MM) — aí não convertemos. */
+export function hasExplicitTimezone(s: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(s.trim());
+}
+
 /** Add n calendar days to a "YYYY-MM-DD" string (timezone-independent). */
 export function addDaysStr(dateStr: string, n: number): string {
   const d = new Date(`${dateStr}T12:00:00Z`); // noon avoids any DST edge

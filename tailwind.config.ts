@@ -32,9 +32,18 @@ const config: Config = {
         },
         // The CSS variables existed but were never registered here, so every
         // text-success / bg-warn in the app emitted no rule at all.
-        // `warn` is the class name used across the code; --warning is the token.
         success: 'hsl(var(--success))',
+        // Duas grafias circulam no código: `warn` (toaster) e `warning` (chamada
+        // diária, relatórios, login, PWA). Só `warn` estava registrada, então
+        // TODO `text-warning` / `bg-warning/10` / `border-warning/30` saía SEM
+        // regra: linhas de "Atraso" e "Saída sem entrada" ficavam sem cor, e o
+        // badge de <75% (o ponto do relatório) ficava cinza igual aos demais.
+        // Registrar as duas resolve os 9 usos sem tocar em cada arquivo.
         warn:    'hsl(var(--warning))',
+        warning: 'hsl(var(--warning))',
+        // Mesmo caso: `bg-danger` era usado no estado ERRO do dispositivo e não
+        // existia — o indicador vermelho simplesmente não aparecia.
+        danger:  'hsl(var(--destructive))',
         muted: {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',

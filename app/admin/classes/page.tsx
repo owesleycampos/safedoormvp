@@ -10,7 +10,10 @@ async function getClassesData(schoolId: string) {
     where: { schoolId },
     select: {
       id: true, name: true, grade: true, shift: true, createdAt: true,
-      _count: { select: { students: true } },
+      // Só alunos ATIVOS: contando os removidos (soft delete), a turma exibia
+      // "5 alunos" para sempre e o botão de excluir travava com "Mova os 5
+      // aluno(s) antes de excluir" — sem nunca chamar a API, que permitiria.
+      _count: { select: { students: { where: { isActive: true } } } },
     },
     orderBy: [{ grade: 'asc' }, { name: 'asc' }],
   });

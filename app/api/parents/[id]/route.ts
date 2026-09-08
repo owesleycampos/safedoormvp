@@ -20,7 +20,12 @@ async function findParentInScope(parentId: string, schoolId: string) {
   return prisma.parent.findFirst({
     where: {
       id: parentId,
-      OR: [{ students: { some: { student: { schoolId } } } }, { students: { none: {} } }],
+      // Mesmo cuidado do vínculo: sem amarrar o não vinculado à própria escola,
+      // um admin podia editar (e trocar a senha de) o responsável de outra.
+      OR: [
+        { students: { some: { student: { schoolId } } } },
+        { students: { none: {} }, user: { schoolId } },
+      ],
     },
     include: parentInclude,
   });

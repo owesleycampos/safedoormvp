@@ -12,6 +12,8 @@ import {
   addDaysStr,
   weekdayOfDateStr,
   isWeekendDateStr,
+  zonedWallClockUtc,
+  hasExplicitTimezone,
 } from '../lib/timezone';
 import {
   resolveSchedule,
@@ -171,6 +173,36 @@ test('a NOITE-shift 22:00 BRT exit stays on its own local day', () => {
   assert.equal(range.dateStr, '2026-08-24');
   const noite = DEFAULT_SHIFT_SCHEDULES.NOITE;
   assert.equal(computeStatus(noite, 'EXIT', localMinutes(exit, SP)), 'ON_TIME');
+});
+
+console.log('\n── correção manual: hora de parede da escola → UTC ──');
+
+test('12:30 na escola (SP) vira 15:30 UTC, não 12:30 UTC', () => {
+  // Era o bug: `new Date("2026-09-08T12:30:00")` num servidor UTC dava 12:30Z,
+  // que é 09:30 em SP — a saída às 12:30 virava "saída antecipada" às 09:30.
+  const d = zonedWallClockUtc('2026-09-08T12:30:00', SP);
+  assert.equal(d.toISOString(), '2026-09-08T15:30:00.000Z');
+  assert.equal(localMinutes(d, SP), 12 * 60 + 30); // volta a ser 12:30 na escola
+});
+
+test('aceita sem segundos ("YYYY-MM-DDTHH:mm")', () => {
+  const d = zonedWallClockUtc('2026-09-08T07:15', SP);
+  assert.equal(localMinutes(d, SP), 7 * 60 + 15);
+});
+
+test('00:15 da escola continua no MESMO dia local (não cai no anterior)', () => {
+  const d = zonedWallClockUtc('2026-09-08T00:15:00', SP);
+  assert.equal(localDateStr(d, SP), '2026-09-08');
+});
+
+test('string inválida vira Data inválida (a rota devolve 400)', () => {
+  assert.ok(isNaN(zonedWallClockUtc('não é data', SP).getTime()));
+});
+
+test('hasExplicitTimezone distingue com e sem fuso', () => {
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00'), false);
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00Z'), true);
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00-03:00'), true);
 });
 
 console.log('\n── billing.ts (fonte única de MRR) ──');

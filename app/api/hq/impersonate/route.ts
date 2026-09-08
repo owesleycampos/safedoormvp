@@ -86,11 +86,12 @@ export async function POST(req: NextRequest) {
   });
   // Sem encodeURIComponent aqui: o next/server já codifica o valor do
   // cookie, e codificar de novo deixava "Maria%20Silva" na faixa.
-  // Vive exatamente o tempo da impersonação (MAX_AGE): a faixa não pode
-  // continuar afirmando "você está vendo como X" depois que a sessão
-  // impersonada já expirou.
+  // Vive o mesmo tempo do cookie de volta (8h), NÃO o da impersonação (1h).
+  // Se a faixa sumisse junto com a sessão impersonada, o dono ficaria numa
+  // sessão sem papel e sem o único botão que chama /api/hq/restore — sem
+  // nenhuma saída a não ser limpar cookies na mão.
   res.cookies.set(MARKER_COOKIE, target.name || target.email || 'usuário', {
-    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: MAX_AGE,
+    httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: 8 * 60 * 60,
   });
   return res;
 }

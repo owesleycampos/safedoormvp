@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const classId = req.nextUrl.searchParams.get('classId');
 
   if (!classId) {
@@ -45,6 +48,9 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const body = await req.json();
   const { classId, subjectId, dayOfWeek, period, startTime, endTime, teacherName } = body;
 
@@ -102,6 +108,9 @@ export async function PUT(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const { fromClassId, toClassId } = await req.json();
 
   if (!fromClassId || !toClassId) {
@@ -159,6 +168,9 @@ export async function DELETE(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const id = req.nextUrl.searchParams.get('id');
 
   if (!id) {

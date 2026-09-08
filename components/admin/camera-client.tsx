@@ -29,6 +29,8 @@ interface RecentRecognition {
 }
 
 const SCAN_INTERVAL_MS = 2_000;
+/** Tempo máximo que um crachá reconhecido fica na tela sem ser reconfirmado. */
+const FACE_STALE_MS = 8_000;
 const CLIENT_COOLDOWN_MS = 60_000;
 const MAX_RECENT = 10;
 
@@ -42,6 +44,8 @@ export function CameraClient() {
   const modeRef = useRef<'ENTRY' | 'EXIT'>('ENTRY');
   const modeChosenRef = useRef(false);
   const failStreakRef = useRef(0);
+  /** Quando o último crachá foi exibido — usado para expirá-lo (ver scanFrame). */
+  const lastMatchAtRef = useRef(0);
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [mode, setMode] = useState<'ENTRY' | 'EXIT'>('ENTRY');
@@ -141,6 +145,16 @@ export function CameraClient() {
   useEffect(() => { confirmationRef.current = !!confirmation; }, [confirmation]);
 
   const scanFrame = useCallback(async () => {
+    // O crachá (foto + nome + %) só era LIMPO num reconhecimento bem-sucedido.
+    // Todos os caminhos de saída antecipada — gate de diferença de frame (que
+    // para de enviar quando o corredor esvazia), erro 429/503, confirmação em
+    // curso — deixavam o nome do último aluno colado no vídeo por tempo
+    // indeterminado: o operador via o crachá do Lucas ao lado do rosto de outra
+    // criança. Expirar por tempo cobre todos esses caminhos de uma vez.
+    if (lastMatchAtRef.current && Date.now() - lastMatchAtRef.current > FACE_STALE_MS) {
+      lastMatchAtRef.current = 0;
+      setDetectedFaces([]);
+    }
     if (scanningRef.current) return;
     // Com o overlay verde cobrindo o vídeo não há o que reconhecer — cada
     // frame enviado é uma chamada cobrada do Rekognition.
@@ -218,6 +232,7 @@ export function CameraClient() {
       const data = await res.json();
       const matches: FaceMatch[] = data.matches ?? [];
       setDetectedFaces(matches);
+      lastMatchAtRef.current = matches.length > 0 ? Date.now() : 0;
 
       for (const match of matches) {
         if (!match.studentId) continue;
@@ -239,6 +254,13 @@ export function CameraClient() {
 
   const startCamera = useCallback(async () => {
     setCameraStatus('starting');
+    // `scanHalted` sobrevivia ao Parar/Iniciar: depois de bater a cota, o
+    // operador parava, iniciava de novo — a varredura voltava a rodar de fato,
+    // mas o banner vermelho "Cota atingida" continuava na tela. Ele acreditava
+    // que estava parado enquanto rodava (e vice-versa no dia seguinte).
+    setScanHalted(null);
+    failStreakRef.current = 0;
+    setDetectedFaces([]);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false,
@@ -258,6 +280,8 @@ export function CameraClient() {
     setCameraStatus('idle');
     setModeChosen(false);
     setDetectedFaces([]);
+    setScanHalted(null);
+    failStreakRef.current = 0;
   }, []);
 
   useEffect(() => {

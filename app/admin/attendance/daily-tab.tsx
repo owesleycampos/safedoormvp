@@ -89,11 +89,26 @@ interface TimePickerProps {
   title: string;
 }
 
+/** "YYYY-MM-DD" pelos componentes LOCAIS (toISOString viraria o dia à noite). */
+function localYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function nowHHMM(): string {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+}
+
 function TimePicker({ open, onClose, onConfirm, title }: TimePickerProps) {
-  const now = new Date();
-  const [time, setTime] = useState(
-    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  );
+  const [time, setTime] = useState(nowHHMM);
+
+  // O componente fica montado por linha, então o valor inicial era a hora em que
+  // a PÁGINA abriu e nunca mudava: às 14h a secretária marcava um atraso e o
+  // seletor oferecia 07:50 (hora em que ela abriu a tela) — gravando um atraso
+  // que o sistema classificava como pontual. Recalcula a cada abertura.
+  useEffect(() => {
+    if (open) setTime(nowHHMM());
+  }, [open]);
 
   if (!open) return null;
 
@@ -247,11 +262,15 @@ export default function DailyTab() {
   const [busyStudent, setBusyStudent] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
 
-  const dateStr = date.toISOString().slice(0, 10);
-  const isToday = dateStr === today.toISOString().slice(0, 10);
+  // Data pelos componentes LOCAIS. Com toISOString(), a partir das 21h no
+  // Brasil o dia já virou em UTC: clicar "Hoje" às 21:30 abria AMANHÃ, a
+  // chamada vinha vazia (todos "ausentes") e canEdit ficava falso — a
+  // secretária do turno da noite não conseguia corrigir nada, sem explicação.
+  const dateStr = localYMD(date);
+  const isToday = dateStr === localYMD(today);
   // Corrigir a chamada de ontem é a operação real de secretaria; antes o menu
   // simplesmente não abria em dias passados, sem dizer por quê.
-  const canEdit = dateStr <= today.toISOString().slice(0, 10);
+  const canEdit = dateStr <= localYMD(today);
 
   useEffect(() => {
     if (classFilter !== 'all') localStorage.setItem('daily_class', classFilter);
@@ -299,11 +318,15 @@ export default function DailyTab() {
     .filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
+  // O resumo conta a TURMA INTEIRA, não o que está filtrado pela busca. Antes
+  // saía de `searched`: digitar "ana" na busca fazia os cards virarem 1/1/0 e a
+  // secretária lia "Ausentes: 0" como se fosse o resumo da turma.
+  const rosterAll = data?.students ?? [];
   const stats = {
-    total: searched.length,
-    present: searched.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
-    absent: searched.filter(s => getEffectiveStatus(s) === 'absent').length,
-    late: searched.filter(s => getEffectiveStatus(s) === 'late').length,
+    total: rosterAll.length,
+    present: rosterAll.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
+    absent: rosterAll.filter(s => getEffectiveStatus(s) === 'absent').length,
+    late: rosterAll.filter(s => getEffectiveStatus(s) === 'late').length,
   };
 
   const filtered = searched.filter(s => {
@@ -445,7 +468,7 @@ export default function DailyTab() {
         </div>
 
         {!isToday && (
-          <Button variant="ghost" size="sm" className="text-xs self-start" onClick={() => setDate(new Date())}>Hoje</Button>
+          <Button variant="ghost" size="sm" className="text-xs self-start" onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setDate(d); }}>Hoje</Button>
         )}
 
         <div className="flex items-center gap-2 ml-auto">

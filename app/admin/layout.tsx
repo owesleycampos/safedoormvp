@@ -11,15 +11,28 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!session) redirect('/auth/login');
   const role = (session.user as any)?.role;
-  // SUPERADMIN ia para /pwa, cujo layout devolvia para /admin — loop infinito.
+  // FALHA FECHADO: sessão sem papel (ex.: impersonação expirada) não pode cair
+  // no `role !== 'ADMIN'` abaixo, senão vai para /pwa, cujo layout devolve para
+  // /admin — loop infinito de redirect, sem tela e sem saída.
+  if (!role) redirect('/auth/login');
   if (role === 'SUPERADMIN') redirect('/hq');
   if (role !== 'ADMIN') redirect('/pwa/children');
 
   const schoolId = (session.user as any)?.schoolId;
   if (schoolId) {
-    const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { status: true } });
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { status: true, subscription: { select: { status: true, trialEndsAt: true } } },
+    });
     if (school?.status === 'SUSPENDED' || school?.status === 'CANCELLED') {
       redirect('/auth/login?error=school_suspended');
+    }
+    // Trial vencido: as APIs já devolviam 403, mas o layout deixava o painel
+    // abrir inteiro e cada card falhava sozinho — o dono via um app "quebrado"
+    // em vez de um aviso de que o teste acabou.
+    const sub = school?.subscription;
+    if (sub?.status === 'TRIAL' && sub.trialEndsAt && sub.trialEndsAt < new Date()) {
+      redirect('/auth/login?error=trial_expired');
     }
   }
 

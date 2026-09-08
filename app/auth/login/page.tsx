@@ -89,6 +89,14 @@ function LoginForm() {
         </div>
       )}
 
+      {/* Trial vencido: antes o painel abria inteiro e cada tela falhava
+          sozinha, sem dizer o motivo. */}
+      {loginError === 'trial_expired' && (
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-foreground animate-fade-in">
+          Seu período de teste terminou. Fale com o suporte do Porta Segura para ativar a assinatura e voltar a usar o painel.
+        </div>
+      )}
+
       {/* Error Banner */}
       {errors.general && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive animate-fade-in">

@@ -173,7 +173,9 @@ export function SchoolsClient({ schools }: { schools: SchoolData[] }) {
             className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/25 focus:border-primary/40"
           />
         </div>
-        <div className="flex gap-2">
+        {/* Cinco filtros nao cabem em 375px: sem quebrar nem rolar, o ultimo
+            ("Cancelado") passava da tela e a pagina rolava de lado. */}
+        <div className="flex gap-2 flex-wrap">
           {['ALL', 'ACTIVE', 'TRIAL', 'SUSPENDED', 'CANCELLED'].map((s) => (
             <button
               key={s}

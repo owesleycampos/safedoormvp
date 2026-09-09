@@ -29,6 +29,8 @@ interface RecentRecognition {
 }
 
 const SCAN_INTERVAL_MS = 2_000;
+/** Tempo máximo que um crachá reconhecido fica na tela sem ser reconfirmado. */
+const FACE_STALE_MS = 8_000;
 const CLIENT_COOLDOWN_MS = 60_000;
 const MAX_RECENT = 10;
 
@@ -42,6 +44,8 @@ export function CameraClient() {
   const modeRef = useRef<'ENTRY' | 'EXIT'>('ENTRY');
   const modeChosenRef = useRef(false);
   const failStreakRef = useRef(0);
+  /** Quando o último crachá foi exibido — usado para expirá-lo (ver scanFrame). */
+  const lastMatchAtRef = useRef(0);
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [mode, setMode] = useState<'ENTRY' | 'EXIT'>('ENTRY');
@@ -65,11 +69,22 @@ export function CameraClient() {
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { modeChosenRef.current = modeChosen; }, [modeChosen]);
 
-  useEffect(() => {
+  // Distingue "não liberado" (o servidor respondeu 503) de "não consegui
+  // perguntar" (rede caiu). Antes, QUALQUER falha marcava como não configurado
+  // e o botão Iniciar ficava cinza até recarregar a página inteira — uma
+  // oscilação de rede de 1s trancava a portaria.
+  const probeRekognition = useCallback(() => {
     fetch('/api/camera/recognize')
-      .then((r) => setRekognitionConfigured(r.ok))
-      .catch(() => setRekognitionConfigured(false));
+      .then((r) => setRekognitionConfigured(r.status === 503 ? false : r.ok))
+      // Falha de REDE não é "não configurado". Bloquear a portaria por causa de
+      // uma oscilação de 1s é pior do que deixar iniciar: se o reconhecimento
+      // estiver mesmo fora, o próprio scan devolve 503 e o disjuntor da câmera
+      // avisa com a mensagem certa. (Marcar null aqui deixaria isLoading=true
+      // para sempre — o mesmo travamento com outro rótulo.)
+      .catch(() => setRekognitionConfigured(true));
   }, []);
+
+  useEffect(() => { probeRekognition(); }, [probeRekognition]);
 
   // Suggest the mode from the school's configured windows, so an operator
   // who forgot to flip ENTRADA→SAÍDA in the afternoon gets a visible nudge.
@@ -141,6 +156,16 @@ export function CameraClient() {
   useEffect(() => { confirmationRef.current = !!confirmation; }, [confirmation]);
 
   const scanFrame = useCallback(async () => {
+    // O crachá (foto + nome + %) só era LIMPO num reconhecimento bem-sucedido.
+    // Todos os caminhos de saída antecipada — gate de diferença de frame (que
+    // para de enviar quando o corredor esvazia), erro 429/503, confirmação em
+    // curso — deixavam o nome do último aluno colado no vídeo por tempo
+    // indeterminado: o operador via o crachá do Lucas ao lado do rosto de outra
+    // criança. Expirar por tempo cobre todos esses caminhos de uma vez.
+    if (lastMatchAtRef.current && Date.now() - lastMatchAtRef.current > FACE_STALE_MS) {
+      lastMatchAtRef.current = 0;
+      setDetectedFaces([]);
+    }
     if (scanningRef.current) return;
     // Com o overlay verde cobrindo o vídeo não há o que reconhecer — cada
     // frame enviado é uma chamada cobrada do Rekognition.
@@ -218,6 +243,7 @@ export function CameraClient() {
       const data = await res.json();
       const matches: FaceMatch[] = data.matches ?? [];
       setDetectedFaces(matches);
+      lastMatchAtRef.current = matches.length > 0 ? Date.now() : 0;
 
       for (const match of matches) {
         if (!match.studentId) continue;
@@ -239,6 +265,13 @@ export function CameraClient() {
 
   const startCamera = useCallback(async () => {
     setCameraStatus('starting');
+    // `scanHalted` sobrevivia ao Parar/Iniciar: depois de bater a cota, o
+    // operador parava, iniciava de novo — a varredura voltava a rodar de fato,
+    // mas o banner vermelho "Cota atingida" continuava na tela. Ele acreditava
+    // que estava parado enquanto rodava (e vice-versa no dia seguinte).
+    setScanHalted(null);
+    failStreakRef.current = 0;
+    setDetectedFaces([]);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false,
@@ -258,6 +291,8 @@ export function CameraClient() {
     setCameraStatus('idle');
     setModeChosen(false);
     setDetectedFaces([]);
+    setScanHalted(null);
+    failStreakRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -275,6 +310,25 @@ export function CameraClient() {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   const isLoading = rekognitionConfigured === null;
+
+  /**
+   * Quiosque: a camera esta LIGADA (ou subindo), entao este aparelho e a
+   * portaria e nao um painel administrativo. Ver o efeito no return: a tela
+   * vira sobreposicao fixa acima do menu e da barra inferior.
+   */
+  const kioskMode = cameraStatus === 'active' || cameraStatus === 'starting';
+
+  // Sem isto a pagina atras da sobreposicao continua rolando sob o dedo.
+  useEffect(() => {
+    if (!kioskMode) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('camera-kiosk');
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.classList.remove('camera-kiosk');
+    };
+  }, [kioskMode]);
 
   // Mode pre-selection — monochrome
   if (!modeChosen) {
@@ -328,24 +382,54 @@ export function CameraClient() {
   }
 
   // Camera active view
+  //
+  // MODO QUIOSQUE: com a camera rodando, este e um aparelho de PORTARIA, nao um
+  // painel. Antes a tela vivia dentro do layout do admin, entao continuavam
+  // clicaveis o menu sanduiche, o botao de tema, a barra inferior inteira
+  // (Dashboard/Camera/Alunos/Frequencia), o painel lateral e um botao flutuante
+  // de lista. Um toque errado no meio da fila de entrada tirava a portaria do ar.
+  // Ativa => sobreposicao fixa acima de tudo (header z-30, barra inferior z-40),
+  // e sobram apenas ENTRADA, SAIDA e Fechar.
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
+    <div
+      className={cn(
+        kioskMode
+          ? 'fixed inset-0 z-[100] flex flex-col bg-black'
+          : 'flex flex-col h-full bg-background overflow-hidden'
+      )}
+    >
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 md:px-5 py-2.5 border-b border-border flex-shrink-0">
-        <div className="hidden md:block">
+      <div
+        className={cn(
+          'flex items-center justify-between flex-shrink-0',
+          kioskMode
+            ? 'px-4 py-3 bg-black/80 backdrop-blur-sm border-b border-white/10'
+            : 'px-3 md:px-5 py-2.5 border-b border-border'
+        )}
+        style={kioskMode ? { paddingTop: 'max(0.75rem, env(safe-area-inset-top))' } : undefined}
+      >
+        <div className={cn('hidden', !kioskMode && 'md:block')}>
           <h1 className="text-sm font-semibold">Câmera ao Vivo</h1>
           <p className="text-[11px] text-muted-foreground mt-0.5">AWS Rekognition</p>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           {/* Mode toggle — monochrome */}
-          <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+          {/* No quiosque estes viram alvos grandes: a portaria opera de pe, com
+              fila andando, muitas vezes com o tablet na parede. */}
+          <div className={cn(
+            'flex items-center gap-1 rounded-md border p-0.5',
+            kioskMode ? 'border-white/20 bg-white/5' : 'border-border'
+          )}>
             <button
               onClick={() => setMode('ENTRY')}
               className={cn(
-                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
-                mode === 'ENTRY' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                'rounded font-medium transition-colors',
+                kioskMode ? 'px-5 h-10 text-sm' : 'px-3 py-1 text-[11px]',
+                mode === 'ENTRY'
+                  ? 'bg-foreground text-background'
+                  : kioskMode ? 'text-white/60 hover:text-white' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               ENTRADA
@@ -353,8 +437,11 @@ export function CameraClient() {
             <button
               onClick={() => setMode('EXIT')}
               className={cn(
-                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
-                mode === 'EXIT' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                'rounded font-medium transition-colors',
+                kioskMode ? 'px-5 h-10 text-sm' : 'px-3 py-1 text-[11px]',
+                mode === 'EXIT'
+                  ? 'bg-foreground text-background'
+                  : kioskMode ? 'text-white/60 hover:text-white' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               SAÍDA
@@ -368,8 +455,14 @@ export function CameraClient() {
               <span className="sm:hidden">Iniciar</span>
             </Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={stopCamera} className="gap-1.5">
-              <VideoOff className="h-3.5 w-3.5" /> Parar
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={stopCamera}
+              className={cn('gap-1.5', kioskMode && 'h-11 px-4 bg-white/10 border-white/20 text-white hover:bg-white/20')}
+            >
+              <VideoOff className="h-4 w-4" />
+              {kioskMode ? 'Fechar câmera' : 'Parar'}
             </Button>
           )}
         </div>
@@ -384,12 +477,20 @@ export function CameraClient() {
           {rekognitionConfigured === false && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20 px-8">
               <AlertCircle className="h-8 w-8 text-muted-foreground" />
-              <div className="text-center">
-                <p className="text-white text-sm font-medium">AWS Rekognition não configurado</p>
-                <p className="text-white/50 text-xs mt-2 leading-relaxed">
-                  Adicione <code className="text-white/70">AWS_ACCESS_KEY_ID</code> e{' '}
-                  <code className="text-white/70">AWS_SECRET_ACCESS_KEY</code>
+              {/* Quem lê isto é a secretária da portaria, não quem faz deploy:
+                  nomes de variável de ambiente não ajudam e assustam. */}
+              <div className="text-center space-y-3">
+                <p className="text-white text-sm font-medium">Reconhecimento facial ainda não liberado</p>
+                <p className="text-white/50 text-xs leading-relaxed max-w-xs">
+                  Esta escola ainda não tem o reconhecimento facial ativado. Fale com o suporte do Porta Segura. O registro manual continua funcionando normalmente.
                 </p>
+                <button
+                  type="button"
+                  onClick={probeRekognition}
+                  className="h-8 px-3 rounded-md border border-white/20 text-white/80 text-xs hover:bg-white/10 transition-colors"
+                >
+                  Verificar de novo
+                </button>
               </div>
             </div>
           )}
@@ -544,15 +645,18 @@ export function CameraClient() {
           {/* Mobile panel toggle */}
           <button
             onClick={() => setPanelOpen(true)}
-            className="md:hidden absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 px-2.5 py-1.5 text-white text-[11px] font-medium"
+            className={cn(
+              'absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 px-2.5 py-1.5 text-white text-[11px] font-medium',
+              kioskMode ? 'hidden' : 'md:hidden'
+            )}
           >
             <List className="h-3.5 w-3.5" />
             {recentRecognitions.length > 0 && <span className="tabular-nums">{recentRecognitions.length}</span>}
           </button>
         </div>
 
-        {/* Desktop sidebar */}
-        <div className="hidden md:flex w-72 flex-col border-l border-border bg-card overflow-hidden flex-shrink-0">
+        {/* Painel lateral: escondido no quiosque — nada clicavel alem dos 3 controles */}
+        <div className={cn('w-72 flex-col border-l border-border bg-card overflow-hidden flex-shrink-0', kioskMode ? 'hidden' : 'hidden md:flex')}>
           <SidebarContent
             rekognitionConfigured={rekognitionConfigured}
             isLoading={isLoading}

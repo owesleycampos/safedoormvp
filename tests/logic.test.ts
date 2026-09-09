@@ -12,6 +12,8 @@ import {
   addDaysStr,
   weekdayOfDateStr,
   isWeekendDateStr,
+  zonedWallClockUtc,
+  hasExplicitTimezone,
 } from '../lib/timezone';
 import {
   resolveSchedule,
@@ -19,6 +21,8 @@ import {
   timeToMinutes,
   DEFAULT_SHIFT_SCHEDULES,
 } from '../lib/attendance-rules';
+import { monthlyRevenueCents, mrrCents } from '../lib/billing';
+import { isImpersonationExpired } from '../lib/impersonation';
 
 const SP = 'America/Sao_Paulo';
 let passed = 0;
@@ -169,6 +173,83 @@ test('a NOITE-shift 22:00 BRT exit stays on its own local day', () => {
   assert.equal(range.dateStr, '2026-08-24');
   const noite = DEFAULT_SHIFT_SCHEDULES.NOITE;
   assert.equal(computeStatus(noite, 'EXIT', localMinutes(exit, SP)), 'ON_TIME');
+});
+
+console.log('\n── correção manual: hora de parede da escola → UTC ──');
+
+test('12:30 na escola (SP) vira 15:30 UTC, não 12:30 UTC', () => {
+  // Era o bug: `new Date("2026-09-08T12:30:00")` num servidor UTC dava 12:30Z,
+  // que é 09:30 em SP — a saída às 12:30 virava "saída antecipada" às 09:30.
+  const d = zonedWallClockUtc('2026-09-08T12:30:00', SP);
+  assert.equal(d.toISOString(), '2026-09-08T15:30:00.000Z');
+  assert.equal(localMinutes(d, SP), 12 * 60 + 30); // volta a ser 12:30 na escola
+});
+
+test('aceita sem segundos ("YYYY-MM-DDTHH:mm")', () => {
+  const d = zonedWallClockUtc('2026-09-08T07:15', SP);
+  assert.equal(localMinutes(d, SP), 7 * 60 + 15);
+});
+
+test('00:15 da escola continua no MESMO dia local (não cai no anterior)', () => {
+  const d = zonedWallClockUtc('2026-09-08T00:15:00', SP);
+  assert.equal(localDateStr(d, SP), '2026-09-08');
+});
+
+test('string inválida vira Data inválida (a rota devolve 400)', () => {
+  assert.ok(isNaN(zonedWallClockUtc('não é data', SP).getTime()));
+});
+
+test('hasExplicitTimezone distingue com e sem fuso', () => {
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00'), false);
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00Z'), true);
+  assert.equal(hasExplicitTimezone('2026-09-08T12:30:00-03:00'), true);
+});
+
+console.log('\n── billing.ts (fonte única de MRR) ──');
+
+test('mensal ativo: preço cheio, desconto ignorado (desconto é do anual)', () => {
+  assert.equal(monthlyRevenueCents({ status: 'ACTIVE', billing: 'MONTHLY', priceMonthly: 10000, discount: 0.2 }), 10000);
+});
+
+test('anual ativo: desconto aplicado', () => {
+  assert.equal(monthlyRevenueCents({ status: 'ACTIVE', billing: 'ANNUAL', priceMonthly: 10000, discount: 0.2 }), 8000);
+});
+
+test('TRIAL não é receita', () => {
+  assert.equal(monthlyRevenueCents({ status: 'TRIAL', billing: 'MONTHLY', priceMonthly: 10000, discount: 0 }), 0);
+});
+
+test('CANCELLED não é receita', () => {
+  assert.equal(monthlyRevenueCents({ status: 'CANCELLED', billing: 'ANNUAL', priceMonthly: 10000, discount: 0.1 }), 0);
+});
+
+test('mrrCents soma só as ativas — Monitor e Dashboard batem', () => {
+  const subs = [
+    { status: 'ACTIVE', billing: 'MONTHLY', priceMonthly: 10000, discount: 0.3 }, // 10000
+    { status: 'ACTIVE', billing: 'ANNUAL', priceMonthly: 20000, discount: 0.1 },  // 18000
+    { status: 'TRIAL', billing: 'MONTHLY', priceMonthly: 5000, discount: 0 },     // 0
+  ];
+  assert.equal(mrrCents(subs), 28000);
+});
+
+console.log('\n── impersonação: prazo absoluto (não depende do cookie rolante) ──');
+
+test('sessão normal (sem impersonatedBy) nunca expira por aqui', () => {
+  assert.equal(isImpersonationExpired({ impExp: 1 }, 999999999999), false);
+});
+
+test('impersonação dentro do prazo continua válida', () => {
+  const now = 1_000_000;
+  assert.equal(isImpersonationExpired({ impersonatedBy: 'u1', impExp: now + 60_000 }, now), false);
+});
+
+test('impersonação vencida expira mesmo com cookie renovado', () => {
+  const now = 2_000_000;
+  assert.equal(isImpersonationExpired({ impersonatedBy: 'u1', impExp: now - 1 }, now), true);
+});
+
+test('impersonação sem impExp não força expiração (degrada seguro)', () => {
+  assert.equal(isImpersonationExpired({ impersonatedBy: 'u1' }, 999999999999), false);
 });
 
 console.log(`\n${passed} tests passed.\n`);

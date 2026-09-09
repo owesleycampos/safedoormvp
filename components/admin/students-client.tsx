@@ -61,10 +61,10 @@ export function StudentsClient({ students: initialStudents, classes }: StudentsC
   const orphanStudents = students.filter((s) => (s._count?.parents ?? 0) === 0);
 
   const filtered = students.filter((s) => {
+    // `registration` não existe no modelo Student — o ramo nunca casava nada.
     const matchSearch =
       s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.class?.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.registration || '').includes(search);
+      s.class?.name.toLowerCase().includes(search.toLowerCase());
     const matchClass = filterClass === 'all' || s.classId === filterClass;
     return matchSearch && matchClass;
   });

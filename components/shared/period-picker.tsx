@@ -57,7 +57,7 @@ export function PeriodPicker({
             key={p}
             onClick={() => pickPreset(p)}
             className={cn(
-              'flex-shrink-0 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors',
+              'flex-shrink-0 px-3.5 min-h-[40px] text-[13px] font-medium rounded-md transition-colors',
               value.preset === p ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             )}
           >
@@ -67,7 +67,7 @@ export function PeriodPicker({
         <button
           onClick={() => setOpen(true)}
           className={cn(
-            'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors',
+            'flex-shrink-0 flex items-center justify-center gap-1.5 px-3.5 min-h-[40px] text-[13px] font-medium rounded-md transition-colors',
             value.preset === 'custom' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
           )}
         >

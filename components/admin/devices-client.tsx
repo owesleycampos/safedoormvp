@@ -278,11 +278,13 @@ export function DevicesClient({ devices: initialDevices, schoolId }: DevicesClie
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
+      {/* flex-wrap + min-w-0: sem quebra, o texto e os dois botoes somavam mais
+          que a tela e a pagina rolava de lado. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground min-w-0">
           {devices.length} dispositivo{devices.length !== 1 ? 's' : ''} registrado{devices.length !== 1 ? 's' : ''}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             variant="outline"
             size="sm"

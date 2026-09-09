@@ -100,7 +100,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
       if (selectedLog?.id === log.id) {
         setSelectedLog(prev => prev ? { ...prev, reviewed: true, reviewedAt: new Date().toISOString() } : null);
       }
-      toast({ variant: 'success', title: 'Marcado como revisado' });
+      toast({ variant: 'success', title: 'Registro descartado' });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erro', description: err.message });
     } finally { setMarkingId(null); }
@@ -132,7 +132,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 max-w-[1200px] mx-auto w-full">
 
         {/* Header */}
         <motion.div
@@ -150,7 +150,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
           {pendingCount > 0 && (
             <Button variant="outline" size="sm" onClick={markAllReviewed} loading={markingAll}>
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Revisar todos
+              Descartar todos
             </Button>
           )}
         </motion.div>
@@ -362,7 +362,7 @@ export function UnrecognizedClient({ logs: initialLogs }: UnrecognizedClientProp
                 <Button variant="outline" onClick={() => setDetailOpen(false)}>Fechar</Button>
                 {!selectedLog.reviewed && (
                   <Button onClick={() => { markReviewed(selectedLog); setDetailOpen(false); }} loading={markingId === selectedLog.id}>
-                    <CheckCircle2 className="h-4 w-4" /> Revisar
+                    <CheckCircle2 className="h-4 w-4" /> Descartar
                   </Button>
                 )}
               </DialogFooter>

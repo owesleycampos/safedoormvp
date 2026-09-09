@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       id: true,
       name: true,
       photoUrl: true,
+      createdAt: true, // piso da apuração: dia da matrícula
       class: { select: { id: true, name: true } },
     },
   });
@@ -104,10 +105,24 @@ export async function GET(req: NextRequest) {
     status: 'warning' | 'critical';
   }> = [];
 
+  const schoolDayList = Array.from(schoolDays);
+
   for (const student of students) {
-    const presentDays = presentDaysMap.get(student.id)?.size ?? 0;
-    const absentDays = totalSchoolDays - presentDays;
-    const absenceRate = Math.round((absentDays / totalSchoolDays) * 10000) / 100; // e.g. 33.33
+    // PISO NA MATRÍCULA: só contam os dias letivos a partir do dia em que o
+    // aluno entrou na escola. Sem isto, uma turma importada por CSV hoje
+    // aparecia inteira com 100% de falta e "crítico" no topo da lista — à
+    // frente dos alunos que estão de fato em risco. Este alerta é obrigação
+    // legal (LDB art. 12) e vai para o Conselho Tutelar; não pode ter ruído.
+    const enrolledStr = localDateStr(student.createdAt, tz);
+    const daysForStudent = schoolDayList.filter((d) => d >= enrolledStr).length;
+    if (daysForStudent === 0) continue; // entrou depois do período: nada a apurar
+
+    const presentSet = presentDaysMap.get(student.id);
+    const presentDays = presentSet
+      ? Array.from(presentSet).filter((d) => d >= enrolledStr).length
+      : 0;
+    const absentDays = daysForStudent - presentDays;
+    const absenceRate = Math.round((absentDays / daysForStudent) * 10000) / 100; // e.g. 33.33
 
     if (absenceRate >= 25) {
       alerts.push({
@@ -115,7 +130,7 @@ export async function GET(req: NextRequest) {
         name: student.name,
         className: student.class?.name ?? '',
         photoUrl: student.photoUrl,
-        totalDays: totalSchoolDays,
+        totalDays: daysForStudent,
         absentDays,
         absenceRate,
         status: absenceRate >= 50 ? 'critical' : 'warning',

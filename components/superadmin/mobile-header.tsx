@@ -7,6 +7,7 @@ import { signOut, useSession } from 'next-auth/react';
 import {
   Menu, LayoutDashboard, School, CreditCard,
   ScrollText, Settings, LogOut, Shield, Webhook,
+  Activity, FileSearch,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { Logo } from '@/components/shared/logo';
@@ -14,10 +15,16 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
+// Mesma lista da sidebar do desktop. Faltavam Monitoramento e Auditoria: no
+// celular o dono NÃO conseguia chegar na pausa global do reconhecimento (a
+// contingência de custo) nem no log de auditoria — e o título da barra caía no
+// literal "SuperAdmin" nessas duas páginas, por não estarem no array.
 const nav = [
   { href: '/hq',            icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/hq/monitor',     icon: Activity,        label: 'Monitoramento' },
   { href: '/hq/schools',     icon: School,          label: 'Escolas' },
   { href: '/hq/billing',     icon: CreditCard,      label: 'Faturamento' },
+  { href: '/hq/audit',       icon: FileSearch,      label: 'Auditoria' },
   { href: '/hq/webhooks',    icon: Webhook,         label: 'Webhooks' },
   { href: '/hq/logs',        icon: ScrollText,      label: 'Logs' },
   { href: '/hq/settings',    icon: Settings,        label: 'Configurações' },
@@ -38,10 +45,10 @@ export function SuperAdminMobileHeader() {
 
   return (
     <>
-      <div className="lg:hidden flex items-center justify-between h-12 px-4 border-b border-border bg-background sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between h-16 px-5 border-b border-border bg-background sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent transition-colors"
           aria-label="Abrir menu"
         >
           <Menu className="h-4 w-4 text-muted-foreground" />
@@ -53,7 +60,7 @@ export function SuperAdminMobileHeader() {
             Super
           </span>
         </div>
-        <ThemeToggle className="h-8 w-8" />
+        <ThemeToggle className="h-10 w-10" />
       </div>
 
       <Sheet open={open} onOpenChange={setOpen}>

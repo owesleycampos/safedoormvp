@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import * as rekognition from '@/lib/rekognition';
 import { requireActiveSchool } from '@/lib/require-active-school';
-import { getRecognitionGate, reserveRecognition } from '@/lib/recognition-usage';
+import { getRecognitionGate, reserveRecognition, releaseRecognition } from '@/lib/recognition-usage';
+import { validateImageUpload } from '@/lib/upload-guard';
 
 /**
  * GET /api/camera/recognize
@@ -62,15 +63,19 @@ export async function POST(req: NextRequest) {
   }
   const faceMatchThreshold = Math.max(50, Math.min(99, Math.round(gate.minConfidence * 100)));
 
-  // ── Parse image from FormData ──────────────────────────────────────────────
+  // ── Parse + valida a imagem ANTES de reservar ─────────────────────────────
+  // Sem isso, a rota da câmera (ao contrário das outras) aceitava qualquer
+  // arrayBuffer sem limite de tamanho nem checagem de tipo — um POST de
+  // centenas de MB derrubava a função e ainda gastava um slot de AWS.
   let imageBytes: Buffer;
   try {
     const formData = await req.formData();
-    const file = formData.get('image') as File | null;
-    if (!file) {
-      return NextResponse.json({ error: 'Campo "image" não encontrado no FormData.' }, { status: 400 });
+    const file = formData.get('image');
+    const validated = await validateImageUpload(file);
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: validated.status });
     }
-    imageBytes = Buffer.from(await file.arrayBuffer());
+    imageBytes = validated.bytes;
   } catch {
     return NextResponse.json({ error: 'Erro ao processar imagem.' }, { status: 400 });
   }
@@ -87,17 +92,33 @@ export async function POST(req: NextRequest) {
 
   const collectionId = schoolId;
 
+  // ── Chamada à AWS ────────────────────────────────────────────────────────
+  // O release do slot vale SÓ para falha da AWS (não houve cobrança). Se a AWS
+  // responde mas o trabalho POSTERIOR no banco falha, a chamada já foi cobrada
+  // — devolver o slot aí faria a contagem "vazar pra baixo" e a escola furar o
+  // teto. Por isso a busca fica no seu próprio try; o banco vem depois, fora
+  // dele.
+  let faceMatches: Awaited<ReturnType<typeof rekognition.searchFacesByImage>>['matches'];
+  let box: Awaited<ReturnType<typeof rekognition.searchFacesByImage>>['box'];
   try {
-    // ── Search for matching faces ──────────────────────────────────────────
-    const { matches: faceMatches, box } = await rekognition.searchFacesByImage(
-      collectionId, imageBytes, faceMatchThreshold
+    const res = await rekognition.searchFacesByImage(collectionId, imageBytes, faceMatchThreshold);
+    faceMatches = res.matches;
+    box = res.box;
+  } catch (err: any) {
+    console.error('[recognize] AWS Rekognition error:', err);
+    await releaseRecognition(schoolId, auth.timezone);
+    return NextResponse.json(
+      { error: err.message || 'Erro ao reconhecer via AWS Rekognition.' },
+      { status: 500 }
     );
+  }
 
-    if (faceMatches.length === 0) {
-      return NextResponse.json({ matches: [], faceCount: 0 });
-    }
+  if (faceMatches.length === 0) {
+    return NextResponse.json({ matches: [], faceCount: 0 });
+  }
 
-    // ── Look up best match in DB ───────────────────────────────────────────
+  // ── Look up best match in DB (AWS já cobrou: NUNCA devolve o slot aqui) ────
+  try {
     const bestMatch = faceMatches[0];
     const student = await prisma.student.findFirst({
       where: {
@@ -130,10 +151,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ matches: [], faceCount: 0 });
   } catch (err: any) {
-    console.error('[recognize] AWS Rekognition error:', err);
-    return NextResponse.json(
-      { error: err.message || 'Erro ao reconhecer via AWS Rekognition.' },
-      { status: 500 }
-    );
+    console.error('[recognize] DB lookup error (slot NÃO devolvido, AWS já cobrou):', err);
+    return NextResponse.json({ error: 'Erro ao consultar o aluno.' }, { status: 500 });
   }
 }

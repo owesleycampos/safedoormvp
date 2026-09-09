@@ -18,7 +18,7 @@ export function AdminSidebar() {
   const isActive = (href: string) => isNavActive(pathname, href);
 
   return (
-    <aside className="sidebar fixed inset-y-0 left-0 z-40 hidden lg:flex w-[220px] flex-col">
+    <aside data-admin-sidebar className="sidebar fixed inset-y-0 left-0 z-40 hidden lg:flex w-[220px] flex-col">
       {/* Logo */}
       <div className="flex h-14 items-center px-5">
         <Logo size="xs" showText />

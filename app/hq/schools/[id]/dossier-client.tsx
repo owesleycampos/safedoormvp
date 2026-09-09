@@ -65,7 +65,7 @@ export function SchoolDossierClient({ schoolId }: { schoolId: string }) {
   const paused = school.recognitionPaused;
 
   return (
-    <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1100px] mx-auto w-full">
+    <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 max-w-[1100px] mx-auto w-full">
       <Link href="/hq/schools" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft className="h-4 w-4" /> Escolas
       </Link>

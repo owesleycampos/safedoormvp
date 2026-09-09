@@ -26,9 +26,15 @@ export async function POST(
 
   const invite = await prisma.classInvite.findUnique({
     where: { token: params.token },
+    include: { school: { select: { status: true } } },
   });
 
   if (!invite || !invite.isActive || invite.expiresAt < new Date()) {
+    return NextResponse.json({ error: 'Link inválido ou expirado.' }, { status: 404 });
+  }
+  // Escola suspensa/cancelada não pode continuar criando contas, vínculos e
+  // consentimentos LGPD por um link antigo que ainda circula em grupo.
+  if (invite.school.status === 'SUSPENDED' || invite.school.status === 'CANCELLED') {
     return NextResponse.json({ error: 'Link inválido ou expirado.' }, { status: 404 });
   }
 
@@ -130,8 +136,29 @@ export async function POST(
       );
     }
   } else if (user && !user.passwordHash) {
-    // Account created by the school without a password — the guardian
-    // defines it now, which is exactly what the invite is for.
+    // Conta criada pela escola sem senha — o responsável define agora, que é
+    // exatamente o propósito do convite.
+    //
+    // MAS este é o ramo perigoso: a ÚNICA prova exigida é a data de nascimento
+    // do aluno, que não é segredo entre os pais da turma. Sem os dois guardas
+    // abaixo, qualquer um com o link podia digitar o e-mail de OUTRA pessoa e
+    // definir a senha da conta dela — herdando todos os filhos daquele
+    // responsável, inclusive de OUTRAS escolas (o vínculo é global).
+    if (user.role !== 'PARENT') {
+      // Nunca deixar um convite público assumir uma conta de admin/dono.
+      return NextResponse.json(
+        { error: 'Este e-mail não pode ser usado no link da turma. Fale com a secretaria.' },
+        { status: 403 }
+      );
+    }
+    if (user.schoolId && user.schoolId !== invite.schoolId) {
+      // Conta de responsável de outra escola: o link desta turma não define a
+      // senha dela. Corta a tomada de conta entre escolas.
+      return NextResponse.json(
+        { error: 'Já existe uma conta com este e-mail. Entre com sua senha para continuar.', needsAccount: true, accountExists: true },
+        { status: 409 }
+      );
+    }
     if (!password || String(password).length < 8) {
       return NextResponse.json(
         {

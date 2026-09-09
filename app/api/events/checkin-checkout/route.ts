@@ -41,6 +41,17 @@ export async function POST(req: NextRequest) {
   if (isNaN(timestamp.getTime())) {
     return NextResponse.json({ error: 'Invalid timestamp' }, { status: 400 });
   }
+  // Relógio adiantado do tablet TRAVA o aluno: o evento entra com data futura,
+  // a janela de cooldown (>= agora-60s, sem teto) passa a casar sempre, e todo
+  // scan seguinte responde "skipped". A criança fica sem entrada hoje, amanhã e
+  // depois — aparecendo como AUSENTE na chamada — até a data alcançar o evento.
+  // Aceita uma folga de 5 min para dessincronia normal de relógio.
+  if (timestamp.getTime() > Date.now() + 5 * 60_000) {
+    return NextResponse.json(
+      { error: 'Timestamp no futuro. Verifique o relógio do dispositivo.' },
+      { status: 400 }
+    );
+  }
 
   // A pausa de contingência (plataforma ou escola) também vale para o
   // tablet — o interruptor "pausar reconhecimento" tinha que parar as

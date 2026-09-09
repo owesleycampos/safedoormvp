@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { SuperAdminDashboardClient } from './dashboard-client';
 import { DEFAULT_TIMEZONE, dayRangeForDateStr, localDateStr, addDaysStr } from '@/lib/timezone';
+import { mrrCents } from '@/lib/billing';
 
 export default async function SuperAdminDashboard() {
   const session = await getServerSession(authOptions);
@@ -56,15 +57,11 @@ export default async function SuperAdminDashboard() {
     prisma.awsAccount.findMany(),
   ]);
 
-  // MRR só de assinaturas ATIVAS — TRIAL não é receita (a lista inclui
-  // trials para outras métricas, mas eles não somam no faturamento).
-  const mrr = schoolsWithSubs.reduce((acc, sub) => {
-    if (sub.status !== 'ACTIVE') return acc;
-    const monthly = sub.billing === 'ANNUAL'
-      ? Math.round(sub.priceMonthly * (1 - sub.discount))
-      : sub.priceMonthly;
-    return acc + monthly;
-  }, 0);
+  // MRR pela fonte única (só ACTIVE, desconto só no anual). A lista inclui
+  // trials para outras métricas, mas eles não somam no faturamento.
+  const mrr = mrrCents(schoolsWithSubs);
+  // "Assinaturas Ativas" conta só ACTIVE — trials não são assinatura ativa.
+  const activeSubscriptions = schoolsWithSubs.filter((s) => s.status === 'ACTIVE').length;
 
   const arr = mrr * 12;
   const eventsGrowth = eventsLastMonth > 0
@@ -82,7 +79,7 @@ export default async function SuperAdminDashboard() {
     eventsGrowth,
     mrr,
     arr,
-    activeSubscriptions: schoolsWithSubs.length,
+    activeSubscriptions,
     recentSchools: recentSchools.map((s) => ({
       id: s.id,
       name: s.name,

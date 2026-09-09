@@ -9,6 +9,11 @@ async function verifyAdminAndStudent(req: NextRequest, id: string) {
   if (!session || (session.user as any)?.role !== 'ADMIN') return null;
 
   const schoolId = (session.user as any)?.schoolId;
+  // CRÍTICO: `schoolId` é opcional no modelo User. Com undefined, o Prisma
+  // REMOVE a cláusula e o findFirst passa a casar o aluno de QUALQUER escola —
+  // um admin sem escola vinculada leria e editaria a ficha de qualquer aluno da
+  // plataforma. Sem escola, não há o que autorizar.
+  if (!schoolId) return null;
   const student = await prisma.student.findFirst({ where: { id, schoolId } });
   if (!student) return null;
 
@@ -53,6 +58,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const name = formData.get('name') as string;
     const classId = formData.get('classId') as string;
     const birthDate = formData.get('birthDate') as string;
+    // `has` e não `get`: campo AUSENTE não pode apagar as observações; campo
+    // presente e vazio pode (o usuário limpou o texto de propósito).
+    const notesSent = formData.has('notes');
+    const notes = notesSent ? String(formData.get('notes') ?? '').trim() : '';
 
     // A turma de destino PRECISA ser da mesma escola. Sem isto, o PUT
     // escrevia um classId de outra escola no aluno — ele sumia das listas
@@ -71,6 +80,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         name,
         classId,
         birthDate: birthDate ? new Date(birthDate) : null,
+        // 'notes' era gravado só na criação: editar as observações de um aluno
+        // já existente (alergia, atestado, remédio) mostrava o toast de sucesso
+        // e descartava o texto silenciosamente.
+        ...(notesSent && { notes: notes || null }),
       },
       include: {
         class: { select: { id: true, name: true, grade: true } },

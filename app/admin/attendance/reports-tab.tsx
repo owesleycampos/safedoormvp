@@ -293,7 +293,10 @@ export default function ReportsTab() {
       const res = await fetch(`/api/reports/alerts?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setAlerts(data.students ?? []);
+        // A rota devolve { alerts, alertCount, ... } — lia-se `data.students`,
+        // que nunca existiu: o alerta de infrequência (<75%, LDB art. 12) era
+        // calculado certo no servidor e SEMPRE chegava vazio na tela.
+        setAlerts(data.alerts ?? []);
       }
     } catch {
       setAlerts([]);
@@ -327,7 +330,7 @@ export default function ReportsTab() {
   const absenceCells = totalCells - presentCells;
 
   return (
-    <div className="flex-1 p-3 md:p-6 space-y-4 overflow-x-hidden">
+    <div className="flex-1 px-5 py-6 md:px-8 md:py-7 space-y-4 overflow-x-hidden">
 
       {/* Alerts banner (inline, collapsible) */}
       {displayedAlerts.length > 0 && (

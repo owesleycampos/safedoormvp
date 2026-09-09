@@ -15,6 +15,31 @@ import {
 
 let _client: RekognitionClient | null = null;
 
+// Sob carga (muitas escolas reconhecendo ao mesmo tempo) a AWS pode limitar a
+// taxa (ThrottlingException / ProvisionedThroughputExceededException). Em vez
+// de falhar o frame na hora, tenta de novo com backoff exponencial + jitter —
+// a maioria dos throttles é transitória. Esgotadas as tentativas, propaga o
+// erro (a rota devolve o slot de cota e cai no registro manual).
+const THROTTLE_ERRORS = new Set(['ThrottlingException', 'ProvisionedThroughputExceededException']);
+const MAX_RETRIES = 3;
+
+async function sendWithRetry<T>(send: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await send();
+    } catch (err: any) {
+      if (THROTTLE_ERRORS.has(err?.name) && attempt < MAX_RETRIES) {
+        const backoff = 80 * 2 ** attempt + Math.floor(Math.random() * 60);
+        await new Promise((r) => setTimeout(r, backoff));
+        attempt++;
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 function getClient() {
   if (!_client) {
     _client = new RekognitionClient({
@@ -144,13 +169,15 @@ export async function searchFacesByImage(
   faceMatchThreshold: number = 70
 ): Promise<FaceSearchResult> {
   try {
-    const res = await getClient().send(
-      new SearchFacesByImageCommand({
-        CollectionId: collectionId,
-        Image: { Bytes: imageBuffer },
-        MaxFaces: 5,
-        FaceMatchThreshold: faceMatchThreshold,
-      })
+    const res = await sendWithRetry(() =>
+      getClient().send(
+        new SearchFacesByImageCommand({
+          CollectionId: collectionId,
+          Image: { Bytes: imageBuffer },
+          MaxFaces: 5,
+          FaceMatchThreshold: faceMatchThreshold,
+        })
+      )
     );
 
     const box: BoundingBox | null = res.SearchedFaceBoundingBox

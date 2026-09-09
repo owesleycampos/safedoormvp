@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { BillingClient } from './billing-client';
+import { mrrCents } from '@/lib/billing';
 
 export default async function BillingPage() {
   const now = new Date();
@@ -36,14 +37,8 @@ export default async function BillingPage() {
       prisma.invoice.count({ where: { status: 'PENDING' } }),
     ]);
 
-  // Só ACTIVE conta como receita; TRIAL fica de fora do MRR.
-  const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE');
-  const mrr = activeSubs.reduce((acc, sub) => {
-    const monthly = sub.billing === 'ANNUAL'
-      ? Math.round(sub.priceMonthly * (1 - sub.discount))
-      : sub.priceMonthly;
-    return acc + monthly;
-  }, 0);
+  // MRR pela fonte única (só ACTIVE, desconto só no anual).
+  const mrr = mrrCents(subscriptions);
 
   const data = {
     mrr,

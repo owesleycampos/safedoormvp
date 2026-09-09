@@ -129,6 +129,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               email,
               name,
               role: 'PARENT',
+              // Marca a escola dona do cadastro (ver comentário em /api/parents).
+              schoolId: auth.schoolId,
               ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
             },
           },
@@ -144,7 +146,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const inScope = await prisma.parent.findFirst({
       where: {
         id: parentId,
-        OR: [{ students: { some: { student: { schoolId: auth.schoolId } } } }, { students: { none: {} } }],
+        // O ramo "sem aluno vinculado" precisa ser da PRÓPRIA escola: solto, ele
+        // permitia vincular a um aluno seu um responsável cadastrado por outra
+        // escola (e depois assumir a conta dele pelo PATCH de senha).
+        OR: [
+          { students: { some: { student: { schoolId: auth.schoolId } } } },
+          { students: { none: {} }, user: { schoolId: auth.schoolId } },
+        ],
       },
       select: { id: true },
     });

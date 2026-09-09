@@ -253,7 +253,7 @@ export function ParentsClient({ parents: initialParents, schoolId }: ParentsClie
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 max-w-[1200px] mx-auto w-full">
 
         {/* Header */}
         <motion.div

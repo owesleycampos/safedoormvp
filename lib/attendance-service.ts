@@ -21,10 +21,16 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { notifyParentsOfStudent, formatAttendanceNotification } from '@/lib/notifications';
-import { resolveSchedule, computeStatus, type AttendanceStatus } from '@/lib/attendance-rules';
+import { resolveSchedule, computeStatus, timeToMinutes, type AttendanceStatus } from '@/lib/attendance-rules';
 import { DEFAULT_TIMEZONE, dayRangeInTz, localMinutes } from '@/lib/timezone';
 
 const COOLDOWN_SECONDS = 60;
+/** Folga depois do horário de saída do turno em que a saída ainda pode ser
+    refinada para frente (passagens muito depois disso são só a criança
+    circulando, não uma saída nova). */
+const EXIT_GRACE_MIN = 90;
+/** Intervalo mínimo entre a ENTRADA e a SAÍDA do mesmo aluno no mesmo dia. */
+const MIN_ENTRY_EXIT_GAP_MS = 10 * 60_000;
 
 export type EventSource = 'CAMERA_WEB' | 'AGENT' | 'MANUAL';
 
@@ -44,6 +50,16 @@ export interface RegisterEventInput {
   override?: boolean;
   actorUserId?: string | null;
   actorName?: string | null;
+  /**
+   * Não enviar push aos responsáveis por ESTE registro.
+   *
+   * Existe para a reconciliação administrativa: quando a secretária clica
+   * "Todos presentes" às 15h para fechar a chamada, o pai NÃO pode receber
+   * "seu filho chegou à escola" — a criança chegou de manhã, e o aviso de
+   * chegada é justamente o produto de segurança. Um push falso de chegada
+   * horas depois destrói a confiança na notificação que importa.
+   */
+  suppressNotification?: boolean;
 }
 
 export interface EventStudentInfo {
@@ -69,7 +85,8 @@ export type RegisterEventResult =
         | 'LOW_CONFIDENCE'
         | 'COOLDOWN'
         | 'DUPLICATE_ENTRY'
-        | 'STALE_EXIT';
+        | 'STALE_EXIT'
+        | 'TOO_SOON_AFTER_ENTRY';
       message: string;
       httpStatus: number;
       existingEventId?: string;
@@ -91,6 +108,7 @@ export async function registerAttendanceEvent(
   const {
     studentId, eventType, source, schoolId, deviceId,
     confidence, explicitNotes, override, actorUserId, actorName,
+    suppressNotification,
   } = input;
   const isManual = source === 'MANUAL';
   const timestamp = input.timestamp ?? new Date();
@@ -161,9 +179,17 @@ export async function registerAttendanceEvent(
 
   // ── Cooldown (automatic sources; DB-backed → multi-camera safe) ────────
   if (!isManual) {
-    const cooldownCutoff = new Date(Date.now() - COOLDOWN_SECONDS * 1000);
+    const now = Date.now();
+    const cooldownCutoff = new Date(now - COOLDOWN_SECONDS * 1000);
+    // O `lte: agora` é o teto que faltava. Sem ele, um evento gravado com data
+    // FUTURA (tablet com relógio adiantado) casava a janela para sempre e todo
+    // scan seguinte virava "cooldown" — o aluno sumia da chamada por dias.
     const recentEvent = await prisma.attendanceEvent.findFirst({
-      where: { studentId, eventType, timestamp: { gte: cooldownCutoff } },
+      where: {
+        studentId,
+        eventType,
+        timestamp: { gte: cooldownCutoff, lte: new Date(now) },
+      },
       select: { id: true },
     });
     if (recentEvent) {
@@ -200,6 +226,7 @@ export async function registerAttendanceEvent(
   });
 
   const notify = async (eventId: string, eventTime: Date) => {
+    if (suppressNotification) return; // reconciliação administrativa (ver input)
     const wantsPush = eventType === 'ENTRY'
       ? settings?.notifyOnEntry ?? true
       : settings?.notifyOnExit ?? true;
@@ -246,27 +273,83 @@ export async function registerAttendanceEvent(
         student: studentInfo,
       };
     }
+    // MANTER A MAIS CEDO: se chega uma entrada ANTERIOR à registrada, ela é a
+    // verdadeira. Cenário real: o tablet fica sem internet às 07:05 e guarda a
+    // entrada do Pedro (07:10); às 07:45 ele passa na câmera do segundo portão
+    // e o sistema grava 07:45 → ATRASO. Quando a internet volta e o tablet
+    // envia os 07:10 reais, isto era descartado como duplicado e o Pedro ficava
+    // marcado como atrasado PARA SEMPRE, sem ninguém entender por quê.
+    if (timestamp < existing.timestamp) {
+      const updated = await prisma.attendanceEvent.update({
+        where: { id: existing.id },
+        data: { timestamp, notes, dayKey: day.dateStr },
+      });
+      await audit('ENTRY_EARLIER_APPLIED', updated.id);
+      return {
+        ok: true, created: false, updated: true, status,
+        event: { id: updated.id, eventType: updated.eventType, timestamp: updated.timestamp, notes: updated.notes },
+        student: studentInfo,
+      };
+    }
     return {
       ok: false, code: 'DUPLICATE_ENTRY', httpStatus: 200,
       message: 'Entrada já registrada hoje.', existingEventId: existing.id, student: studentInfo,
     };
   }
 
-  // ── EXIT (re-registration moves time forward only) ─────────────────────
+  // ── Guarda: SAÍDA logo depois da ENTRADA ───────────────────────────────
+  // Cenário real: 07:35, acaba a fila de entrada, o operador troca para SAÍDA
+  // com crianças ainda passando na frente da câmera. Em um tick de 2s cada uma
+  // ganhava uma SAÍDA às 07:35 (marcada como "saída antecipada") e o pai
+  // recebia um push dizendo que o filho DEIXOU a escola 5 minutos depois de
+  // chegar. O cooldown não pegava isso: ele é por tipo de evento.
+  // Correção manual com override continua podendo (é a secretária consertando).
+  if (eventType === 'EXIT' && !(isManual && override)) {
+    const entryToday = await prisma.attendanceEvent.findFirst({
+      where: { studentId, eventType: 'ENTRY', timestamp: { gte: day.start, lt: day.end } },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+    if (entryToday && timestamp.getTime() - entryToday.timestamp.getTime() < MIN_ENTRY_EXIT_GAP_MS) {
+      return {
+        ok: false, code: 'TOO_SOON_AFTER_ENTRY', httpStatus: 200,
+        message: 'Entrada registrada há poucos minutos. Confira se a câmera está no modo certo.',
+        student: studentInfo,
+      };
+    }
+  }
+
+  // ── EXIT (a saída só avança DENTRO da janela de saída do turno) ────────
   if (eventType === 'EXIT' && existing) {
-    const allowUpdate = (isManual && override) || timestamp > existing.timestamp;
+    const movingForward = timestamp > existing.timestamp;
+    // Uma saída já registrada pode ser refinada para frente — a criança demora
+    // na porta, passa de novo — mas NÃO indefinidamente. O limite é ancorado no
+    // horário de saída DO TURNO da própria escola (mais uma folga), não numa
+    // constante arbitrária. Assim:
+    //   • saiu 11:30, saída real 12:05 (turno fecha 12:00) → move, correto;
+    //   • saiu 11:50 (ANTECIPADA, pai avisado) e passa às 15:00 esperando o
+    //     irmão → NÃO move: o registro legal continua 11:50 e a evidência da
+    //     saída antecipada não é apagada.
+    // Sem grade definida para a turma, mantém o comportamento antigo.
+    let withinExitWindow = true;
+    if (movingForward && schedule) {
+      withinExitWindow =
+        localMinutes(timestamp, tz) <= timeToMinutes(schedule.exit) + EXIT_GRACE_MIN;
+    }
+    const allowUpdate = (isManual && override) || (movingForward && withinExitWindow);
     if (!allowUpdate) {
       return {
         ok: false, code: 'STALE_EXIT', httpStatus: 200,
-        message: 'Já existe uma saída mais recente registrada hoje.',
+        message: 'Já existe uma saída registrada hoje.',
         existingEventId: existing.id, student: studentInfo,
       };
     }
+    const notesForUpdate = notes;
     const updated = await prisma.attendanceEvent.update({
       where: { id: existing.id },
       data: {
         timestamp,
-        notes, // recomputed for the NEW time — an early-exit note can't outlive a later exit
+        notes: notesForUpdate,
         dayKey: day.dateStr,
         // NÃO reseta `notified`: a criança lingerando na frente da câmera de
         // saída gerava um update a cada 60s e um push novo a cada vez.

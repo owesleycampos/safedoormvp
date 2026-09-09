@@ -41,6 +41,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  // Sem escola não há o que autorizar: com schoolId undefined o Prisma remove a
+  // cláusula e o findFirst casaria a turma de QUALQUER escola (o GET acima já
+  // tinha este guard; PATCH e DELETE ficaram sem).
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const body = await req.json();
   const { name, grade, shift } = body;
 
@@ -67,6 +71,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 
   const schoolId = (session.user as any)?.schoolId;
+  // Mesmo guard do PATCH: sem escola, o filtro sumiria e o DELETE alcançaria a
+  // turma de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
 
   const cls = await prisma.class.findFirst({
     where: { id: params.id, schoolId },

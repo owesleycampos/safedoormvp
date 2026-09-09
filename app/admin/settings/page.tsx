@@ -187,6 +187,14 @@ export default function SettingsPage() {
           fetch('/api/school'),
           fetch('/api/school/settings'),
         ]);
+        // Uma resposta 4xx/5xx (trial vencido, sessão caída, erro do banco) NÃO
+        // entra no `catch` — o código seguia adiante com o formulário VAZIO, e
+        // salvar gravava strings vazias por cima de nome, CNPJ, endereço e
+        // contato da escola (o PATCH aceita '' como valor válido).
+        if (!schoolRes.ok || !settingsRes.ok) {
+          setLoadError(true);
+          return;
+        }
         if (schoolRes.ok) {
           const data = await schoolRes.json();
           setSchool({
@@ -790,10 +798,12 @@ export default function SettingsPage() {
 
                     {/* Info box */}
                     <div className="rounded-md bg-secondary border border-border p-4">
+                      {/* Quem lê é a secretária: "chaves VAPID em variáveis de
+                          ambiente" não é acionável por ela e só gera dúvida. */}
                       <p className="text-xs text-foreground">
-                        As notificações são enviadas via Web Push (PWA) para os responsáveis
-                        que autorizaram o recebimento no aplicativo. Certifique-se de que as
-                        chaves VAPID estão configuradas nas variáveis de ambiente.
+                        Os avisos chegam no celular dos responsáveis que ativaram as
+                        notificações no aplicativo. Cada responsável precisa autorizar uma
+                        vez, no próprio aparelho.
                       </p>
                     </div>
 

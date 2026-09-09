@@ -13,7 +13,10 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
-      <div className="flex-1 lg:ml-[220px] min-h-screen flex flex-col">
+      {/* min-w-0: mesma armadilha do layout do admin — sem isto a coluna cresce
+          alem da tela por causa de qualquer tabela larga e a pagina inteira
+          rola de lado (medido: 435px numa tela de 375 em Faturamento). */}
+      <div className="flex-1 lg:ml-[220px] min-h-screen min-w-0 flex flex-col">
         <SuperAdminMobileHeader />
         <div className="flex-1 flex flex-col">
           {children}

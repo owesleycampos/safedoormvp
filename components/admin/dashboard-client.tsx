@@ -173,6 +173,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
     return { preset: '7d', from, to };
   });
   const [data, setData] = useState<StatsData | null>(initialData);
+  const [loadError, setLoadError] = useState(false);
 
   // KPIs always fetch "today", chart fetches the selected period
   const fetchStats = useCallback(async (cid?: string) => {
@@ -187,8 +188,9 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
         params.set('trendDays', chartPeriod.preset === '7d' ? '7' : chartPeriod.preset === '30d' ? '30' : '90');
       }
       const res = await fetch(`/api/dashboard/stats?${params}`);
-      if (res.ok) setData(await res.json());
-    } catch { /* silent */ }
+      if (res.ok) { setData(await res.json()); setLoadError(false); }
+      else setLoadError(true);
+    } catch { setLoadError(true); }
   }, [chartPeriod]);
 
   useEffect(() => {
@@ -205,10 +207,32 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
     }
   }, [classFilter]);
 
+  // Falha na carga: antes o componente ficava com `data` nulo e pulsava o
+  // esqueleto cinza PARA SEMPRE — sem erro, sem mensagem, sem tentar de novo.
+  if (!data && loadError) {
+    return (
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 w-full">
+        <div className="rounded-lg border border-border bg-card p-6 text-center space-y-3 max-w-md mx-auto mt-10">
+          <p className="text-sm font-medium">Não foi possível carregar o painel.</p>
+          <p className="text-sm text-muted-foreground">
+            Verifique sua conexão. Se persistir, fale com o suporte.
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchStats(classFilter)}
+            className="h-9 px-4 rounded-md border border-border text-sm hover:bg-accent transition-colors"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) {
     // Primeiro paint instantâneo; os números chegam da API em seguida.
     return (
-      <div className="flex-1 p-5 md:p-8 space-y-6 w-full animate-pulse">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 w-full animate-pulse">
         <div className="skeleton h-7 w-44" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28" />)}
@@ -258,7 +282,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 w-full">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 w-full">
 
         {/* Header */}
         <motion.div
@@ -274,12 +298,15 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Era `hidden md:flex`: o registro manual sumia exatamente no
+                aparelho onde a portaria trabalha (celular/tablet). O rótulo
+                colapsa em telas estreitas; o botão continua acessível. */}
             <button
               onClick={() => setManualOpen(true)}
-              className="hidden md:flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
             >
               <ClipboardEdit className="h-3.5 w-3.5" />
-              Registrar
+              <span className="hidden sm:inline">Registrar</span>
             </button>
             <Link
               href="/admin/camera"
@@ -375,7 +402,15 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
                 </div>
                 <PeriodPicker value={chartPeriod} onChange={setChartPeriod} />
               </div>
-              {data.trend && data.trend.some(t => t.total > 0) ? (
+              {/* Precisa de >= 2 dias ÚTEIS com dados: o LineChart devolve null
+                  com menos que isso, e a condição antiga (qualquer dia com
+                  total > 0) deixava o card renderizar título, "Média: X%" e o
+                  seletor de período sobre um espaço em branco, sem cair no
+                  "Sem dados no período". */}
+              {data.trend && data.trend.filter(t => {
+                const wd = new Date(t.date + 'T12:00:00').getDay();
+                return wd !== 0 && wd !== 6 && t.total > 0;
+              }).length >= 2 ? (
                 <LineChart data={data.trend} />
               ) : (
                 <div className="flex items-center justify-center h-[180px]">

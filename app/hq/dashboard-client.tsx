@@ -96,7 +96,7 @@ const actionLabels: Record<string, string> = {
 
 export function SuperAdminDashboardClient({ data }: { data: DashboardData }) {
   return (
-    <div className="p-5 lg:p-8 space-y-8 max-w-[1200px] mx-auto w-full">
+    <div className="px-5 py-7 lg:px-8 lg:py-9 space-y-8 max-w-[1200px] mx-auto w-full">
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold">Dashboard</h1>

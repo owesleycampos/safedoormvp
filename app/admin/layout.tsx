@@ -11,15 +11,28 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!session) redirect('/auth/login');
   const role = (session.user as any)?.role;
-  // SUPERADMIN ia para /pwa, cujo layout devolvia para /admin — loop infinito.
+  // FALHA FECHADO: sessão sem papel (ex.: impersonação expirada) não pode cair
+  // no `role !== 'ADMIN'` abaixo, senão vai para /pwa, cujo layout devolve para
+  // /admin — loop infinito de redirect, sem tela e sem saída.
+  if (!role) redirect('/auth/login');
   if (role === 'SUPERADMIN') redirect('/hq');
   if (role !== 'ADMIN') redirect('/pwa/children');
 
   const schoolId = (session.user as any)?.schoolId;
   if (schoolId) {
-    const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { status: true } });
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { status: true, subscription: { select: { status: true, trialEndsAt: true } } },
+    });
     if (school?.status === 'SUSPENDED' || school?.status === 'CANCELLED') {
       redirect('/auth/login?error=school_suspended');
+    }
+    // Trial vencido: as APIs já devolviam 403, mas o layout deixava o painel
+    // abrir inteiro e cada card falhava sozinho — o dono via um app "quebrado"
+    // em vez de um aviso de que o teste acabou.
+    const sub = school?.subscription;
+    if (sub?.status === 'TRIAL' && sub.trialEndsAt && sub.trialEndsAt < new Date()) {
+      redirect('/auth/login?error=trial_expired');
     }
   }
 
@@ -29,11 +42,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminSidebar />
 
       {/* Main */}
-      <div className="flex-1 lg:ml-[220px] min-h-screen flex flex-col">
+      {/* min-w-0: sem isto, um item flex NAO encolhe abaixo do tamanho do seu
+          conteudo — qualquer tabela, titulo longo ou linha larga fazia esta
+          coluna crescer alem da tela e a pagina INTEIRA rolava de lado
+          (medido: 428px numa tela de 375 em Dispositivos e Configuracoes). */}
+      <div className="flex-1 lg:ml-[220px] min-h-screen min-w-0 flex flex-col">
         {/* Mobile header — only on small screens */}
         <AdminMobileHeader />
         {/* Bottom padding on phones so content never hides behind the bar */}
-        <main className="flex-1 flex flex-col pb-[calc(3.25rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="flex-1 flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>

@@ -89,11 +89,26 @@ interface TimePickerProps {
   title: string;
 }
 
+/** "YYYY-MM-DD" pelos componentes LOCAIS (toISOString viraria o dia à noite). */
+function localYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function nowHHMM(): string {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+}
+
 function TimePicker({ open, onClose, onConfirm, title }: TimePickerProps) {
-  const now = new Date();
-  const [time, setTime] = useState(
-    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  );
+  const [time, setTime] = useState(nowHHMM);
+
+  // O componente fica montado por linha, então o valor inicial era a hora em que
+  // a PÁGINA abriu e nunca mudava: às 14h a secretária marcava um atraso e o
+  // seletor oferecia 07:50 (hora em que ela abriu a tela) — gravando um atraso
+  // que o sistema classificava como pontual. Recalcula a cada abertura.
+  useEffect(() => {
+    if (open) setTime(nowHHMM());
+  }, [open]);
 
   if (!open) return null;
 
@@ -247,11 +262,15 @@ export default function DailyTab() {
   const [busyStudent, setBusyStudent] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
 
-  const dateStr = date.toISOString().slice(0, 10);
-  const isToday = dateStr === today.toISOString().slice(0, 10);
+  // Data pelos componentes LOCAIS. Com toISOString(), a partir das 21h no
+  // Brasil o dia já virou em UTC: clicar "Hoje" às 21:30 abria AMANHÃ, a
+  // chamada vinha vazia (todos "ausentes") e canEdit ficava falso — a
+  // secretária do turno da noite não conseguia corrigir nada, sem explicação.
+  const dateStr = localYMD(date);
+  const isToday = dateStr === localYMD(today);
   // Corrigir a chamada de ontem é a operação real de secretaria; antes o menu
   // simplesmente não abria em dias passados, sem dizer por quê.
-  const canEdit = dateStr <= today.toISOString().slice(0, 10);
+  const canEdit = dateStr <= localYMD(today);
 
   useEffect(() => {
     if (classFilter !== 'all') localStorage.setItem('daily_class', classFilter);
@@ -299,11 +318,15 @@ export default function DailyTab() {
     .filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
+  // O resumo conta a TURMA INTEIRA, não o que está filtrado pela busca. Antes
+  // saía de `searched`: digitar "ana" na busca fazia os cards virarem 1/1/0 e a
+  // secretária lia "Ausentes: 0" como se fosse o resumo da turma.
+  const rosterAll = data?.students ?? [];
   const stats = {
-    total: searched.length,
-    present: searched.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
-    absent: searched.filter(s => getEffectiveStatus(s) === 'absent').length,
-    late: searched.filter(s => getEffectiveStatus(s) === 'late').length,
+    total: rosterAll.length,
+    present: rosterAll.filter(s => ['present', 'late', 'left', 'early_exit'].includes(getEffectiveStatus(s))).length,
+    absent: rosterAll.filter(s => getEffectiveStatus(s) === 'absent').length,
+    late: rosterAll.filter(s => getEffectiveStatus(s) === 'late').length,
   };
 
   const filtered = searched.filter(s => {
@@ -334,14 +357,24 @@ export default function DailyTab() {
     setBatchBusy(true);
     let count = 0;
     try {
-      for (const s of absentStudents) {
-        const res = await fetch('/api/events/manual', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId: s.id, eventType: 'ENTRY' }),
-        });
-        const d = await res.json();
-        if (d.success) count++;
+      // Em blocos de 6 em paralelo, não um a um: com 30 ausentes eram 30
+      // idas e voltas em série (~10-45s de botão congelado), e a secretária
+      // costumava sair da página no meio, deixando a chamada pela metade sem
+      // qualquer indicação de onde parou.
+      const CHUNK = 6;
+      for (let i = 0; i < absentStudents.length; i += CHUNK) {
+        const slice = absentStudents.slice(i, i + CHUNK);
+        const results = await Promise.all(slice.map((s) =>
+          fetch('/api/events/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // suppressNotification: isto é fechamento administrativo da
+            // chamada. Sem o flag, cada família recebia um push dizendo que a
+            // criança ACABOU de chegar — horas depois da chegada real.
+            body: JSON.stringify({ studentId: s.id, eventType: 'ENTRY', suppressNotification: true }),
+          }).then((r) => r.json()).catch(() => ({ success: false }))
+        ));
+        count += results.filter((d: any) => d?.success).length;
       }
       toast({ variant: 'success', title: `${count} aluno${count !== 1 ? 's' : ''} marcado${count !== 1 ? 's' : ''} como presente` });
       fetchData();
@@ -425,10 +458,10 @@ export default function DailyTab() {
   const dayLabel = date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-3">
+    <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8 md:py-7 space-y-4 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">
 
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-row flex-wrap items-center gap-2">
         {/* Date navigator */}
         <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 self-start">
           <button onClick={() => setDate(d => addDays(d, -1))} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent">
@@ -445,10 +478,10 @@ export default function DailyTab() {
         </div>
 
         {!isToday && (
-          <Button variant="ghost" size="sm" className="text-xs self-start" onClick={() => setDate(new Date())}>Hoje</Button>
+          <Button variant="ghost" size="sm" className="text-xs self-start" onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setDate(d); }}>Hoje</Button>
         )}
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 sm:ml-auto">
           {isToday && stats.absent > 0 && (
             <Button variant="outline" size="sm" onClick={handleBatchPresent} disabled={batchBusy || loading} className="gap-1.5">
               {batchBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
@@ -486,7 +519,7 @@ export default function DailyTab() {
 
       {/* Summary bar */}
       {data && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {([
             { label: 'Total',     value: stats.total,   key: 'all'     },
             { label: 'Presentes', value: stats.present, key: 'present' },

@@ -433,13 +433,29 @@ curl -s -b "$JARF" -c "$JARF" -X POST "$BASE/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF" \
   --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
 SP_ST=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
-sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('freq-sm2','$SP_ST','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+# Matrícula anterior à janela de entradas: a frequência tem PISO na matrícula
+# (aluno não é cobrado por dias antes de existir na escola). Sem isto o fixture
+# ficava irreal — aluno "matriculado hoje" com presença backdatada.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP_ST';" >/dev/null
+# Datas RELATIVAS a hoje. Com datas fixas de agosto, o teste só passava enquanto
+# "hoje" caísse no bimestre jul–ago: virado setembro, as presenças ficavam fora
+# do bimestre corrente e o teste quebrava sozinho, sem nada ter mudado no produto.
+# Fuso da ESCOLA, não UTC. Com `date -u`, entre 21h e meia-noite no Brasil a
+# data UTC já virou e o teste semeava um evento que para o app é AMANHÃ — que
+# ele corretamente recusa a contar. Falhava sozinho por 3h todo dia.
+SCHOOL_TZ=America/Sao_Paulo
+FD1=$(TZ=$SCHOOL_TZ date +%Y-%m-%d)                 # hoje na escola
+FD2=$(TZ=$SCHOOL_TZ date -v-1d +%Y-%m-%d 2>/dev/null || TZ=$SCHOOL_TZ date -d 'yesterday' +%Y-%m-%d)  # ontem
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','${FD1} 11:00:00+00',true,false,now(),now(),'${FD1}'),('freq-sm2','$SP_ST','ENTRY','${FD2} 11:00:00+00',true,false,now(),now(),'${FD2}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 FREQ=$(curl -s -b "$JARF" "$BASE/api/parent/frequency?studentId=$SP_ST")
 echo "$FREQ" > /tmp/freq.json
 check "frequência retorna bimestre/semestre/ano" "true" \
   "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('true' if all(k in d for k in ['bimester','semester','year']) else 'false')")"
-check "presença conta dias úteis com entrada (>=2)" "ok" \
-  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('ok' if d['bimester']['present']>=2 else 'nao')")"
+# O ANO sempre contém os dois dias semeados; o BIMESTRE sempre contém hoje.
+# Assim a asserção vale em qualquer época, inclusive na virada de bimestre
+# (quando ontem cai no bimestre anterior).
+check "presença conta os 2 dias com entrada (ano) e o dia de hoje (bimestre)" "ok" \
+  "$(python3 -c "import json;d=json.load(open('/tmp/freq.json'));print('ok' if d['year']['present']>=2 and d['bimester']['present']>=1 else 'nao')")"
 check "responsável não vê aluno de fora → 404" "404" \
   "$(curl -s -b "$JARF" -o /dev/null -w '%{http_code}' "$BASE/api/parent/frequency?studentId=nao-existe")"
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('freq-sm1','freq-sm2');" >/dev/null
@@ -522,18 +538,34 @@ curl -s -b "$JARF2" -c "$JARF2" -X POST "$BASE/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRFF2" \
   --data-urlencode "email=mae@demo.com" --data-urlencode "password=parent123" --data-urlencode "json=true" > /dev/null
 SP2=$(sql0 "SELECT sp.\"studentId\" FROM \"StudentParent\" sp JOIN \"Parent\" p ON p.id=sp.\"parentId\" JOIN \"User\" u ON u.id=p.\"userId\" WHERE u.email='mae@demo.com' LIMIT 1")
+# Matrícula anterior à janela (piso da frequência). Ver bloco anterior.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP2';" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr.json
 check "sem dia letivo → rate null (não 0%/alarme falso)" "true" \
   "$(python3 -c "import json;d=json.load(open('/tmp/fr.json'));print('true' if d['year']['rate'] is None and d['year']['schoolDays']==0 else 'false')")"
 
 # insere 2 entradas em dias úteis (a Ana + um colega no mesmo dia = dia letivo)
 COLEGA=$(sql0 "SELECT id FROM \"Student\" WHERE \"schoolId\"=(SELECT \"schoolId\" FROM \"Student\" WHERE id='$SP2') AND id != '$SP2' AND \"isActive\" LIMIT 1")
-sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','2026-08-24 11:00:00+00',true,false,now(),now(),'2026-08-24'),('fr-b','$COLEGA','ENTRY','2026-08-25 11:00:00+00',true,false,now(),now(),'2026-08-25') ON CONFLICT (id) DO NOTHING;" >/dev/null
+# Relativas a hoje (ver bloco anterior): com datas fixas isto quebraria sozinho
+# na virada do ano, quando agosto sai da janela do "ano corrente".
+FR_ONTEM=$(TZ=$SCHOOL_TZ date -v-1d +%Y-%m-%d 2>/dev/null || TZ=$SCHOOL_TZ date -d 'yesterday' +%Y-%m-%d)
+FR_HOJE=$(TZ=$SCHOOL_TZ date +%Y-%m-%d)
+sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','${FR_ONTEM} 11:00:00+00',true,false,now(),now(),'${FR_ONTEM}'),('fr-b','$COLEGA','ENTRY','${FR_HOJE} 11:00:00+00',true,false,now(),now(),'${FR_HOJE}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr2.json
 check "dias letivos = dias com entrada da escola (2)" "2" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['schoolDays'])")"
 check "aluno presente em 1 dos 2 dias letivos = 50%" "50" \
   "$(python3 -c "import json;print(json.load(open('/tmp/fr2.json'))['year']['rate'])")"
+
+# PISO na matrícula: matriculado HOJE não é cobrado pelo dia letivo de ONTEM.
+# Meio-dia UTC de propósito: meia-noite UTC cairia no dia anterior no fuso de SP
+# e o piso (data LOCAL) não isolaria o dia.
+sql0 "UPDATE \"Student\" SET \"createdAt\"='${FR_HOJE} 12:00:00+00' WHERE id='$SP2';" >/dev/null
+curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr3.json
+check "piso na matrícula: dia anterior à matrícula não conta → 1 dia letivo" "1" \
+  "$(python3 -c "import json;print(json.load(open('/tmp/fr3.json'))['year']['schoolDays'])")"
+sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$SP2';" >/dev/null
+
 sql0 "DELETE FROM \"AttendanceEvent\" WHERE id IN ('fr-a','fr-b');" >/dev/null
 
 # PUT de aluno com classId de OUTRA escola → 400 (não corrompe)
@@ -545,6 +577,43 @@ if [ -n "$CLS_OUTRA" ]; then
 else
   echo "  (só uma escola no teste — pulando PUT cross-tenant)"
 fi
+
+echo "── Guarda: saída logo depois da entrada (modo errado da câmera) ──"
+# Cenário: acaba a fila de entrada, o operador troca para SAÍDA e as crianças
+# ainda estão passando. Sem a guarda, cada uma ganhava uma SAÍDA imediata e o
+# pai recebia "seu filho saiu da escola" minutos depois de ele chegar.
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+R=$(post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:20:00-03:00\"}" -H "x-device-api-key: $KEY_A")
+check "entrada base → 201" "201" "$(echo "$R" | tail -1)"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:23:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída 3 min após a entrada NÃO é gravada" "0" \
+  "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T12:05:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída no fim do turno é gravada normalmente" "1" \
+  "$(sql0 "SELECT count(*) FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+
+echo "── Registro legal: entrada mais cedo vence; saída não desliza ──"
+# Sync offline atrasado: a entrada real (07:10) chega DEPOIS da que o segundo
+# portão gravou (07:45). Sem a regra, o aluno ficava marcado ATRASO para sempre.
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:45:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "entrada 07:45 nasce como ATRASO" "ATRASO" \
+  "$(sql0 "SELECT COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='ENTRY'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"ENTRY\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T07:10:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "entrada anterior (07:10) substitui e limpa o ATRASO" "07:10|NULL" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='ENTRY'")"
+
+# Saída antecipada REAL às 11:50; passagem às 15:00 (muito depois do fim do
+# turno) é a criança circulando, não uma saída nova — não pode mover o registro
+# nem apagar a evidência. Já 11:30 -> 12:05 (turno fecha 12:00) DEVE mover.
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T11:50:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "saída 11:50 registrada como SAIDA_ANTECIPADA" "11:50|SAIDA_ANTECIPADA" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+post_event "{\"studentId\":\"$JOAO\",\"eventType\":\"EXIT\",\"confidence\":0.97,\"timestamp\":\"${TODAY}T15:00:00-03:00\"}" -H "x-device-api-key: $KEY_A" >/dev/null
+check "passagem às 15:00 (fora da janela) NÃO move a saída" "11:50|SAIDA_ANTECIPADA" \
+  "$(sql0 "SELECT to_char((timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo','HH24:MI') || '|' || COALESCE(notes,'NULL') FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO' AND \"eventType\"='EXIT'")"
+sql0 "DELETE FROM \"AttendanceEvent\" WHERE \"studentId\"='$JOAO';" >/dev/null
 
 echo
 echo "RESULTADO: $PASS passaram, $FAIL falharam"

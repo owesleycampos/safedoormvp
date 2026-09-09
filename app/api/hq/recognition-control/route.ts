@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireSuperAdmin } from '@/lib/require-superadmin';
+import { invalidateGateCache } from '@/lib/recognition-usage';
 
 /**
  * POST /api/hq/recognition-control
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest) {
   } else {
     return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
   }
+
+  // Efeito imediato nesta instância (o cache do gate expira sozinho em 30s nas
+  // demais instâncias serverless): pausa global limpa tudo, escola limpa a sua.
+  invalidateGateCache(scope === 'global' ? undefined : schoolId);
 
   await prisma.auditLog.create({
     data: {

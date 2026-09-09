@@ -33,13 +33,18 @@ export async function GET(req: NextRequest) {
   const link = await prisma.studentParent.findFirst({
     where: { studentId: sid, parent: { userId } },
     select: {
-      student: { select: { id: true, schoolId: true, school: { select: { settings: { select: { timezone: true } } } } } },
+      student: { select: { id: true, schoolId: true, createdAt: true, school: { select: { settings: { select: { timezone: true } } } } } },
     },
   });
   if (!link) return NextResponse.json({ error: 'Aluno não encontrado.' }, { status: 404 });
 
   const schoolId = link.student.schoolId;
   const tz = link.student.school?.settings?.timezone || DEFAULT_TIMEZONE;
+  // Piso da frequência = dia da matrícula. Um aluno que entrou em agosto não
+  // pode ser contado como ausente em jan–jul (dias em que nem existia na
+  // escola) — sem isso a taxa do ano/semestre despencava e disparava o
+  // alarme falso de <75% da LDB.
+  const enrolledStr = localDateStr(link.student.createdAt, tz);
   const todayStr = localDateStr(new Date(), tz);
   const [y, m] = todayStr.split('-').map(Number);
 
@@ -72,10 +77,12 @@ export async function GET(req: NextRequest) {
   }
 
   function periodStats(startStr: string) {
+    // O início efetivo do período nunca é anterior à matrícula do aluno.
+    const effStart = startStr < enrolledStr ? enrolledStr : startStr;
     let total = 0;
     let present = 0;
     schoolDays.forEach((d) => {
-      if (d < startStr || d > todayStr) return;
+      if (d < effStart || d > todayStr) return;
       total++;
       if (studentDays.has(d)) present++;
     });

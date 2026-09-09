@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const classId = req.nextUrl.searchParams.get('classId');
 
   if (!classId) {
@@ -45,6 +48,9 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const body = await req.json();
   const { classId, subjectId, dayOfWeek, period, startTime, endTime, teacherName } = body;
 
@@ -102,6 +108,9 @@ export async function PUT(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const { fromClassId, toClassId } = await req.json();
 
   if (!fromClassId || !toClassId) {
@@ -126,13 +135,15 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Turma de origem não tem grade horária.' }, { status: 400 });
   }
 
-  // Clear target and copy
-  await prisma.classSchedule.deleteMany({ where: { classId: toClassId } });
-
-  let copied = 0;
-  for (const s of source) {
-    await prisma.classSchedule.create({
-      data: {
+  // Apaga o destino e copia DENTRO de uma transação. Antes o deleteMany era
+  // solto e as inserções vinham uma a uma: se a 7ª falhasse (constraint,
+  // conexão), a rota devolvia 500 com a turma de destino já sem a grade antiga
+  // e com apenas 6 aulas novas — destruição sem desfazer. createMany também
+  // troca 30 idas ao banco por uma.
+  const copied = await prisma.$transaction(async (tx) => {
+    await tx.classSchedule.deleteMany({ where: { classId: toClassId } });
+    const res = await tx.classSchedule.createMany({
+      data: source.map((s) => ({
         classId: toClassId,
         subjectId: s.subjectId,
         dayOfWeek: s.dayOfWeek,
@@ -140,10 +151,10 @@ export async function PUT(req: NextRequest) {
         startTime: s.startTime,
         endTime: s.endTime,
         teacherName: s.teacherName,
-      },
+      })),
     });
-    copied++;
-  }
+    return res.count;
+  });
 
   return NextResponse.json({ success: true, copied });
 }
@@ -159,6 +170,9 @@ export async function DELETE(req: NextRequest) {
   }
 
   const schoolId = (session.user as any)?.schoolId as string;
+  // O `as string` engana o compilador, mas em execução isto pode ser undefined
+  // — e aí o Prisma REMOVE a cláusula, alcançando o registro de outra escola.
+  if (!schoolId) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   const id = req.nextUrl.searchParams.get('id');
 
   if (!id) {

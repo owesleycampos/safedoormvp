@@ -226,7 +226,7 @@ export default function ProfilePage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Push Notifications</p>
+                <p className="text-sm font-medium">Notificações</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {!pushSupported
                     ? 'Não suportado neste navegador'

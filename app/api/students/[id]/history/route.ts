@@ -83,14 +83,36 @@ export async function GET(
     eventsByDate.get(dateKey)!.push(event);
   }
 
-  // Generate all weekdays (Mon-Fri) in range for absent detection
-  const allWeekdays: string[] = [];
-  for (let d = fromStr; d <= toStr; d = addDaysStr(d, 1)) {
-    if (!isWeekendDateStr(d)) allWeekdays.push(d);
+  // DIA LETIVO = dia em que a ESCOLA operou (teve pelo menos uma entrada),
+  // não "todo dia útil do intervalo".
+  //
+  // Esta rota contava férias e feriados como falta: um aluno que compareceu aos
+  // 8 dias letivos de julho aparecia com 8/23 = 34,8% e disparava o banner
+  // vermelho "risco de reprovação por falta" — e o PDF exportado marcava "F" em
+  // 15 colunas. O alerta de infrequência (/api/reports/alerts) e a tela do
+  // responsável já usavam a definição correta; as três precisam bater, porque
+  // esses números são impressos e entregues a pais e ao Conselho Tutelar.
+  const schoolEntries = await prisma.attendanceEvent.findMany({
+    where: {
+      student: { schoolId },
+      eventType: 'ENTRY',
+      timestamp: { gte: fromDate, lt: toDate },
+    },
+    select: { timestamp: true },
+  });
+  const schoolDays = new Set<string>();
+  for (const ev of schoolEntries) {
+    const d = localDateStr(ev.timestamp, tz);
+    if (!isWeekendDateStr(d)) schoolDays.add(d);
   }
 
-  // Exclude future dates
-  const relevantDays = allWeekdays.filter((d) => d <= todayStr);
+  // Piso na matrícula: o aluno não é cobrado por dias anteriores à entrada dele
+  // na escola (mesma regra da tela do responsável e do alerta).
+  const enrolledStr = localDateStr(student.createdAt, tz);
+
+  const relevantDays = Array.from(schoolDays)
+    .filter((d) => d <= todayStr && d >= enrolledStr)
+    .sort();
 
   type DaySummary = {
     date: string;
@@ -133,8 +155,11 @@ export async function GET(
     const hasLateNote = dayEvents.some(
       (e) => e.notes && e.notes.toLowerCase().includes('atraso')
     );
+    // A nota gravada é a constante 'SAIDA_ANTECIPADA' (sem acento, com _), mas
+    // comparava-se com 'saída antecipada' (com acento e espaço) — nunca casava,
+    // então a saída antecipada jamais aparecia no histórico do aluno.
     const hasEarlyExitNote = dayEvents.some(
-      (e) => e.notes && e.notes.toLowerCase().includes('saída antecipada')
+      (e) => e.notes && e.notes.toLowerCase().includes('antecipada')
     );
 
     let status: DaySummary['status'] = 'present';

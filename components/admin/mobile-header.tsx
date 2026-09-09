@@ -53,7 +53,7 @@ export function AdminMobileHeader() {
   return (
     <>
       {/* Mobile Top Bar — glass style */}
-      <div className="lg:hidden flex items-center justify-between h-14 px-4 border-b border-border/50 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between h-16 px-5 border-b border-border/50 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
           className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary transition-colors"

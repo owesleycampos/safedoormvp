@@ -17,7 +17,7 @@ export function PwaTabBar() {
   return (
     <nav
       className="tab-bar"
-      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+      style={{ paddingTop: '0.375rem', paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}
     >
       {tabs.map((tab) => {
         const isActive = pathname.startsWith(tab.href);
@@ -25,7 +25,7 @@ export function PwaTabBar() {
           <Link
             key={tab.href}
             href={tab.href}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[3rem] active:opacity-70 transition-opacity"
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[3.25rem] active:opacity-70 transition-opacity"
           >
             <tab.icon
               className={cn(

@@ -330,7 +330,7 @@ export default function ReportsTab() {
   const absenceCells = totalCells - presentCells;
 
   return (
-    <div className="flex-1 p-3 md:p-6 space-y-4 overflow-x-hidden">
+    <div className="flex-1 px-5 py-6 md:px-8 md:py-7 space-y-4 overflow-x-hidden">
 
       {/* Alerts banner (inline, collapsible) */}
       {displayedAlerts.length > 0 && (

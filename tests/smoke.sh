@@ -440,8 +440,12 @@ sql0 "UPDATE \"Student\" SET \"createdAt\"='2026-01-01 00:00:00+00' WHERE id='$S
 # Datas RELATIVAS a hoje. Com datas fixas de agosto, o teste só passava enquanto
 # "hoje" caísse no bimestre jul–ago: virado setembro, as presenças ficavam fora
 # do bimestre corrente e o teste quebrava sozinho, sem nada ter mudado no produto.
-FD1=$(date -u +%Y-%m-%d)                 # hoje
-FD2=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)  # ontem
+# Fuso da ESCOLA, não UTC. Com `date -u`, entre 21h e meia-noite no Brasil a
+# data UTC já virou e o teste semeava um evento que para o app é AMANHÃ — que
+# ele corretamente recusa a contar. Falhava sozinho por 3h todo dia.
+SCHOOL_TZ=America/Sao_Paulo
+FD1=$(TZ=$SCHOOL_TZ date +%Y-%m-%d)                 # hoje na escola
+FD2=$(TZ=$SCHOOL_TZ date -v-1d +%Y-%m-%d 2>/dev/null || TZ=$SCHOOL_TZ date -d 'yesterday' +%Y-%m-%d)  # ontem
 sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('freq-sm1','$SP_ST','ENTRY','${FD1} 11:00:00+00',true,false,now(),now(),'${FD1}'),('freq-sm2','$SP_ST','ENTRY','${FD2} 11:00:00+00',true,false,now(),now(),'${FD2}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 FREQ=$(curl -s -b "$JARF" "$BASE/api/parent/frequency?studentId=$SP_ST")
 echo "$FREQ" > /tmp/freq.json
@@ -544,8 +548,8 @@ check "sem dia letivo → rate null (não 0%/alarme falso)" "true" \
 COLEGA=$(sql0 "SELECT id FROM \"Student\" WHERE \"schoolId\"=(SELECT \"schoolId\" FROM \"Student\" WHERE id='$SP2') AND id != '$SP2' AND \"isActive\" LIMIT 1")
 # Relativas a hoje (ver bloco anterior): com datas fixas isto quebraria sozinho
 # na virada do ano, quando agosto sai da janela do "ano corrente".
-FR_ONTEM=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)
-FR_HOJE=$(date -u +%Y-%m-%d)
+FR_ONTEM=$(TZ=$SCHOOL_TZ date -v-1d +%Y-%m-%d 2>/dev/null || TZ=$SCHOOL_TZ date -d 'yesterday' +%Y-%m-%d)
+FR_HOJE=$(TZ=$SCHOOL_TZ date +%Y-%m-%d)
 sql0 "INSERT INTO \"AttendanceEvent\" (id,\"studentId\",\"eventType\",timestamp,\"isManual\",notified,\"createdAt\",\"updatedAt\",\"dayKey\") VALUES ('fr-a','$SP2','ENTRY','${FR_ONTEM} 11:00:00+00',true,false,now(),now(),'${FR_ONTEM}'),('fr-b','$COLEGA','ENTRY','${FR_HOJE} 11:00:00+00',true,false,now(),now(),'${FR_HOJE}') ON CONFLICT (id) DO NOTHING;" >/dev/null
 curl -s -b "$JARF2" "$BASE/api/parent/frequency?studentId=$SP2" > /tmp/fr2.json
 check "dias letivos = dias com entrada da escola (2)" "2" \

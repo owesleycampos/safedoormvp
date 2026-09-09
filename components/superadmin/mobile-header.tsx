@@ -45,7 +45,7 @@ export function SuperAdminMobileHeader() {
 
   return (
     <>
-      <div className="lg:hidden flex items-center justify-between h-12 px-4 border-b border-border bg-background sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between h-16 px-5 border-b border-border bg-background sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
           className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent transition-colors"

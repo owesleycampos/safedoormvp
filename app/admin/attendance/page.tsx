@@ -11,7 +11,7 @@ export default function AttendancePage() {
   return (
     <div className="flex flex-col flex-1">
       {/* Tab selector */}
-      <div className="border-b border-border px-5 md:px-8 pt-5 pb-0">
+      <div className="border-b border-border px-5 md:px-8 pt-7 md:pt-8 pb-3">
         <h1 className="text-xl font-semibold tracking-tight mb-3">Frequência</h1>
         <div className="flex items-center gap-1">
           {(['daily', 'reports'] as const).map((t) => (

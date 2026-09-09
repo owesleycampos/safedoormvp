@@ -17,9 +17,9 @@ export default async function PwaLayout({ children }: { children: React.ReactNod
   return (
     <div
       className="flex flex-col min-h-screen bg-background"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
     >
-      <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         {children}
       </main>
       <PwaTabBar />

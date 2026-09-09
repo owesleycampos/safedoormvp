@@ -30,7 +30,7 @@ export function AuditClient() {
   useEffect(() => { load(action); }, [action]);
 
   return (
-    <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1000px] mx-auto w-full">
+    <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 max-w-[1000px] mx-auto w-full">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">

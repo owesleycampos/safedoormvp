@@ -46,7 +46,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         {/* Mobile header — only on small screens */}
         <AdminMobileHeader />
         {/* Bottom padding on phones so content never hides behind the bar */}
-        <main className="flex-1 flex flex-col pb-[calc(3.25rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="flex-1 flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>

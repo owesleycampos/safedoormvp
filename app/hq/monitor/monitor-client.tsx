@@ -53,7 +53,7 @@ export function MonitorClient() {
   ];
 
   return (
-    <div className="flex-1 p-5 md:p-8 space-y-6 max-w-[1200px] mx-auto w-full">
+    <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 max-w-[1200px] mx-auto w-full">
       <div>
         <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
           <Activity className="h-5 w-5" /> Monitoramento

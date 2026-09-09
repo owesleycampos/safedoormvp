@@ -19,7 +19,7 @@ export function AdminMobileBottomNav() {
       // impersonação está na tela (senão a faixa a cobre por inteiro).
       data-bottom-bar
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch border-t border-border bg-background/90 backdrop-blur-xl"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ paddingTop: '0.375rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       {ADMIN_NAV_PRIMARY.map((item) => {
         const active = isNavActive(pathname, item.href);
@@ -28,7 +28,7 @@ export function AdminMobileBottomNav() {
             key={item.href}
             href={item.href}
             className={cn(
-              'flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[3.25rem] transition-colors',
+              'flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[3.5rem] transition-colors',
               active ? 'text-foreground' : 'text-muted-foreground'
             )}
           >

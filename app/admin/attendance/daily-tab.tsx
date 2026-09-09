@@ -458,10 +458,10 @@ export default function DailyTab() {
   const dayLabel = date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-3">
+    <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8 md:py-7 space-y-4 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">
 
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-row flex-wrap items-center gap-2">
         {/* Date navigator */}
         <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 self-start">
           <button onClick={() => setDate(d => addDays(d, -1))} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent">
@@ -481,7 +481,7 @@ export default function DailyTab() {
           <Button variant="ghost" size="sm" className="text-xs self-start" onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setDate(d); }}>Hoje</Button>
         )}
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 sm:ml-auto">
           {isToday && stats.absent > 0 && (
             <Button variant="outline" size="sm" onClick={handleBatchPresent} disabled={batchBusy || loading} className="gap-1.5">
               {batchBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
@@ -519,7 +519,7 @@ export default function DailyTab() {
 
       {/* Summary bar */}
       {data && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {([
             { label: 'Total',     value: stats.total,   key: 'all'     },
             { label: 'Presentes', value: stats.present, key: 'present' },

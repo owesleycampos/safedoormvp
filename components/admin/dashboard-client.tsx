@@ -211,7 +211,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
   // esqueleto cinza PARA SEMPRE — sem erro, sem mensagem, sem tentar de novo.
   if (!data && loadError) {
     return (
-      <div className="flex-1 p-5 md:p-8 w-full">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 w-full">
         <div className="rounded-lg border border-border bg-card p-6 text-center space-y-3 max-w-md mx-auto mt-10">
           <p className="text-sm font-medium">Não foi possível carregar o painel.</p>
           <p className="text-sm text-muted-foreground">
@@ -232,7 +232,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
   if (!data) {
     // Primeiro paint instantâneo; os números chegam da API em seguida.
     return (
-      <div className="flex-1 p-5 md:p-8 space-y-6 w-full animate-pulse">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 w-full animate-pulse">
         <div className="skeleton h-7 w-44" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28" />)}
@@ -282,7 +282,7 @@ export function DashboardClient({ data: initialData }: { data: StatsData | null 
 
   return (
     <>
-      <div className="flex-1 p-5 md:p-8 space-y-6 w-full">
+      <div className="flex-1 px-5 py-7 md:px-8 md:py-9 space-y-6 w-full">
 
         {/* Header */}
         <motion.div

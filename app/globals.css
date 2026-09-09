@@ -173,6 +173,17 @@
   @media (hover: none) {
     .action-reveal { opacity: 1; }
   }
+  /* Em tela de toque, um botao-icone de 28px e dificil de acertar com o dedo.
+     O pseudo-elemento amplia a AREA CLICAVEL para ~44px sem mudar o desenho
+     nem empurrar o layout. */
+  @media (pointer: coarse) {
+    .action-reveal { position: relative; }
+    .action-reveal::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+    }
+  }
 
   /* Tab bar — PWA do responsável.
      Perdida no redesign monocromático: sem estas regras o <nav> deixa de ser

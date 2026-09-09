@@ -91,7 +91,7 @@ export function TimelineClient({ children, events, selectedStudentId, tz = 'Amer
                 type="button"
                 onClick={() => selectStudent(child.id)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 flex-shrink-0 transition-colors border text-xs font-medium',
+                  'flex items-center gap-1.5 rounded-md px-3 min-h-[40px] flex-shrink-0 transition-colors border text-xs font-medium',
                   selectedStudentId === child.id
                     ? 'bg-accent border-border text-foreground'
                     : 'border-transparent text-muted-foreground hover:bg-accent/50'

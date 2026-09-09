@@ -42,7 +42,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminSidebar />
 
       {/* Main */}
-      <div className="flex-1 lg:ml-[220px] min-h-screen flex flex-col">
+      {/* min-w-0: sem isto, um item flex NAO encolhe abaixo do tamanho do seu
+          conteudo — qualquer tabela, titulo longo ou linha larga fazia esta
+          coluna crescer alem da tela e a pagina INTEIRA rolava de lado
+          (medido: 428px numa tela de 375 em Dispositivos e Configuracoes). */}
+      <div className="flex-1 lg:ml-[220px] min-h-screen min-w-0 flex flex-col">
         {/* Mobile header — only on small screens */}
         <AdminMobileHeader />
         {/* Bottom padding on phones so content never hides behind the bar */}

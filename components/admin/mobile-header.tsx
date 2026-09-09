@@ -56,7 +56,7 @@ export function AdminMobileHeader() {
       <div data-admin-header className="lg:hidden flex items-center justify-between h-16 px-5 border-b border-border/50 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-secondary transition-colors"
           aria-label="Abrir menu"
         >
           <Menu className="h-[18px] w-[18px] text-muted-foreground" />
@@ -67,7 +67,7 @@ export function AdminMobileHeader() {
         </div>
 
         <div className="flex items-center gap-1">
-          <ThemeToggle className="h-9 w-9" />
+          <ThemeToggle className="h-10 w-10" />
         </div>
       </div>
 

@@ -48,7 +48,7 @@ export function SuperAdminMobileHeader() {
       <div className="lg:hidden flex items-center justify-between h-16 px-5 border-b border-border bg-background sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent transition-colors"
           aria-label="Abrir menu"
         >
           <Menu className="h-4 w-4 text-muted-foreground" />
@@ -60,7 +60,7 @@ export function SuperAdminMobileHeader() {
             Super
           </span>
         </div>
-        <ThemeToggle className="h-8 w-8" />
+        <ThemeToggle className="h-10 w-10" />
       </div>
 
       <Sheet open={open} onOpenChange={setOpen}>

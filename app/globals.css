@@ -256,7 +256,29 @@
   /* Impersonação: a faixa fixa do dono reserva 52px no rodapé e levanta a
      barra de abas do responsável para não ficar coberta. */
   body.impersonating { padding-bottom: 52px; }
-  /* A faixa de impersonação é fixed bottom-0. Só a tab-bar do PWA era levantada;
+  /* MODO QUIOSQUE DA CÂMERA
+   Com a câmera ligada o aparelho é a PORTARIA, não um painel: menu, botão de
+   tema, barra inferior e sidebar somem. Não basta o z-index da sobreposição —
+   a animação de página cria um contexto de empilhamento próprio, então o
+   z-index dela não alcança a barra fixa que vive fora desse contexto. */
+body.camera-kiosk nav[data-bottom-bar],
+body.camera-kiosk [data-admin-header],
+body.camera-kiosk [data-admin-sidebar] {
+  display: none !important;
+}
+/* sem a sidebar, o conteúdo ocupa a tela toda */
+body.camera-kiosk main { padding-bottom: 0 !important; }
+/* A animação de página aplica `transform`, e um ancestral com transform vira o
+   bloco de contenção do `position: fixed` — a sobreposição da câmera passava a
+   se medir contra um elemento de ALTURA 0 (vídeo sumia) e o z-index dela nem
+   alcançava a barra inferior. Durante o quiosque a animação sai do caminho. */
+body.camera-kiosk .page-transition {
+  animation: none !important;
+  transform: none !important;
+  display: contents;
+}
+
+/* A faixa de impersonação é fixed bottom-0. Só a tab-bar do PWA era levantada;
    a barra inferior do ADMIN no celular ficava COBERTA pela faixa, e o dono
    perdia toda a navegação (Dashboard/Câmera/Alunos/Frequência) ao abrir a tela
    de uma escola pelo telefone. */

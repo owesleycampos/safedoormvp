@@ -311,6 +311,25 @@ export function CameraClient() {
 
   const isLoading = rekognitionConfigured === null;
 
+  /**
+   * Quiosque: a camera esta LIGADA (ou subindo), entao este aparelho e a
+   * portaria e nao um painel administrativo. Ver o efeito no return: a tela
+   * vira sobreposicao fixa acima do menu e da barra inferior.
+   */
+  const kioskMode = cameraStatus === 'active' || cameraStatus === 'starting';
+
+  // Sem isto a pagina atras da sobreposicao continua rolando sob o dedo.
+  useEffect(() => {
+    if (!kioskMode) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('camera-kiosk');
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.classList.remove('camera-kiosk');
+    };
+  }, [kioskMode]);
+
   // Mode pre-selection — monochrome
   if (!modeChosen) {
     return (
@@ -363,24 +382,54 @@ export function CameraClient() {
   }
 
   // Camera active view
+  //
+  // MODO QUIOSQUE: com a camera rodando, este e um aparelho de PORTARIA, nao um
+  // painel. Antes a tela vivia dentro do layout do admin, entao continuavam
+  // clicaveis o menu sanduiche, o botao de tema, a barra inferior inteira
+  // (Dashboard/Camera/Alunos/Frequencia), o painel lateral e um botao flutuante
+  // de lista. Um toque errado no meio da fila de entrada tirava a portaria do ar.
+  // Ativa => sobreposicao fixa acima de tudo (header z-30, barra inferior z-40),
+  // e sobram apenas ENTRADA, SAIDA e Fechar.
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
+    <div
+      className={cn(
+        kioskMode
+          ? 'fixed inset-0 z-[100] flex flex-col bg-black'
+          : 'flex flex-col h-full bg-background overflow-hidden'
+      )}
+    >
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 md:px-5 py-2.5 border-b border-border flex-shrink-0">
-        <div className="hidden md:block">
+      <div
+        className={cn(
+          'flex items-center justify-between flex-shrink-0',
+          kioskMode
+            ? 'px-4 py-3 bg-black/80 backdrop-blur-sm border-b border-white/10'
+            : 'px-3 md:px-5 py-2.5 border-b border-border'
+        )}
+        style={kioskMode ? { paddingTop: 'max(0.75rem, env(safe-area-inset-top))' } : undefined}
+      >
+        <div className={cn('hidden', !kioskMode && 'md:block')}>
           <h1 className="text-sm font-semibold">Câmera ao Vivo</h1>
           <p className="text-[11px] text-muted-foreground mt-0.5">AWS Rekognition</p>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           {/* Mode toggle — monochrome */}
-          <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+          {/* No quiosque estes viram alvos grandes: a portaria opera de pe, com
+              fila andando, muitas vezes com o tablet na parede. */}
+          <div className={cn(
+            'flex items-center gap-1 rounded-md border p-0.5',
+            kioskMode ? 'border-white/20 bg-white/5' : 'border-border'
+          )}>
             <button
               onClick={() => setMode('ENTRY')}
               className={cn(
-                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
-                mode === 'ENTRY' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                'rounded font-medium transition-colors',
+                kioskMode ? 'px-5 h-10 text-sm' : 'px-3 py-1 text-[11px]',
+                mode === 'ENTRY'
+                  ? 'bg-foreground text-background'
+                  : kioskMode ? 'text-white/60 hover:text-white' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               ENTRADA
@@ -388,8 +437,11 @@ export function CameraClient() {
             <button
               onClick={() => setMode('EXIT')}
               className={cn(
-                'px-3 py-1 rounded text-[11px] font-medium transition-colors',
-                mode === 'EXIT' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                'rounded font-medium transition-colors',
+                kioskMode ? 'px-5 h-10 text-sm' : 'px-3 py-1 text-[11px]',
+                mode === 'EXIT'
+                  ? 'bg-foreground text-background'
+                  : kioskMode ? 'text-white/60 hover:text-white' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               SAÍDA
@@ -403,8 +455,14 @@ export function CameraClient() {
               <span className="sm:hidden">Iniciar</span>
             </Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={stopCamera} className="gap-1.5">
-              <VideoOff className="h-3.5 w-3.5" /> Parar
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={stopCamera}
+              className={cn('gap-1.5', kioskMode && 'h-11 px-4 bg-white/10 border-white/20 text-white hover:bg-white/20')}
+            >
+              <VideoOff className="h-4 w-4" />
+              {kioskMode ? 'Fechar câmera' : 'Parar'}
             </Button>
           )}
         </div>
@@ -587,15 +645,18 @@ export function CameraClient() {
           {/* Mobile panel toggle */}
           <button
             onClick={() => setPanelOpen(true)}
-            className="md:hidden absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 px-2.5 py-1.5 text-white text-[11px] font-medium"
+            className={cn(
+              'absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 px-2.5 py-1.5 text-white text-[11px] font-medium',
+              kioskMode ? 'hidden' : 'md:hidden'
+            )}
           >
             <List className="h-3.5 w-3.5" />
             {recentRecognitions.length > 0 && <span className="tabular-nums">{recentRecognitions.length}</span>}
           </button>
         </div>
 
-        {/* Desktop sidebar */}
-        <div className="hidden md:flex w-72 flex-col border-l border-border bg-card overflow-hidden flex-shrink-0">
+        {/* Painel lateral: escondido no quiosque — nada clicavel alem dos 3 controles */}
+        <div className={cn('w-72 flex-col border-l border-border bg-card overflow-hidden flex-shrink-0', kioskMode ? 'hidden' : 'hidden md:flex')}>
           <SidebarContent
             rekognitionConfigured={rekognitionConfigured}
             isLoading={isLoading}
